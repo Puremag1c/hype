@@ -99,7 +99,7 @@ reset_stale_tasks() {
                 # Append to notes instead of overwriting (preserve review feedback)
                 local updated_notes
                 updated_notes=$(append_notes "$task_id" "Reset: $log_prefix (${age}s without update)")
-                bd update "$task_id" --status=open --remove-label=executor --notes="$updated_notes" 2>/dev/null || true
+                bd update "$task_id" --status=open --remove-label=executor --notes="$updated_notes" >/dev/null 2>&1 || true
                 ((reset_count++)) || true
             fi
         fi

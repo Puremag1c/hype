@@ -46,7 +46,8 @@ create_worktree() {
 
     # Create worktree from current HEAD (detached)
     # --detach avoids branch conflicts between parallel executors
-    if git worktree add --detach "$worktree_path" HEAD 2>/dev/null; then
+    # Suppress stdout ("HEAD is now at...") to avoid polluting worktree_path
+    if git worktree add --detach "$worktree_path" HEAD >/dev/null 2>&1; then
         echo "$worktree_path"
         return 0
     else

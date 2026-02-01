@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.1.3] - 2026-02-01
+
+### Fixed
+
+- **Executors failed immediately — worktree path corrupted by git output** (P0)
+  - `git worktree add` outputs "HEAD is now at..." to stdout
+  - This polluted `$worktree_path` variable → `cd` failed → executor crashed
+  - Symptom: tasks stuck in `in_progress` with `executor` label, no work done
+  - Fix: suppress stdout with `>/dev/null 2>&1`
+
+- **Stale task reset returned garbage instead of count** (P1)
+  - `bd update` outputs "✓ Updated issue..." to stdout
+  - `reset_stale_tasks()` captured this garbage in `$reset_count`
+  - Caused "integer expression expected" error in orchestrator
+  - Fix: suppress stdout in bd update calls
+
+### Affected files
+
+- `core/scripts/run-executors.sh` — suppress git worktree stdout
+- `core/scripts/common.sh` — suppress bd update stdout in reset_stale_tasks
+
+---
+
 ## [1.1.2] - 2026-02-01
 
 ### Fixed

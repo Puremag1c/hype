@@ -118,6 +118,83 @@ CD_ENABLED=false            # Автоматический релиз
 
 ## Beads интеграция
 
+### Архитектура Beads (КРИТИЧНО)
+
+**Beads использует daemon + SQLite. Понимание этой архитектуры критично для HYPE.**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                      bd CLI                             │
+│  (bd list, bd update, bd create, etc.)                  │
+└─────────────────┬───────────────────────────────────────┘
+                  │ RPC (Unix socket)
+                  ▼
+┌─────────────────────────────────────────────────────────┐
+│                    bd daemon                            │
+│  - Сериализует все операции                             │
+│  - Держит SQLite connection                             │
+│  - Import/Export между SQLite ↔ JSONL                   │
+│  - Sync с git remote (beads-sync branch)                │
+└─────────────────┬───────────────────────────────────────┘
+                  │ SQLite
+                  ▼
+┌─────────────────────────────────────────────────────────┐
+│              .beads/beads.db (SQLite)                   │
+│  - WAL mode для concurrency                             │
+│  - busy_timeout = 30 сек                                │
+│  - BEGIN IMMEDIATE для write locks                      │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Правила работы с Beads
+
+**1. ВСЕГДА через daemon**
+```bash
+# ✓ Правильно — идёт через daemon
+bd list --json
+bd update $id --status=in_progress
+
+# ✗ НЕПРАВИЛЬНО — direct access создаёт lock contention
+BEADS_NO_DAEMON=1 bd update $id
+```
+
+**2. Worktrees используют redirect**
+```
+main-repo/.beads/beads.db     ← единственная база
+worktree/.beads/redirect      ← указывает на main-repo/.beads/
+```
+Все worktrees идут в одну базу через redirect. Daemon сериализует доступ.
+
+**3. Не смешивать daemon и direct access**
+- Если daemon работает → все запросы через него
+- `BEADS_NO_DAEMON=1` отключает daemon → direct SQLite access
+- Микс daemon + direct = SQLite lock война
+
+**4. Типичные ошибки**
+
+| Симптом | Причина | Решение |
+|---------|---------|---------|
+| `database is locked` | Параллельные direct access | Убрать BEADS_NO_DAEMON |
+| 2+ минуты на bd запрос | Lock contention | Остановить daemon, почистить базу |
+| `failed to handle rename` | Tombstone в JSONL | Удалить tombstone, пересоздать базу |
+| Зависшие `git fetch beads-sync` | Сетевые проблемы | `pkill -f "git fetch.*beads-sync"` |
+
+**5. Восстановление после проблем**
+```bash
+# 1. Остановить всё
+pkill -9 -f "bd daemon"
+pkill -f "git fetch.*beads-sync"
+
+# 2. Почистить базу
+rm -f .beads/beads.db .beads/beads.db-* .beads/daemon.*
+
+# 3. Мигрировать
+bd migrate --update-repo-id
+
+# 4. Запустить daemon
+bd daemon start
+```
+
 ### Статусы задач
 
 - `open` — задача создана, ждёт исполнителя

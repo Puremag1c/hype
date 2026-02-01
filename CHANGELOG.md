@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.1.2] - 2026-02-01
+
+### Fixed
+
+- **CRITICAL: SQLite lock contention — bd запросы занимали 2 минуты вместо мгновенных** (P0)
+  - Коммит 85bf56b добавил `BEADS_NO_DAEMON=1` в run-executors.sh
+  - Идея была "избежать daemon conflicts в worktrees"
+  - Реальность: worktrees используют redirect file → та же .beads/ база
+  - `BEADS_NO_DAEMON=1` = direct SQLite access минуя daemon
+  - Daemon продолжает работать → делает import/export
+  - Direct access + Daemon = SQLite lock война
+  - Результат: `database is locked`, 2+ минуты на каждый bd запрос
+  - Исправлено: убран `BEADS_NO_DAEMON=1` — все операции через daemon
+
+### Added
+
+- **Документация архитектуры Beads** в docs/architecture.md
+  - Как работает daemon + SQLite
+  - Правила работы с beads в high-concurrency сценариях
+  - Типичные ошибки и их решения
+  - Процедура восстановления после проблем
+
+### Performance
+
+- До исправления: 2:00.22 на `bd list --json`
+- После исправления: 0.087s (87 миллисекунд)
+- Ускорение: **1400x**
+
+### Affected files
+
+- `core/scripts/run-executors.sh` — убран BEADS_NO_DAEMON=1
+- `docs/architecture.md` — добавлена секция "Архитектура Beads"
+
+---
+
 ## [1.1.1] - 2026-02-01
 
 ### Fixed

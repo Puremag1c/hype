@@ -82,7 +82,7 @@ if [ "$HAS_PROJECT_DONE" -gt 0 ]; then
     exit 0
 fi
 
-if [ "$TOTAL" -eq 0 ]; then
+if [ "$TOTAL" -eq 0 ] && [ "$CLOSED" -eq 0 ]; then
     if [ -f "$PROJECT_ROOT/.hype/needs-spec" ]; then
         # После завершённой итерации, нужен новый SPEC
         echo "INIT"

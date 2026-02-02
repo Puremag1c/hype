@@ -659,6 +659,12 @@ dispatch_phase() {
             else
                 log "WARN" "tech-writer.md not found, skipping INIT"
             fi
+
+            # Clean up needs-spec marker if SPEC.md was created
+            if [ -f "$PROJECT_ROOT/SPEC.md" ] && [ -f "$PROJECT_ROOT/.hype/needs-spec" ]; then
+                rm -f "$PROJECT_ROOT/.hype/needs-spec"
+                log "INFO" "Removed needs-spec marker (SPEC.md exists)"
+            fi
             ;;
 
         PLANNING)

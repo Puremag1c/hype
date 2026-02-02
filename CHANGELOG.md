@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.3.14] - 2026-02-02
+
+### Fixed
+
+- **Progress calculation was inverted** - `bd list` returns only open tasks, so total was wrong. Now correctly counts open+closed.
+
+### Changed
+
+- **Progress bar** - Visual progress indicator:
+  - `[████████████░░░░░░░░] 12/20 (60%)`
+
+---
+
 ## [1.3.13] - 2026-02-02
 
 ### Added

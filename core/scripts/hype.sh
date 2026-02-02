@@ -965,16 +965,26 @@ main() {
         echo "" >> "$LOGS_DIR/hype.log"
 
         # Calculate progress (tasks only, exclude epics)
-        local total_tasks closed_tasks progress_pct
-        total_tasks=$(bd list --json 2>/dev/null | jq '[.[] | select(.issue_type == "task" or .issue_type == "bug" or .issue_type == "feature")] | length' 2>/dev/null || echo "0")
+        # Note: bd list without --status returns only open+in_progress, need to count separately
+        local open_tasks closed_tasks total_tasks progress_pct
+        open_tasks=$(bd list --json 2>/dev/null | jq '[.[] | select(.issue_type == "task" or .issue_type == "bug" or .issue_type == "feature")] | length' 2>/dev/null || echo "0")
         closed_tasks=$(bd list --status=closed --json 2>/dev/null | jq '[.[] | select(.issue_type == "task" or .issue_type == "bug" or .issue_type == "feature")] | length' 2>/dev/null || echo "0")
+        total_tasks=$((open_tasks + closed_tasks))
         if [ "$total_tasks" -gt 0 ]; then
             progress_pct=$((closed_tasks * 100 / total_tasks))
         else
             progress_pct=0
         fi
 
-        log "INFO" "--- Cycle $cycle | Phase: $phase | Progress: $closed_tasks/$total_tasks ($progress_pct%) ---"
+        # Build progress bar (20 chars wide)
+        local bar_width=20
+        local filled=$((progress_pct * bar_width / 100))
+        local empty=$((bar_width - filled))
+        local bar=""
+        for ((i=0; i<filled; i++)); do bar+="█"; done
+        for ((i=0; i<empty; i++)); do bar+="░"; done
+
+        log "INFO" "--- Cycle $cycle | Phase: $phase | [$bar] $closed_tasks/$total_tasks ($progress_pct%) ---"
 
         # Show active work (agents with growing log files)
         show_active_work

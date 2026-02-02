@@ -1,11 +1,11 @@
 #!/bin/bash
-# core/scripts/orchestrator.sh
-# Главный цикл Hype — координирует работу агентов через Manager.
+# core/scripts/hype.sh
+# Главный управляющий модуль HYPE — координирует работу агентов.
 #
 # Использование:
-#   ./scripts/orchestrator.sh           # Интерактивно
-#   ./scripts/orchestrator.sh &         # В фоне
-#   nohup ./scripts/orchestrator.sh &   # Переживёт закрытие терминала
+#   ./scripts/hype.sh           # Интерактивно
+#   ./scripts/hype.sh &         # В фоне
+#   nohup ./scripts/hype.sh &   # Переживёт закрытие терминала
 
 set -euo pipefail
 
@@ -16,7 +16,7 @@ source "$SCRIPT_DIR/common.sh"
 PROJECT_DIR=$(pwd)
 CLAUDEV_DIR="$PROJECT_DIR/.hype"
 LOGS_DIR="$PROJECT_DIR/logs"
-LOCK_FILE="$CLAUDEV_DIR/orchestrator.lock"
+LOCK_FILE="$CLAUDEV_DIR/hype.lock"
 CONFIG_FILE="$CLAUDEV_DIR/config.sh"
 HYPE_HOME="${HYPE_HOME:-$HOME/.hype}"
 
@@ -28,7 +28,7 @@ acquire_lock() {
     if ! (set -C; echo $$ > "$LOCK_FILE") 2>/dev/null; then
         OLD_PID=$(cat "$LOCK_FILE" 2>/dev/null || echo "0")
         if kill -0 "$OLD_PID" 2>/dev/null; then
-            echo "ERROR: Orchestrator already running (PID $OLD_PID)"
+            echo "ERROR: HYPE already running (PID $OLD_PID)"
             exit 1
         else
             echo "Removing stale lock (PID $OLD_PID not found)"
@@ -57,8 +57,8 @@ log() {
         START)         color="\033[36m" ;;
     esac
 
-    printf "${gray}%s${reset} [ORCHESTRATOR] ${color}%s${reset}: %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$message"
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [ORCHESTRATOR] $level: $message" >> "$LOGS_DIR/hype.log"
+    printf "${gray}%s${reset} [HYPE] ${color}%s${reset}: %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$message"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [HYPE] $level: $message" >> "$LOGS_DIR/hype.log"
 }
 
 # === Config validation ===
@@ -260,7 +260,7 @@ detect_phase() {
     # Log stderr to file only (NOT to stdout!) to avoid polluting $phase
     if [[ -s "$stderr_output" ]]; then
         while IFS= read -r line; do
-            echo "$(date '+%Y-%m-%d %H:%M:%S') [ORCHESTRATOR] DEBUG: [detect-phase] $line" >> "$LOGS_DIR/hype.log"
+            echo "$(date '+%Y-%m-%d %H:%M:%S') [HYPE] DEBUG: [detect-phase] $line" >> "$LOGS_DIR/hype.log"
         done < "$stderr_output"
     fi
     rm -f "$stderr_output"
@@ -579,7 +579,7 @@ generate_iteration_stats() {
 
     # Count agent runs from logs
     local manager_runs architect_runs executor_runs analyst_runs senior_runs
-    manager_runs=$(grep -c "\[ORCHESTRATOR\].*Manager" "$LOGS_DIR/hype.log" 2>/dev/null || echo "0")
+    manager_runs=$(grep -c "\[HYPE\].*Manager" "$LOGS_DIR/hype.log" 2>/dev/null || echo "0")
     architect_runs=$(grep -c "Running agent: architect" "$LOGS_DIR/hype.log" 2>/dev/null || echo "0")
     executor_runs=$(grep -c "Starting executor for" "$LOGS_DIR/hype.log" 2>/dev/null || echo "0")
     analyst_runs=$(grep -c "Starting analyst-" "$LOGS_DIR/hype.log" 2>/dev/null || echo "0")
@@ -629,7 +629,7 @@ EOF
 }
 
 # === Phase dispatcher ===
-# Orchestrator DIRECTLY calls scripts/agents by phase.
+# HYPE DIRECTLY calls scripts/agents by phase.
 # Manager is called ONLY for problem resolution (blocked, retry limit, escalations).
 
 dispatch_phase() {
@@ -823,7 +823,7 @@ main() {
     version=$(cat "$hype_root/VERSION" 2>/dev/null || echo "unknown")
 
     log "INFO" "=========================================="
-    log "INFO" "ORCHESTRATOR STARTED (PID $$)"
+    log "INFO" "HYPE STARTED (PID $$)"
     log "INFO" "Version: $version"
     log "INFO" "Project: $PROJECT_DIR"
     log "INFO" "=========================================="

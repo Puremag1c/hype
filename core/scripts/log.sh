@@ -9,7 +9,7 @@
 #   source ./scripts/log.sh
 #   log "MANAGER" "INFO" "Starting phase detection"
 #   log "EXECUTOR" "TASK_START" "hype-abc"
-#   log "ORCHESTRATOR" "FATAL" "Beads daemon not running"
+#   log "HYPE" "FATAL" "Beads daemon not running"
 #
 # Или напрямую:
 #   ./scripts/log.sh MANAGER INFO "Starting phase detection"

@@ -41,13 +41,13 @@ hype init
 1. Инициализирует git и beads
 2. Создаёт конфигурацию `.hype/config.sh`
 3. Настраивает симлинки для агентов
-4. Запускает orchestrator
+4. Запускает HYPE
 
 ## Команды
 
 ```bash
 hype init         # Инициализация проекта + запуск
-hype start        # Запуск orchestrator
+hype start        # Запуск HYPE
 hype status       # Статус проекта
 hype update       # Обновление hype (глобально)
 hype upgrade      # Обновление текущего проекта

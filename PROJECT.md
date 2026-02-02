@@ -39,7 +39,7 @@ hype/
 │   │   ├── analyzer.md      # Глубокий анализ кода
 │   │   └── analyst-*.md     # 5 аналитиков (Sonnet)
 │   ├── scripts/             # Bash скрипты (10 шт)
-│   │   ├── orchestrator.sh  # Главный цикл с lock file
+│   │   ├── hype.sh  # Главный цикл с lock file
 │   │   ├── detect-phase.sh  # Определение фазы проекта
 │   │   ├── run-analysts.sh  # Параллельный запуск аналитиков
 │   │   ├── run-executors.sh # Параллельный запуск исполнителей

@@ -13,7 +13,7 @@ MAX_PARALLEL_EXECUTORS=3
 # Лимит retry перед эскалацией к Architect
 RETRY_LIMIT=3
 
-# Пауза между итерациями orchestrator (seconds)
+# Пауза между итерациями HYPE (seconds)
 ITERATION_DELAY=30
 
 # === Таймауты ===

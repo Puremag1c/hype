@@ -2,7 +2,7 @@
 # core/scripts/close-completed-parents.sh
 # Автоматически закрывает features и epics когда все их children завершены.
 #
-# Вызывается из orchestrator.sh каждый цикл.
+# Вызывается из hype.sh каждый цикл.
 # Использует встроенную команду beads для epics + аналогичную логику для features.
 
 set -euo pipefail

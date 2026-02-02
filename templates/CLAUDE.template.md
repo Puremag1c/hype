@@ -5,7 +5,7 @@ Hype — многоагентная AI-система разработки.
 ## Архитектура
 
 ```
-orchestrator.sh (bash loop)
+hype.sh (bash loop)
     │
     └─► Manager (Sonnet, stateless)
             │
@@ -24,10 +24,10 @@ orchestrator.sh (bash loop)
 
 ```bash
 # Запустить систему
-./scripts/orchestrator.sh
+./scripts/hype.sh
 
 # В фоне
-nohup ./scripts/orchestrator.sh &
+nohup ./scripts/hype.sh &
 tail -f logs/hype.log
 ```
 
@@ -51,7 +51,7 @@ bd list                     # Все задачи
 bd list --status=in_progress # Задачи в работе
 bd show <id>                # Детали задачи
 
-./scripts/orchestrator.sh   # Запустить систему
+./scripts/hype.sh   # Запустить систему
 ./scripts/detect-phase.sh   # Определить текущую фазу
 ```
 

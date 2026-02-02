@@ -146,7 +146,7 @@ main() {
     # Wait for all
     wait
 
-    # Check completion status (milestone created by orchestrator)
+    # Check completion status (milestone created by HYPE)
     local open_triggers
     open_triggers=$(bd list --status=open --json 2>/dev/null | jq '[.[] | select(.title | startswith("run-analyst-"))] | length' 2>/dev/null || echo "0")
 

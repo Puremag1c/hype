@@ -291,7 +291,7 @@ main() {
     disown -a 2>/dev/null || true
 
     log "INFO" "Started $started executor(s), skipped $skipped"
-    # No wait — returns immediately, orchestrator will check progress next iteration
+    # No wait — returns immediately, HYPE will check progress next iteration
 }
 
 main "$@"

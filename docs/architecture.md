@@ -5,7 +5,7 @@
 ## Обзор
 
 ```
-orchestrator.sh (bash loop с lock file)
+hype.sh (bash loop с lock file)
     │
     ├─► detect-phase.sh → определяет текущую фазу
     │
@@ -96,7 +96,7 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → FINAL_REVIE
 
 | Скрипт | Назначение |
 |--------|------------|
-| `orchestrator.sh` | Главный цикл с lock file |
+| `hype.sh` | Главный цикл с lock file |
 | `detect-phase.sh` | Определение текущей фазы |
 | `run-analysts.sh` | Параллельный запуск 5 Analysts |
 | `run-executors.sh` | Параллельный запуск Executors с backpressure |
@@ -220,7 +220,7 @@ bd dep cycles  # Проверка циклов
 ## Отказоустойчивость
 
 ### Lock file
-- Один orchestrator за раз
+- Один HYPE за раз
 - Atomic через `set -C` (noclobber)
 - Автоочистка stale lock
 

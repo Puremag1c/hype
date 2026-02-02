@@ -2,8 +2,8 @@
 # hype CLI — управление многоагентной системой разработки
 #
 # Использование:
-#   hype init      Инициализация проекта + запуск orchestrator
-#   hype start     Запуск orchestrator (если уже инициализирован)
+#   hype init      Инициализация проекта + запуск HYPE
+#   hype start     Запуск HYPE (если уже инициализирован)
 #   hype status    Статус проекта
 #   hype update    Обновление hype
 
@@ -422,7 +422,7 @@ EOF
             ;;
     esac
 
-    # Save project type for orchestrator
+    # Save project type for HYPE
     echo "$project_type" > .hype/project_type
 
     # Auto-commit .gitignore if changed
@@ -435,10 +435,10 @@ EOF
     echo ""
     success "Project initialized!"
     echo ""
-    info "Starting orchestrator..."
+    info "Starting HYPE..."
     echo ""
 
-    exec "$HYPE_HOME/core/scripts/orchestrator.sh"
+    exec "$HYPE_HOME/core/scripts/hype.sh"
 }
 
 # === Start ===
@@ -458,8 +458,8 @@ cmd_start() {
         success "beads daemon started"
     fi
 
-    info "Starting orchestrator..."
-    exec "$HYPE_HOME/core/scripts/orchestrator.sh"
+    info "Starting HYPE..."
+    exec "$HYPE_HOME/core/scripts/hype.sh"
 }
 
 # === Status ===
@@ -473,17 +473,17 @@ cmd_status() {
     echo "hype $VERSION"
     echo ""
 
-    # Orchestrator status
-    local lock_file=".hype/orchestrator.lock"
+    # HYPE status
+    local lock_file=".hype/hype.lock"
     if [[ -f "$lock_file" ]]; then
         local pid=$(cat "$lock_file" 2>/dev/null || echo "0")
         if kill -0 "$pid" 2>/dev/null; then
-            success "Orchestrator running (PID $pid)"
+            success "HYPE running (PID $pid)"
         else
             warn "Stale lock file (PID $pid not found)"
         fi
     else
-        info "Orchestrator not running"
+        info "HYPE not running"
     fi
 
     echo ""
@@ -779,12 +779,12 @@ cmd_delete() {
         exit 0
     fi
 
-    # Stop orchestrator if running
-    local lock_file=".hype/orchestrator.lock"
+    # Stop HYPE if running
+    local lock_file=".hype/hype.lock"
     if [[ -f "$lock_file" ]]; then
         local pid=$(cat "$lock_file" 2>/dev/null || echo "0")
         if kill -0 "$pid" 2>/dev/null; then
-            info "Stopping orchestrator (PID $pid)..."
+            info "Stopping HYPE (PID $pid)..."
             kill "$pid" 2>/dev/null || true
             sleep 1
         fi
@@ -876,11 +876,11 @@ cmd_wipe() {
         exit 0
     fi
 
-    # Stop orchestrator if running
-    if [[ -f ".hype/orchestrator.lock" ]]; then
-        local pid=$(cat ".hype/orchestrator.lock" 2>/dev/null || echo "0")
+    # Stop HYPE if running
+    if [[ -f ".hype/hype.lock" ]]; then
+        local pid=$(cat ".hype/hype.lock" 2>/dev/null || echo "0")
         if kill -0 "$pid" 2>/dev/null; then
-            info "Stopping orchestrator (PID $pid)..."
+            info "Stopping HYPE (PID $pid)..."
             kill "$pid" 2>/dev/null || true
             sleep 1
         fi
@@ -1057,22 +1057,22 @@ cmd_stop() {
         exit 1
     fi
 
-    local lock_file=".hype/orchestrator.lock"
+    local lock_file=".hype/hype.lock"
 
     if [[ ! -f "$lock_file" ]]; then
-        info "Orchestrator not running (no lock file)"
+        info "HYPE not running (no lock file)"
         exit 0
     fi
 
     local pid=$(cat "$lock_file" 2>/dev/null || echo "0")
 
     if ! kill -0 "$pid" 2>/dev/null; then
-        info "Orchestrator not running (stale lock file, removing)"
+        info "HYPE not running (stale lock file, removing)"
         rm -f "$lock_file"
         exit 0
     fi
 
-    info "Stopping orchestrator (PID $pid)..."
+    info "Stopping HYPE (PID $pid)..."
     kill -TERM "$pid" 2>/dev/null || true
 
     # Wait for graceful shutdown (max 5 seconds)
@@ -1083,12 +1083,12 @@ cmd_stop() {
     done
 
     if kill -0 "$pid" 2>/dev/null; then
-        warn "Orchestrator didn't stop gracefully, sending SIGKILL..."
+        warn "HYPE didn't stop gracefully, sending SIGKILL..."
         kill -9 "$pid" 2>/dev/null || true
     fi
 
     rm -f "$lock_file"
-    success "Orchestrator stopped"
+    success "HYPE stopped"
 
     # Kill ALL claude processes for this project
     info "Stopping all executor processes..."
@@ -1104,10 +1104,10 @@ cmd_help() {
     echo "Usage: hype <command>"
     echo ""
     echo "Commands:"
-    echo "  init         Initialize project and start orchestrator"
-    echo "  start        Start orchestrator (project must be initialized)"
-    echo "  stop         Stop orchestrator (executors continue running)"
-    echo "  status       Show project and orchestrator status"
+    echo "  init         Initialize project and start HYPE"
+    echo "  start        Start HYPE (project must be initialized)"
+    echo "  stop         Stop HYPE (executors continue running)"
+    echo "  status       Show project and HYPE status"
     echo "  update       Update hype to latest version"
     echo "  upgrade      Upgrade current project to latest hype version"
     echo "               --all    Upgrade all discovered projects"

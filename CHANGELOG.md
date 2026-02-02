@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.3.4] - 2026-02-02
+
+### Changed
+
+- **Renamed ORCHESTRATOR → HYPE everywhere**
+  - Main module renamed: `orchestrator.sh` → `hype.sh`
+  - Logs now show `[HYPE]` instead of `[ORCHESTRATOR]`
+  - Lock file: `orchestrator.lock` → `hype.lock`
+  - All documentation, comments, and UI messages updated
+
+### Affected files
+
+- `core/scripts/orchestrator.sh` → `core/scripts/hype.sh` (renamed)
+- `bin/hype` — updated references
+- `core/agents/manager.md`, `executor.md` — updated comments
+- `core/scripts/*.sh` — updated comments
+- `docs/architecture.md`, `README.md`, `PROJECT.md` — updated docs
+- `templates/*.md`, `templates/*.sh` — updated templates
+
+---
+
 ## [1.3.3] - 2026-02-02
 
 ### Fixed
@@ -10,7 +31,7 @@
 
 ### Affected files
 
-- `core/scripts/orchestrator.sh` — empty line before each cycle
+- `core/scripts/hype.sh` — empty line before each cycle
 - `core/scripts/run-executors.sh` — empty line to terminal
 - `core/scripts/run-senior-executor.sh` — empty line to terminal
 - `core/scripts/run-analysts.sh` — empty line to terminal

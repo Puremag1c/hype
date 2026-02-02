@@ -850,7 +850,18 @@ main() {
         # Visual separation between cycles (terminal + file)
         echo ""
         echo "" >> "$LOGS_DIR/hype.log"
-        log "INFO" "--- Cycle $cycle | Phase: $phase ---"
+
+        # Calculate progress (tasks only, exclude epics)
+        local total_tasks closed_tasks progress_pct
+        total_tasks=$(bd list --json 2>/dev/null | jq '[.[] | select(.issue_type == "task" or .issue_type == "bug" or .issue_type == "feature")] | length' 2>/dev/null || echo "0")
+        closed_tasks=$(bd list --status=closed --json 2>/dev/null | jq '[.[] | select(.issue_type == "task" or .issue_type == "bug" or .issue_type == "feature")] | length' 2>/dev/null || echo "0")
+        if [ "$total_tasks" -gt 0 ]; then
+            progress_pct=$((closed_tasks * 100 / total_tasks))
+        else
+            progress_pct=0
+        fi
+
+        log "INFO" "--- Cycle $cycle | Phase: $phase | Progress: $closed_tasks/$total_tasks ($progress_pct%) ---"
 
         # 4. Dispatch phase-specific actions
         dispatch_phase "$phase"

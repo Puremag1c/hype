@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.3.8] - 2026-02-02
+
+### Added
+
+- **Review result logging** - [HYPE CHECK] now shows:
+  - `APPROVED: task-id (merged)` when task is closed
+  - `RETURNED: task-id - reason` when task is sent back for rework
+- **Progress indicator** - Each cycle now shows completion progress:
+  - `--- Cycle N | Phase: X | Progress: 5/12 (41%) ---`
+  - Counts tasks, bugs, features (excludes epics)
+
+---
+
 ## [1.3.7] - 2026-02-02
 
 ### Changed

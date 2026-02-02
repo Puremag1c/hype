@@ -107,14 +107,24 @@ ACTION: Review and merge if ready"
     fi
     set +o pipefail
 
-    # Always cleanup: if task is closed, remove needs-review label
-    # (Claude might have closed task before crashing)
+    # Check result and log appropriately
+    local updated_json
+    updated_json=$(bd show "$task_id" --json 2>/dev/null || echo "[]")
     local task_status
-    task_status=$(bd show "$task_id" --json 2>/dev/null | jq -r '.[0].status // "unknown"' 2>/dev/null || echo "unknown")
+    task_status=$(echo "$updated_json" | jq -r '.[0].status // "unknown"' 2>/dev/null || echo "unknown")
 
     if [ "$task_status" = "closed" ]; then
-        log "INFO" "Task $task_id is closed, cleaning up labels"
+        log "SUCCESS" "APPROVED: $task_id (merged)"
         bd update "$task_id" --remove-label needs-review --add-label reviewed >/dev/null 2>&1 || true
+    elif [ "$task_status" = "open" ]; then
+        # Task returned for rework - extract reason from notes
+        local notes
+        notes=$(echo "$updated_json" | jq -r '.[0].notes // ""' 2>/dev/null | tail -1 | head -c 80)
+        if [ -n "$notes" ]; then
+            log "WARN" "RETURNED: $task_id - $notes"
+        else
+            log "WARN" "RETURNED: $task_id (no reason given)"
+        fi
     fi
 }
 

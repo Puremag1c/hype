@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.2.2] - 2026-02-02
+
+### Improved
+
+- **Functional testing now supports all project types**
+  - 1.2.1 assumed all projects have UI (web apps)
+  - Now detects project type: Web App, API, CLI, Library, Script
+  - Applies appropriate verification method for each type:
+    - Web App → dev server + browser/Playwright
+    - API → server + curl endpoints
+    - CLI → run with --help and test args
+    - Library → run tests, check imports
+    - Script → run with test data
+
+### Affected files
+
+- `core/agents/architect.md` — step 3 now handles non-UI projects
+
+---
+
 ## [1.2.1] - 2026-02-02
 
 ### Fixed

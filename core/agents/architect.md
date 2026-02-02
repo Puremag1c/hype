@@ -184,55 +184,79 @@ bd list --status=closed  # Что сделано
 
 **КРИТИЧНО:** Перед сдачей проекта ты ОБЯЗАН проверить что продукт работает.
 
-#### 3.1 Запусти приложение
+#### 3.1 Определи тип проекта
 
+Прочитай SPEC.md и структуру проекта чтобы понять что тестировать:
+
+| Тип | Признаки | Метод проверки |
+|-----|----------|----------------|
+| **Web App** | React, Vue, Next.js, index.html | Запустить dev server → браузер |
+| **API** | Express, FastAPI, Phoenix без LiveView | Запустить server → curl endpoints |
+| **CLI** | bin/, __main__.py, main.go | Запустить с --help и тестовыми args |
+| **Library** | Только exports, нет entry point | npm test / go test / pytest |
+| **Script** | Один файл, автоматизация | Запустить с тестовыми данными |
+
+#### 3.2 Тестирование по типу проекта
+
+**Web App (UI):**
 ```bash
-# Определи команду запуска из проекта
-if [ -f package.json ]; then
-    npm run dev &
-    DEV_PID=$!
-    sleep 5  # Дай серверу подняться
-elif [ -f mix.exs ]; then
-    mix phx.server &
-    DEV_PID=$!
-    sleep 5
-elif [ -f manage.py ]; then
-    python manage.py runserver &
-    DEV_PID=$!
-    sleep 3
-fi
+npm run dev &   # или mix phx.server, python manage.py runserver
+DEV_PID=$!
+sleep 5
+# Используй Playwright MCP для проверки UI
+# Или: curl -s http://localhost:3000 | head -20
+kill $DEV_PID 2>/dev/null
 ```
 
-#### 3.2 Проверь через браузер (Playwright MCP)
-
-Если доступен Playwright MCP — используй его для проверки:
-
-1. Открой главную страницу приложения
-2. Пройди по каждому Must Have из SPEC.md:
-   - Попробуй выполнить действие как пользователь
-   - Проверь что результат соответствует ожиданиям
-3. Сделай скриншот финального состояния
-
-#### 3.3 Если Playwright недоступен — ручная проверка
-
+**API (без UI):**
 ```bash
-# Проверь что сервер отвечает
-curl -s http://localhost:3000 | head -20
-
-# Или для других портов
-curl -s http://localhost:4000 | head -20
-curl -s http://localhost:8000 | head -20
+npm start &   # или python app.py, mix phx.server
+DEV_PID=$!
+sleep 3
+# Проверь основные endpoints из SPEC.md
+curl -s http://localhost:3000/api/health
+curl -s http://localhost:3000/api/users | head -10
+kill $DEV_PID 2>/dev/null
 ```
 
-Прочитай ответ и убедись что это ожидаемый HTML/JSON, не ошибка.
-
-#### 3.4 Останови dev сервер
-
+**CLI:**
 ```bash
-kill $DEV_PID 2>/dev/null || true
+# Проверь что CLI запускается
+./bin/mycli --help
+./bin/mycli --version
+
+# Проверь основной функционал из SPEC.md
+echo "test input" | ./bin/mycli process
 ```
 
-#### 3.5 Если что-то не работает
+**Library:**
+```bash
+# Запусти тесты
+npm test        # Node.js
+pytest          # Python
+go test ./...   # Go
+mix test        # Elixir
+
+# Проверь что импорт работает
+node -e "require('./dist'); console.log('OK')"
+python -c "import mylib; print('OK')"
+```
+
+**Script:**
+```bash
+# Запусти с тестовыми данными
+python script.py --dry-run
+./script.sh < test_input.txt
+```
+
+#### 3.3 Проверь Must Have из SPEC.md
+
+Для КАЖДОГО пункта из "Must Have" в SPEC.md:
+1. Выполни действие (CLI команда, API запрос, UI клик)
+2. Проверь что результат соответствует ожиданиям
+3. Если не работает — запиши что именно сломано
+
+#### 3.4 Если что-то не работает
 
 ```bash
 bd create --title="Fix: <что не работает>" --type=bug --priority=0 \

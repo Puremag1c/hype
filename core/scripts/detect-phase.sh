@@ -3,6 +3,7 @@
 # Определяет текущую фазу проекта из состояния Beads и файлов.
 #
 # Фазы: INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → FINAL_REVIEW → DONE
+#        IDLE — проект существует, но нет активной работы (требует решения пользователя)
 #
 # Использование: ./scripts/detect-phase.sh
 # Выводит: PHASE_NAME (одно слово, для использования в скриптах)
@@ -65,24 +66,29 @@ fi
 
 # === Определение фазы ===
 
-# DONE: проект завершён
-if [ "$HAS_PROJECT_DONE" -gt 0 ]; then
-    echo "DONE"
-    exit 0
-fi
-
-# INIT: нет SPEC.md → нужен Tech Writer
+# INIT: нужен Tech Writer для сбора требований
+# Условия:
+#   1. Нет SPEC.md (новый проект)
+#   2. Есть milestone:project-done (итерация завершена, начинаем новую)
+#   3. SPEC.md есть но beads пустой (после cleanup)
 if [ ! -f "$PROJECT_ROOT/SPEC.md" ]; then
-    # Проверяем есть ли draft
-    if [ -f "$PROJECT_ROOT/SPEC.draft.md" ]; then
-        echo "INIT"  # Продолжаем с draft
-    else
-        echo "INIT"  # Начинаем с нуля
-    fi
+    echo "INIT"
     exit 0
 fi
 
-# PLANNING: есть SPEC.md, но нет плана (milestone:planning-done)
+if [ "$HAS_PROJECT_DONE" -gt 0 ]; then
+    # Итерация завершена → Tech Writer спросит что дальше
+    echo "INIT"
+    exit 0
+fi
+
+if [ "$TOTAL" -eq 0 ]; then
+    # Beads пустой но SPEC.md есть → Tech Writer спросит что дальше
+    echo "INIT"
+    exit 0
+fi
+
+# PLANNING: есть SPEC.md, есть задачи, но нет плана (milestone:planning-done)
 if [ "$HAS_PLANNING_DONE" -eq 0 ]; then
     echo "PLANNING"
     exit 0

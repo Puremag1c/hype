@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.3.0] - 2026-02-02
+
+### Added
+
+- **New iteration flow after project completion**
+  - Previously: system stuck in DONE state, no way to start new iteration
+  - Now: `detect-phase.sh` routes to INIT when:
+    - milestone:project-done exists (iteration completed)
+    - beads is empty but SPEC.md exists (after cleanup)
+  - Tech Writer asks what to do next: fix bugs, add features, or something else
+
+- **Tech Writer analyzes code during dialogue** (step 3)
+  - When user mentions specific problem or feature — looks in code
+  - Uses `grep -r` to find relevant code patterns
+  - Avoids duplicating work: "This is already done in UserService.ts"
+  - Provides context: "I see the form sends data to /api/login but has no error handling"
+
+- **Tech Writer context-aware greetings**
+  - Completed iteration (SPEC.md + CHANGELOG.md): summarizes what was done, asks what's next
+  - Existing project (PROJECT_CONTEXT.md): recognizes stack, asks about changes
+  - Draft exists: continues from where left off
+  - Empty project: standard greeting
+
+### Affected files
+
+- `core/scripts/detect-phase.sh` — routes DONE/empty to INIT
+- `core/agents/tech-writer.md` — code analysis step, context greetings, fixed step numbering
+
+---
+
 ## [1.2.2] - 2026-02-02
 
 ### Improved

@@ -1,5 +1,55 @@
 # Changelog
 
+## [1.2.0] - 2026-02-02
+
+### Fixed
+
+- **P0: Infinite PLANNING loop after FINAL_REVIEW** (claudev-q38)
+  - `bd admin cleanup --force` deleted milestone:project-done immediately after creation
+  - Next cycle → no milestone → falls back to PLANNING → loop
+  - Fix: `bd admin cleanup --older-than 1 --force` preserves tasks closed <1 day ago
+
+- **P1: Architect ignored untracked files in FINAL_REVIEW** (claudev-vn9)
+  - Untracked utility scripts left in working directory
+  - Added step 3 in final_review: delete temp files, commit project files, or add to .gitignore
+
+### Added
+
+- **Real-time agent visibility** (claudev-hqg epic)
+  - `strip_ansi()` function removes terminal garbage from logs
+  - Streaming logs via `tee` — `tail -f logs/executor-xxx.log` now works
+  - `hype status` shows active executors with duration and pending reviews:
+    ```
+    Active executors:
+      beads-abc  "Add login form"     3m 42s  logs/executor-beads-abc.log
+
+    Pending reviews:
+      beads-xyz  "Update API"         waiting for senior
+    ```
+
+### Improved
+
+- **run-executors logging** (claudev-al3)
+  - Shows TASK_START with task title and model
+  - Counts started vs skipped executors
+  - Pre-checks status to reduce race condition confusion
+
+- **Visual separation in logs** (claudev-w1y)
+  - Empty lines between logical blocks in hype.log
+  - Cleaner, more readable log output
+
+### Affected files
+
+- `core/scripts/orchestrator.sh` — cleanup --older-than 1
+- `core/agents/architect.md` — step 3: handle untracked files
+- `core/scripts/common.sh` — strip_ansi() function
+- `core/scripts/run-executors.sh` — streaming + improved logging
+- `core/scripts/run-senior-executor.sh` — streaming
+- `core/scripts/run-analysts.sh` — streaming
+- `bin/hype` — status shows active executors
+
+---
+
 ## [1.1.3] - 2026-02-01
 
 ### Fixed
@@ -172,7 +222,7 @@
 
 ### Fixed
 
-- **Race condition в executors** — задача исчезала между list и show
+- **Race condition in executors** — задача исчезала между list и show
   - `get_review_tasks()` возвращал ID задачи
   - К моменту `bd show` задача уже закрыта/удалена другим процессом
   - Claude получал пустой JSON → "No messages returned" crash

@@ -668,12 +668,16 @@ dispatch_phase() {
                     log "INFO" "Removed needs-spec marker"
                 fi
 
-                # Remove milestone:project-done (it served its purpose)
-                local done_milestone_id
-                done_milestone_id=$(bd list --status=closed --json 2>/dev/null | jq -r '.[] | select(.labels[]? == "milestone:project-done") | .id' | head -1)
-                if [ -n "$done_milestone_id" ]; then
-                    bd delete "$done_milestone_id" >/dev/null 2>&1 || true
-                    log "INFO" "Removed project-done milestone (new iteration started)"
+                # Remove ALL milestone tasks (new iteration = clean slate)
+                local milestone_ids
+                milestone_ids=$(bd list --status=closed --json 2>/dev/null | jq -r '.[] | select(.labels[]? | test("^milestone:")) | .id' 2>/dev/null || true)
+                if [ -n "$milestone_ids" ]; then
+                    local count=0
+                    for mid in $milestone_ids; do
+                        bd delete "$mid" >/dev/null 2>&1 || true
+                        ((count++)) || true
+                    done
+                    log "INFO" "Removed $count milestone(s) (new iteration started)"
                 fi
             fi
             ;;

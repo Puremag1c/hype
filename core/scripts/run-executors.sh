@@ -125,7 +125,7 @@ run_executor() {
 
     # Try to claim the task (atomic via beads)
     # Remove needs-review in case this is a retry after timeout
-    if ! bd update "$task_id" --status=in_progress --add-label=executor --remove-label=needs-review 2>/dev/null; then
+    if ! bd update "$task_id" --status=in_progress --add-label=executor --remove-label=needs-review >/dev/null 2>&1; then
         log "INFO" "Task $task_id claim failed (race condition), skipping"
         return 0
     fi
@@ -200,15 +200,15 @@ WORKTREE_PATH: $worktree_path"
             updated_notes=$(append_notes "$task_id" "Timeout at $(date '+%Y-%m-%d %H:%M:%S')")
             old_retry_label=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("retry:"))' 2>/dev/null | head -1)
             if [ -n "$old_retry_label" ]; then
-                bd update "$task_id" --status=open --remove-label=executor --remove-label="$old_retry_label" --add-label="retry:$new_retry" --notes="$updated_notes" 2>/dev/null || true
+                bd update "$task_id" --status=open --remove-label=executor --remove-label="$old_retry_label" --add-label="retry:$new_retry" --notes="$updated_notes" >/dev/null 2>&1 || true
             else
-                bd update "$task_id" --status=open --remove-label=executor --add-label="retry:$new_retry" --notes="$updated_notes" 2>/dev/null || true
+                bd update "$task_id" --status=open --remove-label=executor --add-label="retry:$new_retry" --notes="$updated_notes" >/dev/null 2>&1 || true
             fi
         else
             log "ERROR" "Executor failed for $task_id (exit: $exit_code)"
             local updated_notes
             updated_notes=$(append_notes "$task_id" "Executor failed (exit: $exit_code)")
-            bd update "$task_id" --status=open --remove-label=executor --notes="$updated_notes" 2>/dev/null || true
+            bd update "$task_id" --status=open --remove-label=executor --notes="$updated_notes" >/dev/null 2>&1 || true
         fi
         return 0
     fi
@@ -218,7 +218,7 @@ WORKTREE_PATH: $worktree_path"
     # Fallback: ensure labels are updated even if agent didn't do it
     # Agent should call: bd update --remove-label=executor --add-label=needs-review
     # But we ensure it as safety net
-    bd update "$task_id" --remove-label=executor --add-label=needs-review 2>/dev/null || true
+    bd update "$task_id" --remove-label=executor --add-label=needs-review >/dev/null 2>&1 || true
 }
 
 # === Main ===

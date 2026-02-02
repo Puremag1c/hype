@@ -32,7 +32,7 @@ close_completed_features() {
 
         # Если есть children и все closed — закрываем feature
         if [ "$total" -gt 0 ] && [ "$total" = "$closed" ]; then
-            bd close "$feature_id" --reason="All $total children completed" 2>/dev/null
+            bd close "$feature_id" --reason="All $total children completed" >/dev/null 2>&1
             log "MANAGER" "AUTO_CLOSE" "Feature $feature_id closed (all $total children done)"
             ((closed_count++))
         fi

@@ -356,7 +356,7 @@ create_analyst_triggers() {
     for analyst in "${analysts[@]}"; do
         local trigger_title="run-analyst-$analyst"
         if ! bd list --json 2>/dev/null | jq -e ".[] | select(.title == \"$trigger_title\")" > /dev/null 2>&1; then
-            bd create --title="$trigger_title" --type=task --priority=1 2>/dev/null || true
+            bd create --title="$trigger_title" --type=task --priority=1 >/dev/null 2>&1 || true
             log "INFO" "Created trigger: $trigger_title"
         fi
     done
@@ -371,11 +371,11 @@ check_and_create_done_milestone() {
 
     if [ -n "$latest_log" ] && grep -q "FINAL_REVIEW: PASSED" "$latest_log" 2>/dev/null; then
         log "INFO" "Final review passed, creating project-done milestone"
-        bd create --title="Project complete" --type=task --labels=milestone:project-done 2>/dev/null || true
+        bd create --title="Project complete" --type=task --labels=milestone:project-done >/dev/null 2>&1 || true
         local milestone_id
         milestone_id=$(bd list --json 2>/dev/null | jq -r '.[] | select(.labels[]? == "milestone:project-done") | .id' | head -1)
         if [ -n "$milestone_id" ]; then
-            bd close "$milestone_id" --reason="Final review passed" 2>/dev/null || true
+            bd close "$milestone_id" --reason="Final review passed" >/dev/null 2>&1 || true
         fi
 
         # Create marker for next iteration
@@ -672,7 +672,7 @@ dispatch_phase() {
                 local done_milestone_id
                 done_milestone_id=$(bd list --status=closed --json 2>/dev/null | jq -r '.[] | select(.labels[]? == "milestone:project-done") | .id' | head -1)
                 if [ -n "$done_milestone_id" ]; then
-                    bd delete "$done_milestone_id" 2>/dev/null || true
+                    bd delete "$done_milestone_id" >/dev/null 2>&1 || true
                     log "INFO" "Removed project-done milestone (new iteration started)"
                 fi
             fi
@@ -697,7 +697,7 @@ $spec_content"
                 # Extract issue ID from "Created issue: ProjectName-xxxx" output
                 milestone_id=$(bd create --title="Planning complete" --type=task --labels=milestone:planning-done 2>/dev/null | grep -oE '[A-Za-z]+-[a-z0-9]+' | head -1)
                 if [ -n "$milestone_id" ]; then
-                    bd close "$milestone_id" 2>/dev/null || true
+                    bd close "$milestone_id" >/dev/null 2>&1 || true
                 fi
             fi
             ;;
@@ -714,10 +714,10 @@ $spec_content"
             if [ "$open_triggers" -eq 0 ]; then
                 if ! bd list --json 2>/dev/null | jq -e '.[] | select(.labels[]? == "milestone:analysts-done")' > /dev/null 2>&1; then
                     log "INFO" "All analysts done, creating milestone"
-                    bd create --title="Analysts complete" --type=task --labels=milestone:analysts-done 2>/dev/null || true
+                    bd create --title="Analysts complete" --type=task --labels=milestone:analysts-done >/dev/null 2>&1 || true
                     local milestone_id
                     milestone_id=$(bd list --json 2>/dev/null | jq -r '.[] | select(.labels[]? == "milestone:analysts-done") | .id' | head -1)
-                    [ -n "$milestone_id" ] && bd close "$milestone_id" 2>/dev/null || true
+                    [ -n "$milestone_id" ] && bd close "$milestone_id" >/dev/null 2>&1 || true
                 fi
             fi
             ;;
@@ -727,7 +727,7 @@ $spec_content"
             log "INFO" "PLAN_REVIEW: Starting Architect to review plan..."
             # Create trigger task if not exists
             if ! bd list --json 2>/dev/null | jq -e '.[] | select(.title == "run-plan-review")' > /dev/null 2>&1; then
-                bd create --title="run-plan-review" --type=task --priority=0 2>/dev/null || true
+                bd create --title="run-plan-review" --type=task --priority=0 >/dev/null 2>&1 || true
             fi
             run_agent_with_mode "architect" ".claude/agents/architect.md" "opus" "plan_review" ""
             ;;
@@ -782,7 +782,7 @@ $spec_content"
 
 Run: bd dep cycles
 Then: bd dep remove <task> <dep> for one edge in each cycle" \
-                    2>/dev/null || true
+                    >/dev/null 2>&1 || true
             fi
 
             # Run Architect to fix cycles

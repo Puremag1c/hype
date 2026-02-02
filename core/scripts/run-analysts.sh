@@ -65,7 +65,7 @@ run_analyst() {
     fi
 
     # Claim trigger task
-    if ! bd update "$task_id" --status=in_progress 2>/dev/null; then
+    if ! bd update "$task_id" --status=in_progress >/dev/null 2>&1; then
         log "INFO" "Trigger $trigger_task already claimed"
         return 0
     fi
@@ -73,7 +73,7 @@ run_analyst() {
     # Check if agent file exists
     if [ ! -f "$agent_file" ]; then
         log "WARN" "Agent file not found: $agent_file"
-        bd close "$task_id" --reason="Agent file not found"
+        bd close "$task_id" --reason="Agent file not found" >/dev/null 2>&1
         return 0
     fi
 
@@ -103,17 +103,17 @@ $spec_content"
         local exit_code=$?
         if [ $exit_code -eq 124 ]; then
             log "WARN" "Analyst $analyst timeout"
-            bd update "$task_id" --status=open --notes="Timeout at $(date '+%Y-%m-%d %H:%M:%S')"
+            bd update "$task_id" --status=open --notes="Timeout at $(date '+%Y-%m-%d %H:%M:%S')" >/dev/null 2>&1
         else
             log "ERROR" "Analyst $analyst failed (exit: $exit_code)"
-            bd update "$task_id" --status=open --notes="Failed (exit: $exit_code)"
+            bd update "$task_id" --status=open --notes="Failed (exit: $exit_code)" >/dev/null 2>&1
         fi
         return 0
     fi
     set +o pipefail
 
     # Close trigger task
-    bd close "$task_id" --reason="Analyst $analyst completed"
+    bd close "$task_id" --reason="Analyst $analyst completed" >/dev/null 2>&1
     log "INFO" "Analyst $analyst completed"
 }
 

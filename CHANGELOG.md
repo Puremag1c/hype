@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.3.2] - 2026-02-02
+
+### Improved
+
+- **Clean logs: suppress bd output in all scripts**
+  - All `bd create/update/close/delete` commands now redirect to `/dev/null`
+  - Removes "✓ Created/Updated/Closed" noise from terminal and logs
+  - Affected: orchestrator.sh, run-executors.sh, run-senior-executor.sh, run-analysts.sh, close-completed-parents.sh
+
+- **Streaming logs with ANSI stripping**
+  - `tee` for real-time log output (can `tail -f` log files)
+  - `strip_ansi` removes terminal garbage (cursor reports, OSC sequences)
+  - `set -o pipefail` preserves exit codes through pipes
+
+- **Visual separation between log blocks**
+  - Empty line before each run-executors and run-analysts session
+  - Easier to distinguish cycles visually
+
+- **Improved run-executors logging**
+  - Pre-check task status before launching subshell
+  - Show task title and model in TASK_START log
+  - Summary: "Started X executor(s), skipped Y"
+
+### Affected files
+
+- `core/scripts/orchestrator.sh` — suppress bd output (8 commands)
+- `core/scripts/run-executors.sh` — streaming, visual separation, improved logging
+- `core/scripts/run-senior-executor.sh` — streaming, suppress bd output
+- `core/scripts/run-analysts.sh` — streaming, visual separation, suppress bd output
+- `core/scripts/close-completed-parents.sh` — suppress bd output
+
+---
+
 ## [1.3.1] - 2026-02-02
 
 ### Fixed

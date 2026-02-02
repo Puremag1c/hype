@@ -114,7 +114,7 @@ ACTION: Review and merge if ready"
 
     if [ "$task_status" = "closed" ]; then
         log "INFO" "Task $task_id is closed, cleaning up labels"
-        bd update "$task_id" --remove-label needs-review --add-label reviewed 2>/dev/null || true
+        bd update "$task_id" --remove-label needs-review --add-label reviewed >/dev/null 2>&1 || true
     fi
 }
 

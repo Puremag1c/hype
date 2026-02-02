@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.3.13] - 2026-02-02
+
+### Added
+
+- **Active work monitoring** - Each cycle shows which agents are actively working:
+  - `Active: WORK:task-123(15KB,active) CHECK:task-456(8KB,active) ANALYZE:ux(3KB,stale 90s)`
+  - Monitors log file growth to detect stale/hung processes
+  - Covers all agents: executors, senior, analysts, architect, tech-writer, manager
+
+---
+
 ## [1.3.12] - 2026-02-02
 
 ### Fixed

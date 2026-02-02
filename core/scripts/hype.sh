@@ -820,6 +820,101 @@ $cycles_output"
     check_problems_and_consult_manager
 }
 
+# === Active work monitoring ===
+# Shows which agents are actively working (log files growing)
+
+show_active_work() {
+    local now active_items=""
+    now=$(date +%s)
+    local stale_threshold=60  # seconds without activity = stale
+
+    # Check executor logs (WORK)
+    for log_file in "$LOGS_DIR"/executor-*.log; do
+        [ -f "$log_file" ] || continue
+        local task_id size mtime age status
+        task_id=$(basename "$log_file" .log | sed 's/executor-//')
+        size=$(stat -f%z "$log_file" 2>/dev/null || stat -c%s "$log_file" 2>/dev/null || echo "0")
+        mtime=$(stat -f%m "$log_file" 2>/dev/null || stat -c%Y "$log_file" 2>/dev/null || echo "0")
+        age=$((now - mtime))
+
+        # Only show if file was modified in last 10 minutes (active executor)
+        if [ "$age" -lt 600 ]; then
+            if [ "$age" -lt "$stale_threshold" ]; then
+                status="active"
+            else
+                status="stale ${age}s"
+            fi
+            local size_kb=$((size / 1024))
+            active_items="${active_items}WORK:$task_id(${size_kb}KB,$status) "
+        fi
+    done
+
+    # Check senior-executor logs (CHECK)
+    for log_file in "$LOGS_DIR"/senior-executor-*.log; do
+        [ -f "$log_file" ] || continue
+        local task_id size mtime age status
+        task_id=$(basename "$log_file" .log | sed 's/senior-executor-//')
+        size=$(stat -f%z "$log_file" 2>/dev/null || stat -c%s "$log_file" 2>/dev/null || echo "0")
+        mtime=$(stat -f%m "$log_file" 2>/dev/null || stat -c%Y "$log_file" 2>/dev/null || echo "0")
+        age=$((now - mtime))
+
+        if [ "$age" -lt 600 ]; then
+            if [ "$age" -lt "$stale_threshold" ]; then
+                status="active"
+            else
+                status="stale ${age}s"
+            fi
+            local size_kb=$((size / 1024))
+            active_items="${active_items}CHECK:$task_id(${size_kb}KB,$status) "
+        fi
+    done
+
+    # Check analyst logs (ANALYZE)
+    for analyst in ux security ops reliability architecture; do
+        local log_file="$LOGS_DIR/analyst-$analyst.log"
+        [ -f "$log_file" ] || continue
+        local size mtime age status
+        size=$(stat -f%z "$log_file" 2>/dev/null || stat -c%s "$log_file" 2>/dev/null || echo "0")
+        mtime=$(stat -f%m "$log_file" 2>/dev/null || stat -c%Y "$log_file" 2>/dev/null || echo "0")
+        age=$((now - mtime))
+
+        if [ "$age" -lt 600 ]; then
+            if [ "$age" -lt "$stale_threshold" ]; then
+                status="active"
+            else
+                status="stale ${age}s"
+            fi
+            local size_kb=$((size / 1024))
+            active_items="${active_items}ANALYZE:$analyst(${size_kb}KB,$status) "
+        fi
+    done
+
+    # Check other agent logs (tech-writer, architect, manager)
+    for agent in tech-writer architect manager; do
+        local log_file="$LOGS_DIR/$agent.log"
+        [ -f "$log_file" ] || continue
+        local size mtime age status
+        size=$(stat -f%z "$log_file" 2>/dev/null || stat -c%s "$log_file" 2>/dev/null || echo "0")
+        mtime=$(stat -f%m "$log_file" 2>/dev/null || stat -c%Y "$log_file" 2>/dev/null || echo "0")
+        age=$((now - mtime))
+
+        if [ "$age" -lt 600 ]; then
+            if [ "$age" -lt "$stale_threshold" ]; then
+                status="active"
+            else
+                status="stale ${age}s"
+            fi
+            local size_kb=$((size / 1024))
+            active_items="${active_items}${agent^^}(${size_kb}KB,$status) "
+        fi
+    done
+
+    # Log if there's active work
+    if [ -n "$active_items" ]; then
+        log "INFO" "Active: $active_items"
+    fi
+}
+
 # === Main loop ===
 
 main() {
@@ -880,6 +975,9 @@ main() {
         fi
 
         log "INFO" "--- Cycle $cycle | Phase: $phase | Progress: $closed_tasks/$total_tasks ($progress_pct%) ---"
+
+        # Show active work (agents with growing log files)
+        show_active_work
 
         # 4. Dispatch phase-specific actions
         dispatch_phase "$phase"

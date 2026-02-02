@@ -749,6 +749,20 @@ $spec_content"
             run_agent_with_mode "architect" ".claude/agents/architect.md" "opus" "final_review" ""
             # Check if architect created project-done milestone
             check_and_create_done_milestone
+
+            # Safety: if no PASSED and no new tasks, create blocker to prevent infinite loop
+            local latest_log
+            latest_log=$(ls -t "$LOGS_DIR"/architect-*.log 2>/dev/null | head -1)
+            if [ -z "$latest_log" ] || ! grep -q "FINAL_REVIEW: PASSED" "$latest_log" 2>/dev/null; then
+                local open_count
+                open_count=$(bd list --status=open --json 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+                if [ "$open_count" -eq 0 ]; then
+                    log "WARN" "FINAL_REVIEW incomplete (no PASSED, no new tasks), creating blocker"
+                    bd create --title="FINAL_REVIEW incomplete - check logs" \
+                        --type=bug --priority=0 \
+                        --description="Architect did not complete FINAL_REVIEW. Manual intervention required." >/dev/null 2>&1 || true
+                fi
+            fi
             ;;
 
         DONE)

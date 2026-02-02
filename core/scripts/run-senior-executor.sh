@@ -121,7 +121,9 @@ ACTION: Review and merge if ready"
 # === Main ===
 
 main() {
-    echo "" >> "$LOGS_DIR/hype.log"  # Visual separation
+    # Visual separation (terminal + file)
+    echo ""
+    echo "" >> "$LOGS_DIR/hype.log"
     log "INFO" "SENIOR-EXECUTOR (streaming mode)"
 
     # Get tasks needing review

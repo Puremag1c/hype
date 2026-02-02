@@ -846,6 +846,10 @@ main() {
         # 3. Detect current phase
         local phase
         phase=$(detect_phase)
+
+        # Visual separation between cycles (terminal + file)
+        echo ""
+        echo "" >> "$LOGS_DIR/hype.log"
         log "INFO" "--- Cycle $cycle | Phase: $phase ---"
 
         # 4. Dispatch phase-specific actions

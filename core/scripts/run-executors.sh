@@ -224,7 +224,9 @@ WORKTREE_PATH: $worktree_path"
 # === Main ===
 
 main() {
-    echo "" >> "$LOGS_DIR/hype.log"  # Visual separation
+    # Visual separation (terminal + file)
+    echo ""
+    echo "" >> "$LOGS_DIR/hype.log"
 
     # Check backpressure
     local active

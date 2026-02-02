@@ -119,7 +119,9 @@ $spec_content"
 
 # Main
 main() {
-    echo "" >> "$LOGS_DIR/hype.log"  # Visual separation
+    # Visual separation (terminal + file)
+    echo ""
+    echo "" >> "$LOGS_DIR/hype.log"
     log "INFO" "RUN-ANALYSTS: ${ANALYSTS[*]}"
 
     # Check that all trigger tasks exist

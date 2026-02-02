@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.3.3] - 2026-02-02
+
+### Fixed
+
+- **Visual separation now works in terminal (not just log file)**
+  - Added `echo ""` to stdout in addition to log file
+  - Cycles, executors, senior, analysts now visually separated
+
+### Affected files
+
+- `core/scripts/orchestrator.sh` — empty line before each cycle
+- `core/scripts/run-executors.sh` — empty line to terminal
+- `core/scripts/run-senior-executor.sh` — empty line to terminal
+- `core/scripts/run-analysts.sh` — empty line to terminal
+
+---
+
 ## [1.3.2] - 2026-02-02
 
 ### Improved

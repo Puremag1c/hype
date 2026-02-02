@@ -70,7 +70,7 @@ fi
 # Условия:
 #   1. Нет SPEC.md (новый проект)
 #   2. Есть milestone:project-done (итерация завершена, начинаем новую)
-#   3. SPEC.md есть но beads пустой (после cleanup)
+#   3. Beads пустой + есть .hype/needs-spec (после cleanup завершённой итерации)
 if [ ! -f "$PROJECT_ROOT/SPEC.md" ]; then
     echo "INIT"
     exit 0
@@ -83,8 +83,13 @@ if [ "$HAS_PROJECT_DONE" -gt 0 ]; then
 fi
 
 if [ "$TOTAL" -eq 0 ]; then
-    # Beads пустой но SPEC.md есть → Architect должен создать план
-    echo "PLANNING"
+    if [ -f "$PROJECT_ROOT/.hype/needs-spec" ]; then
+        # После завершённой итерации, нужен новый SPEC
+        echo "INIT"
+    else
+        # SPEC только создан, Architect должен создать план
+        echo "PLANNING"
+    fi
     exit 0
 fi
 

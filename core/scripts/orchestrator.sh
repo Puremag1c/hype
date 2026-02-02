@@ -378,6 +378,11 @@ check_and_create_done_milestone() {
             bd close "$milestone_id" --reason="Final review passed" 2>/dev/null || true
         fi
 
+        # Create marker for next iteration
+        # Tech Writer will see this and ask what to do next
+        touch "$PROJECT_ROOT/.hype/needs-spec"
+        log "INFO" "Created needs-spec marker for next iteration"
+
         # Cleanup after successful iteration
         # --older-than 1 preserves tasks closed less than 1 day ago
         # so the fresh milestone:project-done survives

@@ -178,14 +178,15 @@ echo "Draft saved. Will continue next session."
 Когда SPEC.md готов:
 
 1. Создай файл SPEC.md
-2. Удали временные файлы (SPEC.draft.md, PROJECT_CONTEXT.md)
+2. Удали временные файлы (SPEC.draft.md, PROJECT_CONTEXT.md, .hype/needs-spec)
 3. **ОБЯЗАТЕЛЬНО скажи пользователю:**
    > "SPEC.md создан! Теперь введите `/exit` чтобы запустить следующую фазу (планирование)."
 
 ```bash
-# Удаляем временные файлы
+# Удаляем временные файлы и маркеры
 rm -f SPEC.draft.md
 rm -f PROJECT_CONTEXT.md
+rm -f .hype/needs-spec
 
 # Создаём финальный SPEC.md
 cat > SPEC.md <<EOF

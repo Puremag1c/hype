@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.3.1] - 2026-02-02
+
+### Fixed
+
+- **P0: Tech Writer loop after iteration completion**
+  - Problem: beads empty + old SPEC.md → PLANNING instead of INIT
+  - Solution: `.hype/needs-spec` marker file
+    - Created by orchestrator after milestone:project-done
+    - Cleaned up by orchestrator after INIT phase (not by LLM prompt)
+  - detect-phase.sh: beads=0 + needs-spec → INIT, else → PLANNING
+
+- **P0: Tech Writer infinite loop when milestone:project-done exists**
+  - Problem: milestone persists → detect-phase always returns INIT
+  - Solution: orchestrator deletes milestone after INIT phase completes
+
+- **Risk mitigation: critical operations moved from LLM prompts to bash**
+  - `rm .hype/needs-spec` — now in orchestrator.sh, not tech-writer.md
+  - Principle: LLM instructions are suggestions, bash is deterministic
+
+### Affected files
+
+- `core/scripts/detect-phase.sh` — needs-spec marker check
+- `core/scripts/orchestrator.sh` — creates/deletes needs-spec, deletes milestone
+- `core/agents/tech-writer.md` — removed needs-spec deletion (moved to bash)
+
+---
+
 ## [1.3.0] - 2026-02-02
 
 ### Added

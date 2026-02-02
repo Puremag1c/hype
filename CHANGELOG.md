@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.12] - 2026-02-02
+
+### Fixed
+
+- **Prevent infinite FINAL_REVIEW loop** - If architect times out or crashes without creating tasks or saying PASSED, creates a blocker task to prevent infinite loop.
+
+---
+
 ## [1.3.11] - 2026-02-02
 
 ### Fixed

@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.2.1] - 2026-02-02
+
+### Fixed
+
+- **P0: No functional testing before project delivery**
+  - System marked project as DONE without verifying the product actually works
+  - Closed tasks ≠ working product
+  - Added mandatory step 3 "Функциональное тестирование" in architect.md final_review:
+    - Start dev server
+    - Use Playwright MCP to test UI (or curl fallback)
+    - Verify each Must Have from SPEC.md works
+    - Create bug task and return to IMPLEMENTATION if broken
+
+### Affected files
+
+- `core/agents/architect.md` — added step 3: functional testing in final_review
+
+---
+
 ## [1.2.0] - 2026-02-02
 
 ### Fixed

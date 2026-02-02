@@ -180,7 +180,70 @@ bd list --status=closed  # Что сделано
 - Соответствует ли код изначальному плану?
 - Нет ли пропущенных edge cases?
 
-### 3. Обработай untracked файлы
+### 3. Функциональное тестирование (ОБЯЗАТЕЛЬНО)
+
+**КРИТИЧНО:** Перед сдачей проекта ты ОБЯЗАН проверить что продукт работает.
+
+#### 3.1 Запусти приложение
+
+```bash
+# Определи команду запуска из проекта
+if [ -f package.json ]; then
+    npm run dev &
+    DEV_PID=$!
+    sleep 5  # Дай серверу подняться
+elif [ -f mix.exs ]; then
+    mix phx.server &
+    DEV_PID=$!
+    sleep 5
+elif [ -f manage.py ]; then
+    python manage.py runserver &
+    DEV_PID=$!
+    sleep 3
+fi
+```
+
+#### 3.2 Проверь через браузер (Playwright MCP)
+
+Если доступен Playwright MCP — используй его для проверки:
+
+1. Открой главную страницу приложения
+2. Пройди по каждому Must Have из SPEC.md:
+   - Попробуй выполнить действие как пользователь
+   - Проверь что результат соответствует ожиданиям
+3. Сделай скриншот финального состояния
+
+#### 3.3 Если Playwright недоступен — ручная проверка
+
+```bash
+# Проверь что сервер отвечает
+curl -s http://localhost:3000 | head -20
+
+# Или для других портов
+curl -s http://localhost:4000 | head -20
+curl -s http://localhost:8000 | head -20
+```
+
+Прочитай ответ и убедись что это ожидаемый HTML/JSON, не ошибка.
+
+#### 3.4 Останови dev сервер
+
+```bash
+kill $DEV_PID 2>/dev/null || true
+```
+
+#### 3.5 Если что-то не работает
+
+```bash
+bd create --title="Fix: <что не работает>" --type=bug --priority=0 \
+  --description="Обнаружено при final review. <детали проблемы>"
+echo "FINAL_REVIEW: NEEDS_FIXES"
+# НЕ продолжай! Вернись в IMPLEMENTATION.
+```
+
+**НЕ ПРОПУСКАЙ этот шаг.** Закрытые задачи ≠ работающий продукт.
+
+### 4. Обработай untracked файлы
 
 ```bash
 git status --porcelain | grep '^??'
@@ -193,7 +256,7 @@ git status --porcelain | grep '^??'
 
 **НЕ оставляй untracked файлы в рабочей директории!**
 
-### 4. Если есть проблемы — создай задачи и выйди
+### 5. Если есть проблемы — создай задачи и выйди
 
 ```bash
 bd create --title="Fix: <описание проблемы>" --type=task --priority=0
@@ -201,17 +264,17 @@ echo "FINAL_REVIEW: NEEDS_FIXES"
 # НЕ продолжай к версионированию!
 ```
 
-### 5. Если всё ок — версионирование
+### 6. Если всё ок — версионирование
 
 **ОБЯЗАТЕЛЬНО:** Перед завершением итерации ты должен повысить версию и обновить changelog.
 
-#### 5.1 Прочитай текущую версию
+#### 6.1 Прочитай текущую версию
 
 ```bash
 cat VERSION 2>/dev/null || echo "0.0.0"
 ```
 
-#### 5.2 Определи тип изменений
+#### 6.2 Определи тип изменений
 
 Проанализируй closed задачи этой итерации:
 
@@ -224,14 +287,14 @@ bd list --status=closed --json | jq -r '.[] | "\(.type) \(.title)"'
 - **MINOR** (0.X.0): есть новые features (type=feature)
 - **PATCH** (0.0.X): только bugfixes и tasks (type=bug, type=task)
 
-#### 5.3 Обнови VERSION
+#### 6.3 Обнови VERSION
 
 ```bash
 # Пример: была 0.2.0, добавили features → 0.3.0
 echo "0.3.0" > VERSION
 ```
 
-#### 5.4 Сгенерируй CHANGELOG.md
+#### 6.4 Сгенерируй CHANGELOG.md
 
 Формат:
 
@@ -261,14 +324,14 @@ tail -n +3 CHANGELOG.md >> CHANGELOG_NEW.md 2>/dev/null || true
 mv CHANGELOG_NEW.md CHANGELOG.md
 ```
 
-#### 5.5 Закоммить версию
+#### 6.5 Закоммить версию
 
 ```bash
 git add VERSION CHANGELOG.md
 git commit -m "Release v$(cat VERSION)"
 ```
 
-#### 5.6 Подтверди завершение
+#### 6.6 Подтверди завершение
 
 ```bash
 echo "FINAL_REVIEW: PASSED"

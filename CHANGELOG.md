@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.9] - 2026-02-02
+
+### Fixed
+
+- **Auto-reopen tasks closed without merge** - Senior-executor sometimes calls `bd close` when intending to reject (writes "REJECTED" in notes but calls wrong command). Now detects this by checking if main SHA changed after Claude runs. If task is closed but main unchanged = no merge happened = auto-reopen with note.
+
+---
+
 ## [1.3.8] - 2026-02-02
 
 ### Added

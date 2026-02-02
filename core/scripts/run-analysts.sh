@@ -40,8 +40,8 @@ log() {
     esac
 
     # Colored output to terminal, plain to log file
-    printf "${color}%s [RUN-ANALYSTS] %s: %s${reset}\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$msg"
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [RUN-ANALYSTS] $level: $msg" >> "$LOGS_DIR/hype.log"
+    printf "${color}%s [HYPE ANALYZE] %s: %s${reset}\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$msg"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [HYPE ANALYZE] $level: $msg" >> "$LOGS_DIR/hype.log"
 }
 
 # All analysts
@@ -122,7 +122,7 @@ main() {
     # Visual separation (terminal + file)
     echo ""
     echo "" >> "$LOGS_DIR/hype.log"
-    log "INFO" "RUN-ANALYSTS: ${ANALYSTS[*]}"
+    log "INFO" "ANALYZE: ${ANALYSTS[*]}"
 
     # Check that all trigger tasks exist
     local missing=0
@@ -160,7 +160,7 @@ main() {
     if ! bd sync --status 2>/dev/null | grep -q "auto-commit.*enabled"; then
         bd sync 2>/dev/null || true
     fi
-    log "INFO" "RUN-ANALYSTS FINISHED"
+    log "INFO" "ANALYZE FINISHED"
 }
 
 main "$@"

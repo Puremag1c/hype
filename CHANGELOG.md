@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.3.7] - 2026-02-02
+
+### Changed
+
+- **Renamed log prefixes for clarity**
+  - `[RUN-ANALYSTS]` → `[HYPE ANALYZE]`
+  - `[RUN-EXECUTORS]` → `[HYPE WORK]`
+  - `[SENIOR-EXECUTOR]` → `[HYPE CHECK]`
+
+---
+
 ## [1.3.6] - 2026-02-02
 
 ### Removed

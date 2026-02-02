@@ -37,8 +37,8 @@ log() {
         TASK_START)    color="\033[36m" ;;
     esac
 
-    printf "${gray}%s${reset} [SENIOR-EXECUTOR] ${color}%s${reset}: %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$msg"
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [SENIOR-EXECUTOR] $level: $msg" >> "$LOGS_DIR/hype.log"
+    printf "${gray}%s${reset} [HYPE CHECK] ${color}%s${reset}: %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$msg"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [HYPE CHECK] $level: $msg" >> "$LOGS_DIR/hype.log"
 }
 
 # === Get tasks needing review ===
@@ -124,7 +124,7 @@ main() {
     # Visual separation (terminal + file)
     echo ""
     echo "" >> "$LOGS_DIR/hype.log"
-    log "INFO" "SENIOR-EXECUTOR (streaming mode)"
+    log "INFO" "CHECK (streaming mode)"
 
     # Get tasks needing review
     local tasks

@@ -78,8 +78,8 @@ log() {
         TASK_START)    color="\033[36m" ;;
     esac
 
-    printf "${gray}%s${reset} [RUN-EXECUTORS] ${color}%s${reset}: %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$msg"
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [RUN-EXECUTORS] $level: $msg" >> "$LOGS_DIR/hype.log"
+    printf "${gray}%s${reset} [HYPE WORK] ${color}%s${reset}: %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$msg"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [HYPE WORK] $level: $msg" >> "$LOGS_DIR/hype.log"
 }
 
 # === Backpressure check ===

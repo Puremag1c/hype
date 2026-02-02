@@ -83,8 +83,8 @@ if [ "$HAS_PROJECT_DONE" -gt 0 ]; then
 fi
 
 if [ "$TOTAL" -eq 0 ]; then
-    # Beads пустой но SPEC.md есть → Tech Writer спросит что дальше
-    echo "INIT"
+    # Beads пустой но SPEC.md есть → Architect должен создать план
+    echo "PLANNING"
     exit 0
 fi
 

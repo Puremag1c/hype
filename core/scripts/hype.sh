@@ -25,20 +25,6 @@ HYPE_HOME="${HYPE_HOME:-$HOME/.hype}"
 acquire_lock() {
     mkdir -p "$CLAUDEV_DIR"
 
-    # Migration: remove old orchestrator.lock if exists
-    local old_lock="$CLAUDEV_DIR/orchestrator.lock"
-    if [[ -f "$old_lock" ]]; then
-        local old_pid
-        old_pid=$(cat "$old_lock" 2>/dev/null || echo "0")
-        if kill -0 "$old_pid" 2>/dev/null; then
-            echo "ERROR: Old HYPE process still running (PID $old_pid). Stop it first."
-            exit 1
-        else
-            rm -f "$old_lock"
-            echo "Removed legacy orchestrator.lock"
-        fi
-    fi
-
     if ! (set -C; echo $$ > "$LOCK_FILE") 2>/dev/null; then
         OLD_PID=$(cat "$LOCK_FILE" 2>/dev/null || echo "0")
         if kill -0 "$OLD_PID" 2>/dev/null; then

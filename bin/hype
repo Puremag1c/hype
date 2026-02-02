@@ -475,10 +475,6 @@ cmd_status() {
 
     # HYPE status
     local lock_file=".hype/hype.lock"
-    # Check legacy lock file
-    if [[ -f ".hype/orchestrator.lock" ]]; then
-        lock_file=".hype/orchestrator.lock"
-    fi
     if [[ -f "$lock_file" ]]; then
         local pid=$(cat "$lock_file" 2>/dev/null || echo "0")
         if kill -0 "$pid" 2>/dev/null; then
@@ -785,8 +781,7 @@ cmd_delete() {
 
     # Stop HYPE if running
     local lock_file=".hype/hype.lock"
-    [[ -f ".hype/orchestrator.lock" ]] && lock_file=".hype/orchestrator.lock"
-    if [[ -f "$lock_file" ]]; then
+        if [[ -f "$lock_file" ]]; then
         local pid=$(cat "$lock_file" 2>/dev/null || echo "0")
         if kill -0 "$pid" 2>/dev/null; then
             info "Stopping HYPE (PID $pid)..."
@@ -883,8 +878,7 @@ cmd_wipe() {
 
     # Stop HYPE if running
     local lock_file=".hype/hype.lock"
-    [[ -f ".hype/orchestrator.lock" ]] && lock_file=".hype/orchestrator.lock"
-    if [[ -f "$lock_file" ]]; then
+        if [[ -f "$lock_file" ]]; then
         local pid=$(cat "$lock_file" 2>/dev/null || echo "0")
         if kill -0 "$pid" 2>/dev/null; then
             info "Stopping HYPE (PID $pid)..."
@@ -1065,13 +1059,6 @@ cmd_stop() {
     fi
 
     local lock_file=".hype/hype.lock"
-    local old_lock_file=".hype/orchestrator.lock"
-
-    # Check for legacy lock file first
-    if [[ -f "$old_lock_file" ]]; then
-        lock_file="$old_lock_file"
-        info "Found legacy orchestrator.lock, using it"
-    fi
 
     if [[ ! -f "$lock_file" ]]; then
         info "HYPE not running (no lock file)"

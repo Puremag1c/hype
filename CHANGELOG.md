@@ -1,18 +1,10 @@
 # Changelog
 
-## [1.3.5] - 2026-02-02
+## [1.3.6] - 2026-02-02
 
-### Fixed
+### Removed
 
-- **Migration support for legacy orchestrator.lock**
-  - hype.sh auto-removes old `orchestrator.lock` on startup
-  - bin/hype commands (stop, status, reset, purge) check both lock files
-  - Prevents "already running" errors after upgrade
-
-### Affected files
-
-- `core/scripts/hype.sh` — auto-migration in acquire_lock()
-- `bin/hype` — legacy lock file checks in stop/status/reset/purge
+- **Removed legacy orchestrator.lock checks** (unnecessary complexity)
 
 ---
 

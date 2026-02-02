@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.11] - 2026-02-02
+
+### Fixed
+
+- **Remove ALL milestones when starting new iteration** - Previously only `project-done` was removed in INIT phase. Other milestones (`planning-done`, `analysts-done`, `plan-reviewed`) remained and confused detect-phase in new iteration.
+
+---
+
 ## [1.3.10] - 2026-02-02
 
 ### Fixed

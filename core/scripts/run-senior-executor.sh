@@ -70,6 +70,16 @@ process_review() {
         return 0
     fi
 
+    # Remember main SHA before Claude runs (to detect if merge happened)
+    local main_ref main_before
+    if git remote get-url origin &>/dev/null; then
+        git fetch origin 2>/dev/null || true
+        main_ref="origin/main"
+    else
+        main_ref="main"
+    fi
+    main_before=$(git rev-parse "$main_ref" 2>/dev/null || echo "unknown")
+
     # Check if senior-executor agent exists
     local agent_file=".claude/agents/senior-executor.md"
     local agent_prompt
@@ -107,6 +117,13 @@ ACTION: Review and merge if ready"
     fi
     set +o pipefail
 
+    # Fetch to get latest main SHA
+    if git remote get-url origin &>/dev/null; then
+        git fetch origin 2>/dev/null || true
+    fi
+    local main_after
+    main_after=$(git rev-parse "$main_ref" 2>/dev/null || echo "unknown")
+
     # Check result and log appropriately
     local updated_json
     updated_json=$(bd show "$task_id" --json 2>/dev/null || echo "[]")
@@ -114,8 +131,14 @@ ACTION: Review and merge if ready"
     task_status=$(echo "$updated_json" | jq -r '.[0].status // "unknown"' 2>/dev/null || echo "unknown")
 
     if [ "$task_status" = "closed" ]; then
-        log "SUCCESS" "APPROVED: $task_id (merged)"
-        bd update "$task_id" --remove-label needs-review --add-label reviewed >/dev/null 2>&1 || true
+        # Verify merge actually happened by checking if main changed
+        if [ "$main_before" != "unknown" ] && [ "$main_before" = "$main_after" ]; then
+            log "WARN" "Task $task_id closed but main unchanged, reopening"
+            bd update "$task_id" --status=open --notes="Auto-reopened: closed without merge to main"
+        else
+            log "SUCCESS" "APPROVED: $task_id (merged)"
+            bd update "$task_id" --remove-label needs-review --add-label reviewed >/dev/null 2>&1 || true
+        fi
     elif [ "$task_status" = "open" ]; then
         # Task returned for rework - extract reason from notes
         local notes

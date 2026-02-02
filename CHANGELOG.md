@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.10] - 2026-02-02
+
+### Fixed
+
+- **detect-phase returns PLANNING when all tasks closed** - `bd list` (without --status) returns only open+in_progress tasks. When all tasks are closed, TOTAL=0, causing incorrect PLANNING phase instead of FINAL_REVIEW.
+
+---
+
 ## [1.3.9] - 2026-02-02
 
 ### Fixed

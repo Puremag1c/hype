@@ -660,10 +660,21 @@ dispatch_phase() {
                 log "WARN" "tech-writer.md not found, skipping INIT"
             fi
 
-            # Clean up needs-spec marker if SPEC.md was created
-            if [ -f "$PROJECT_ROOT/SPEC.md" ] && [ -f "$PROJECT_ROOT/.hype/needs-spec" ]; then
-                rm -f "$PROJECT_ROOT/.hype/needs-spec"
-                log "INFO" "Removed needs-spec marker (SPEC.md exists)"
+            # Clean up after INIT phase if SPEC.md was created
+            if [ -f "$PROJECT_ROOT/SPEC.md" ]; then
+                # Remove needs-spec marker
+                if [ -f "$PROJECT_ROOT/.hype/needs-spec" ]; then
+                    rm -f "$PROJECT_ROOT/.hype/needs-spec"
+                    log "INFO" "Removed needs-spec marker"
+                fi
+
+                # Remove milestone:project-done (it served its purpose)
+                local done_milestone_id
+                done_milestone_id=$(bd list --status=closed --json 2>/dev/null | jq -r '.[] | select(.labels[]? == "milestone:project-done") | .id' | head -1)
+                if [ -n "$done_milestone_id" ]; then
+                    bd delete "$done_milestone_id" 2>/dev/null || true
+                    log "INFO" "Removed project-done milestone (new iteration started)"
+                fi
             fi
             ;;
 

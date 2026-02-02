@@ -97,7 +97,9 @@ PROJECT_ROOT: $PROJECT_DIR
 $spec_content"
 
     # Use stdin to avoid issues with prompts starting with "---"
-    if ! printf '%s' "$full_prompt" | timeout_cmd "$TASK_TIMEOUT" claude --model sonnet > "$output_file" 2>&1; then
+    # Streaming: tee for real-time logs, strip_ansi removes terminal garbage
+    set -o pipefail
+    if ! printf '%s' "$full_prompt" | timeout_cmd "$TASK_TIMEOUT" claude --model sonnet 2>&1 | strip_ansi | tee "$output_file" >/dev/null; then
         local exit_code=$?
         if [ $exit_code -eq 124 ]; then
             log "WARN" "Analyst $analyst timeout"
@@ -108,6 +110,7 @@ $spec_content"
         fi
         return 0
     fi
+    set +o pipefail
 
     # Close trigger task
     bd close "$task_id" --reason="Analyst $analyst completed"
@@ -116,10 +119,8 @@ $spec_content"
 
 # Main
 main() {
-    log "INFO" "=========================================="
-    log "INFO" "RUN-ANALYSTS STARTED"
-    log "INFO" "Analysts: ${ANALYSTS[*]}"
-    log "INFO" "=========================================="
+    echo "" >> "$LOGS_DIR/hype.log"  # Visual separation
+    log "INFO" "RUN-ANALYSTS: ${ANALYSTS[*]}"
 
     # Check that all trigger tasks exist
     local missing=0

@@ -180,7 +180,20 @@ bd list --status=closed  # Что сделано
 - Соответствует ли код изначальному плану?
 - Нет ли пропущенных edge cases?
 
-### 3. Если есть проблемы — создай задачи и выйди
+### 3. Обработай untracked файлы
+
+```bash
+git status --porcelain | grep '^??'
+```
+
+**Каждый untracked файл нужно обработать:**
+- Utility/temp скрипт (fix_*.py, test_*.sh) → удалить: `rm <file>`
+- Часть проекта → закоммитить: `git add <file>`
+- Должен игнорироваться → добавить в .gitignore
+
+**НЕ оставляй untracked файлы в рабочей директории!**
+
+### 4. Если есть проблемы — создай задачи и выйди
 
 ```bash
 bd create --title="Fix: <описание проблемы>" --type=task --priority=0
@@ -188,17 +201,17 @@ echo "FINAL_REVIEW: NEEDS_FIXES"
 # НЕ продолжай к версионированию!
 ```
 
-### 4. Если всё ок — версионирование
+### 5. Если всё ок — версионирование
 
 **ОБЯЗАТЕЛЬНО:** Перед завершением итерации ты должен повысить версию и обновить changelog.
 
-#### 4.1 Прочитай текущую версию
+#### 5.1 Прочитай текущую версию
 
 ```bash
 cat VERSION 2>/dev/null || echo "0.0.0"
 ```
 
-#### 4.2 Определи тип изменений
+#### 5.2 Определи тип изменений
 
 Проанализируй closed задачи этой итерации:
 
@@ -211,14 +224,14 @@ bd list --status=closed --json | jq -r '.[] | "\(.type) \(.title)"'
 - **MINOR** (0.X.0): есть новые features (type=feature)
 - **PATCH** (0.0.X): только bugfixes и tasks (type=bug, type=task)
 
-#### 4.3 Обнови VERSION
+#### 5.3 Обнови VERSION
 
 ```bash
 # Пример: была 0.2.0, добавили features → 0.3.0
 echo "0.3.0" > VERSION
 ```
 
-#### 4.4 Сгенерируй CHANGELOG.md
+#### 5.4 Сгенерируй CHANGELOG.md
 
 Формат:
 
@@ -248,14 +261,14 @@ tail -n +3 CHANGELOG.md >> CHANGELOG_NEW.md 2>/dev/null || true
 mv CHANGELOG_NEW.md CHANGELOG.md
 ```
 
-#### 4.5 Закоммить версию
+#### 5.5 Закоммить версию
 
 ```bash
 git add VERSION CHANGELOG.md
 git commit -m "Release v$(cat VERSION)"
 ```
 
-#### 4.6 Подтверди завершение
+#### 5.6 Подтверди завершение
 
 ```bash
 echo "FINAL_REVIEW: PASSED"

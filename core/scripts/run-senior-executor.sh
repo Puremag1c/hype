@@ -93,7 +93,9 @@ PROJECT_ROOT: $PROJECT_DIR
 ACTION: Review and merge if ready"
 
     # Use stdin to avoid issues with prompts starting with "---"
-    if printf '%s' "$full_prompt" | timeout_cmd "$TASK_TIMEOUT" claude --model opus > "$output_file" 2>&1; then
+    # Streaming: tee for real-time logs, strip_ansi removes terminal garbage
+    set -o pipefail
+    if printf '%s' "$full_prompt" | timeout_cmd "$TASK_TIMEOUT" claude --model opus 2>&1 | strip_ansi | tee "$output_file" >/dev/null; then
         log "INFO" "Review completed for $task_id"
     else
         local exit_code=$?
@@ -103,6 +105,7 @@ ACTION: Review and merge if ready"
             log "ERROR" "Review failed for $task_id (exit: $exit_code)"
         fi
     fi
+    set +o pipefail
 
     # Always cleanup: if task is closed, remove needs-review label
     # (Claude might have closed task before crashing)
@@ -118,9 +121,8 @@ ACTION: Review and merge if ready"
 # === Main ===
 
 main() {
-    log "INFO" "=========================================="
+    echo "" >> "$LOGS_DIR/hype.log"  # Visual separation
     log "INFO" "SENIOR-EXECUTOR (streaming mode)"
-    log "INFO" "=========================================="
 
     # Get tasks needing review
     local tasks

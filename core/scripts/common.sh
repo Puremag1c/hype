@@ -5,6 +5,18 @@
 # Disable terminal color queries from beads (causes garbage escape sequences)
 export NO_COLOR=1
 
+# strip_ansi - removes ANSI escape sequences from input
+# Handles: colors, cursor movement, OSC sequences
+# Usage: echo "text" | strip_ansi
+#        strip_ansi < file.log
+strip_ansi() {
+    sed -e 's/\x1b\[[0-9;]*[a-zA-Z]//g' \
+        -e 's/\x1b\][^\x07]*\x07//g' \
+        -e 's/\x1b\][^\x1b]*\x1b\\//g' \
+        -e 's/\x1b(B//g'
+}
+export -f strip_ansi 2>/dev/null || true
+
 # timeout_cmd - кроссплатформенный timeout (macOS + Linux)
 # Использование: timeout_cmd DURATION COMMAND [ARGS...]
 # Пример: timeout_cmd 5m claude -p "prompt"

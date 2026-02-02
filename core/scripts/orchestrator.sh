@@ -379,8 +379,10 @@ check_and_create_done_milestone() {
         fi
 
         # Cleanup after successful iteration
+        # --older-than 1 preserves tasks closed less than 1 day ago
+        # so the fresh milestone:project-done survives
         log "INFO" "Running cleanup after successful iteration..."
-        bd admin cleanup --force 2>/dev/null || true
+        bd admin cleanup --older-than 1 --force 2>/dev/null || true
         bd doctor --fix 2>/dev/null || true
         log "INFO" "Cleanup complete"
     fi

@@ -488,8 +488,55 @@ cmd_status() {
 
     echo ""
 
-    # Beads stats
+    # Active executors and pending reviews
     if command -v bd &>/dev/null && [[ -d ".beads" ]]; then
+        local in_progress
+        in_progress=$(bd list --status=in_progress --json 2>/dev/null || echo "[]")
+
+        # Active executors (have executor label)
+        local executors
+        executors=$(echo "$in_progress" | jq -r '.[] | select(.labels | index("executor")) | "\(.id)|\(.title)|\(.updated_at)"' 2>/dev/null || true)
+
+        if [[ -n "$executors" ]]; then
+            echo "Active executors:"
+            local now_epoch
+            now_epoch=$(date +%s)
+            while IFS='|' read -r task_id title updated_at; do
+                [[ -z "$task_id" ]] && continue
+                # Calculate duration
+                local clean_date="${updated_at%%.*}"
+                clean_date="${clean_date%%+*}"
+                clean_date="${clean_date%%Z*}"
+                local task_epoch duration_s duration_str
+                task_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%S" "$clean_date" +%s 2>/dev/null || date -d "$clean_date" +%s 2>/dev/null || echo "$now_epoch")
+                duration_s=$((now_epoch - task_epoch))
+                if [[ $duration_s -ge 60 ]]; then
+                    duration_str="$((duration_s / 60))m $((duration_s % 60))s"
+                else
+                    duration_str="${duration_s}s"
+                fi
+                # Truncate title
+                title="${title:0:35}"
+                printf "  %-12s %-37s %8s  logs/executor-%s.log\n" "$task_id" "\"$title\"" "$duration_str" "$task_id"
+            done <<< "$executors"
+            echo ""
+        fi
+
+        # Pending reviews (have needs-review label, no executor label)
+        local reviews
+        reviews=$(echo "$in_progress" | jq -r '.[] | select((.labels | index("needs-review")) and ((.labels | index("executor")) | not)) | "\(.id)|\(.title)"' 2>/dev/null || true)
+
+        if [[ -n "$reviews" ]]; then
+            echo "Pending reviews:"
+            while IFS='|' read -r task_id title; do
+                [[ -z "$task_id" ]] && continue
+                title="${title:0:40}"
+                printf "  %-12s %-42s waiting for senior\n" "$task_id" "\"$title\""
+            done <<< "$reviews"
+            echo ""
+        fi
+
+        # Beads stats
         bd stats 2>/dev/null || true
     fi
 }

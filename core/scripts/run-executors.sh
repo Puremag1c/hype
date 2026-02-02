@@ -176,8 +176,11 @@ WORKTREE_PATH: $worktree_path"
     # Worktrees use redirect file to share .beads/ with main repo
     # All bd operations go through daemon (serializes SQLite access)
     # Note: must capture exit code BEFORE any other command
-    printf '%s' "$full_prompt" | timeout_cmd "$TASK_TIMEOUT" bash -c "cd '$worktree_path' && claude --model '$model'" > "$output_file" 2>&1
+    # Streaming: tee for real-time logs, strip_ansi removes terminal garbage
+    set -o pipefail
+    printf '%s' "$full_prompt" | timeout_cmd "$TASK_TIMEOUT" bash -c "cd '$worktree_path' && claude --model '$model'" 2>&1 | strip_ansi | tee "$output_file" >/dev/null
     local exit_code=$?
+    set +o pipefail
 
     # Always cleanup worktree (success or failure)
     cleanup_worktree "$slot"
@@ -221,10 +224,7 @@ WORKTREE_PATH: $worktree_path"
 # === Main ===
 
 main() {
-    log "INFO" "=========================================="
-    log "INFO" "RUN-EXECUTORS STARTED"
-    log "INFO" "Max parallel: $MAX_PARALLEL"
-    log "INFO" "=========================================="
+    echo "" >> "$LOGS_DIR/hype.log"  # Visual separation
 
     # Check backpressure
     local active
@@ -236,25 +236,48 @@ main() {
     fi
 
     local available_slots=$((MAX_PARALLEL - active))
-    log "INFO" "Available slots: $available_slots (active: $active)"
 
     # Get ready tasks
     local tasks
     tasks=$(get_ready_tasks)
 
     if [ -z "$tasks" ]; then
-        log "INFO" "No ready tasks for executors"
+        log "INFO" "No ready tasks (slots: $available_slots/$MAX_PARALLEL)"
         exit 0
     fi
+
+    local task_count
+    task_count=$(echo "$tasks" | wc -l | tr -d ' ')
+    log "INFO" "Checking $task_count ready tasks (slots: $available_slots/$MAX_PARALLEL)"
 
     # Start executors in parallel (up to available slots)
     # Non-blocking: launch and return immediately (streaming architecture)
     # Each executor gets its own slot number for worktree isolation
     local started=0
+    local skipped=0
     for task_id in $tasks; do
         if [ $started -ge $available_slots ]; then
             break
         fi
+
+        # Pre-check status (reduce race condition confusion in logs)
+        local current_status task_title model
+        current_status=$(bd show "$task_id" --json 2>/dev/null | jq -r '.[0].status // "unknown"' 2>/dev/null || echo "unknown")
+
+        if [ "$current_status" != "open" ]; then
+            log "INFO" "SKIP: $task_id already $current_status"
+            ((skipped++)) || true
+            continue
+        fi
+
+        # Get task details for logging
+        local task_json
+        task_json=$(bd show "$task_id" --json 2>/dev/null || echo "[]")
+        task_title=$(echo "$task_json" | jq -r '.[0].title // "unknown"' 2>/dev/null | head -c 40)
+        model=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("model:")) | split(":")[1]' 2>/dev/null | head -1)
+        model="${model:-sonnet}"
+
+        log "TASK_START" "$task_id \"$task_title\" (slot $started, $model)"
 
         # Launch in subshell, detached from parent
         # Pass slot number for worktree isolation
@@ -265,7 +288,7 @@ main() {
     # Detach all background jobs (won't receive SIGHUP if parent exits)
     disown -a 2>/dev/null || true
 
-    log "INFO" "Launched $started executors (non-blocking)"
+    log "INFO" "Started $started executor(s), skipped $skipped"
     # No wait — returns immediately, orchestrator will check progress next iteration
 }
 

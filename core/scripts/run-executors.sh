@@ -293,11 +293,12 @@ main() {
         model=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("model:")) | split(":")[1]' 2>/dev/null | head -1)
         model="${model:-sonnet}"
 
-        log "TASK_START" "$task_id \"$task_title\" (slot $started, $model)"
+        local slot=$((active + started))
+        log "TASK_START" "$task_id \"$task_title\" (slot $slot, $model)"
 
         # Launch in subshell, detached from parent
-        # Pass slot number for worktree isolation
-        ( run_executor "$started" "$task_id" ) &
+        # Pass slot number for worktree isolation (offset by active to avoid conflicts)
+        ( run_executor "$slot" "$task_id" ) &
         ((started++))
     done
 

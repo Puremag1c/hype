@@ -145,6 +145,11 @@ cat src/components/LoginForm.tsx
 ## User Stories
 - As a [user], I want [feature] so that [benefit]
 
+## Testing
+- **Type**: web | api | cli | library
+- **Start command**: [как запустить: `npm run dev`, `mix phx.server`, etc.]
+- **Test URL**: [если web/api: http://localhost:PORT]
+
 ## Open Questions (for Architect)
 [Что осталось неопределённым — Architect решит]
 ```

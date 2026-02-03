@@ -380,7 +380,7 @@ check_and_create_done_milestone() {
 
         # Create marker for next iteration
         # Tech Writer will see this and ask what to do next
-        touch "$PROJECT_ROOT/.hype/needs-spec"
+        touch "$PROJECT_DIR/.hype/needs-spec"
         log "INFO" "Created needs-spec marker for next iteration"
 
         # Cleanup after successful iteration
@@ -661,10 +661,10 @@ dispatch_phase() {
             fi
 
             # Clean up after INIT phase if SPEC.md was created
-            if [ -f "$PROJECT_ROOT/SPEC.md" ]; then
+            if [ -f "$PROJECT_DIR/SPEC.md" ]; then
                 # Remove needs-spec marker
-                if [ -f "$PROJECT_ROOT/.hype/needs-spec" ]; then
-                    rm -f "$PROJECT_ROOT/.hype/needs-spec"
+                if [ -f "$PROJECT_DIR/.hype/needs-spec" ]; then
+                    rm -f "$PROJECT_DIR/.hype/needs-spec"
                     log "INFO" "Removed needs-spec marker"
                 fi
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.4.1] - 2026-02-03
+
+### Added
+
+- **Configurable model restrictions** - New `ALLOWED_MODELS` setting in `.hype/config.sh`:
+  - `"opus,sonnet,haiku"` — all models (default)
+  - `"opus,sonnet"` — haiku tasks run on sonnet
+  - `"sonnet,haiku"` — opus tasks run on sonnet
+  - `"opus"` / `"sonnet"` / `"haiku"` — single model for all tasks
+- `map_model()` function in common.sh maps requested model to nearest allowed
+
+---
+
 ## [1.4.0] - 2026-02-03
 
 ### Added

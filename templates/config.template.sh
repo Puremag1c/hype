@@ -24,6 +24,18 @@ TASK_TIMEOUT="10m"
 # Таймаут ожидания ввода пользователя (Tech Writer)
 USER_INPUT_TIMEOUT="30m"
 
+# === Модели ===
+
+# Разрешённые модели для executor'ов (через запятую)
+# Варианты: opus, sonnet, haiku
+# Примеры:
+#   "opus,sonnet,haiku" — все модели (default)
+#   "opus,sonnet"       — без haiku (haiku→sonnet)
+#   "sonnet,haiku"      — без opus (opus→sonnet)
+#   "opus"              — только opus
+#   "sonnet"            — только sonnet
+ALLOWED_MODELS="opus,sonnet,haiku"
+
 # === CI/CD ===
 
 # Включить интеграцию с GitHub CI

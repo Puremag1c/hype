@@ -185,3 +185,55 @@ save_attempt_result() {
     echo "$updated_notes"
 }
 export -f save_attempt_result 2>/dev/null || true
+
+# map_model - маппит модель на ближайшую разрешённую
+# Использование: map_model MODEL [ALLOWED_MODELS]
+# Иерархия: opus > sonnet > haiku
+# Стратегия: берём ближайшую более мощную (вверх по иерархии)
+#
+# Примеры:
+#   map_model "haiku" "opus,sonnet"  → "sonnet" (ближайшая вверх)
+#   map_model "opus" "sonnet,haiku"  → "sonnet" (ближайшая вниз)
+#   map_model "sonnet" "opus"        → "opus"
+map_model() {
+    local requested="$1"
+    local allowed="${2:-${ALLOWED_MODELS:-opus,sonnet,haiku}}"
+
+    # Helper: проверить что модель в списке разрешённых
+    _model_allowed() {
+        case ",$allowed," in
+            *",$1,"*) return 0 ;;
+            *) return 1 ;;
+        esac
+    }
+
+    # Если запрошенная модель разрешена — вернуть как есть
+    if _model_allowed "$requested"; then
+        echo "$requested"
+        return 0
+    fi
+
+    # Иерархия: opus(0) > sonnet(1) > haiku(2)
+    # Ищем ближайшую: сначала вверх по мощности, потом вниз
+    case "$requested" in
+        haiku)
+            # Вверх: sonnet, opus
+            if _model_allowed "sonnet"; then echo "sonnet"; return 0; fi
+            if _model_allowed "opus"; then echo "opus"; return 0; fi
+            ;;
+        sonnet)
+            # Вверх: opus. Вниз: haiku
+            if _model_allowed "opus"; then echo "opus"; return 0; fi
+            if _model_allowed "haiku"; then echo "haiku"; return 0; fi
+            ;;
+        opus)
+            # Вниз: sonnet, haiku
+            if _model_allowed "sonnet"; then echo "sonnet"; return 0; fi
+            if _model_allowed "haiku"; then echo "haiku"; return 0; fi
+            ;;
+    esac
+
+    # Fallback: первая из списка
+    echo "$allowed" | cut -d',' -f1
+}
+export -f map_model 2>/dev/null || true

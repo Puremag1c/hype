@@ -149,11 +149,17 @@ run_executor() {
     fi
 
     # Get model from label (fallback: sonnet with warning)
-    local model
-    model=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("model:")) | split(":")[1]' 2>/dev/null | head -1)
-    if [ -z "$model" ]; then
+    local requested_model model
+    requested_model=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("model:")) | split(":")[1]' 2>/dev/null | head -1)
+    if [ -z "$requested_model" ]; then
         log "WARN" "Task $task_id has no model: label, using fallback sonnet"
-        model="sonnet"
+        requested_model="sonnet"
+    fi
+
+    # Map to allowed model (respects ALLOWED_MODELS from config)
+    model=$(map_model "$requested_model")
+    if [ "$model" != "$requested_model" ]; then
+        log "INFO" "Model mapped: $requested_model → $model (ALLOWED_MODELS=$ALLOWED_MODELS)"
     fi
 
     log "INFO" "Starting executor for $task_id ($model): $task_title"

@@ -141,32 +141,47 @@ export -f reset_stale_tasks 2>/dev/null || true
 #   Recommendation: <diagnosis>
 build_retry_context() {
     local task_id="$1"
-    local task_json notes retry_count
+    local task_json notes retry_count scope_count review_count total_failures
 
     task_json=$(bd show "$task_id" --json 2>/dev/null || echo "[]")
     notes=$(echo "$task_json" | jq -r '.[0].notes // ""' 2>/dev/null || echo "")
 
-    # Get retry count from label
+    # Get all failure counts from labels
     retry_count=$(echo "$task_json" | jq -r '[.[0].labels[]? | select(startswith("retry:")) | split(":")[1] | tonumber] | max // 0' 2>/dev/null || echo "0")
+    scope_count=$(echo "$task_json" | jq -r '[.[0].labels[]? | select(startswith("scope-violation:")) | split(":")[1] | tonumber] | max // 0' 2>/dev/null || echo "0")
+    review_count=$(echo "$task_json" | jq -r '[.[0].labels[]? | select(startswith("review-retry:")) | split(":")[1] | tonumber] | max // 0' 2>/dev/null || echo "0")
 
-    # No retries = no context needed
-    if [ "$retry_count" -eq 0 ] || [ -z "$notes" ]; then
+    # Total failures = max of all counters
+    total_failures=$((retry_count > scope_count ? retry_count : scope_count))
+    total_failures=$((total_failures > review_count ? total_failures : review_count))
+
+    # No failures = no context needed
+    if [ "$total_failures" -eq 0 ] || [ -z "$notes" ]; then
         echo ""
         return 0
     fi
 
-    # Build structured context
-    cat <<EOF
-## Retry Context (attempt $((retry_count + 1)))
+    # Build structured context with specific issue type
+    local issue_type="general failure"
+    if [ "$scope_count" -gt 0 ]; then
+        issue_type="SCOPE VIOLATION ($scope_count times)"
+    elif [ "$review_count" -gt 0 ]; then
+        issue_type="review rejection ($review_count times)"
+    elif [ "$retry_count" -gt 0 ]; then
+        issue_type="execution failure ($retry_count times)"
+    fi
 
-CRITICAL: This task has failed $retry_count time(s). DO NOT repeat the same approach.
+    cat <<EOF
+## Retry Context (attempt $((total_failures + 1)))
+
+CRITICAL: This task has failed - $issue_type. DO NOT repeat the same approach.
 
 Previous feedback:
 $notes
 
 Recommendations:
+- If SCOPE VIOLATION: You edited files NOT in the 'files:' list. Work ONLY on listed files!
 - If timeout: task may be too large, consider doing LESS
-- If scope violation: focus ONLY on files listed in description
 - If tests failing: fix the specific test, don't refactor
 - If same error repeats: try a fundamentally different approach
 

@@ -235,9 +235,24 @@ process_review() {
             ;;
         SCOPE_VIOLATION:*)
             local bad_file="${preflight_result#SCOPE_VIOLATION:}"
-            log "WARN" "REJECT: $task_id - scope violation ($bad_file)"
-            bd update "$task_id" --status=open --remove-label=needs-review \
-                --notes="Scope violation: Changed file outside allowed scope: $bad_file"
+
+            # Get current scope violation count
+            local scope_retry
+            scope_retry=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("scope-violation:")) | split(":")[1]' 2>/dev/null | head -1)
+            scope_retry=${scope_retry:-0}
+            ((scope_retry++))
+
+            if [ "$scope_retry" -ge 3 ]; then
+                log "WARN" "SCOPE ESCALATE: $task_id - 3 scope violations, escalating to opus"
+                bd update "$task_id" --status=open --remove-label=needs-review \
+                    --remove-label="scope-violation:$((scope_retry-1))" --add-label="model:opus" \
+                    --notes="Scope violation ($scope_retry times): $bad_file. Escalated to opus."
+            else
+                log "WARN" "REJECT: $task_id - scope violation ($bad_file) (attempt $scope_retry/3)"
+                bd update "$task_id" --status=open --remove-label=needs-review \
+                    --remove-label="scope-violation:$((scope_retry-1))" --add-label="scope-violation:$scope_retry" \
+                    --notes="Scope violation (attempt $scope_retry): Changed file outside allowed scope: $bad_file"
+            fi
             return 0
             ;;
     esac

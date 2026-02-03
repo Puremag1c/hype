@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.5.6] - 2026-02-03
+
+### Fixed
+
+- **Scope violation infinite loop** - Executor didn't receive retry context for scope violations. Now `build_retry_context()` checks all failure labels (`retry:N`, `scope-violation:N`, `review-retry:N`).
+- **Scope violation escalation** - After 3 scope violations, task escalates to opus model (like review failures).
+- **Clear failure type in context** - Retry context now shows specific issue type: "SCOPE VIOLATION (N times)" or "review rejection (N times)".
+
+---
+
 ## [1.5.5] - 2026-02-03
 
 ### Fixed

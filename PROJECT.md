@@ -6,7 +6,7 @@
 
 Запустите `hype init` в любом проекте, опишите что хотите словами — система сама создаст план, распределит задачи между агентами и выдаст готовый результат.
 
-**Версия:** 1.4.0
+**Версия:** 1.5.0
 
 ## Целевая аудитория
 
@@ -35,7 +35,7 @@ hype/
 │   │   ├── tech-writer.md   # Сбор требований (Opus)
 │   │   ├── architect.md     # Планирование (Opus)
 │   │   ├── executor.md      # Реализация задач (по label)
-│   │   ├── senior-executor.md # Code review + merge (Opus)
+│   │   ├── senior-executor.md # Code review + merge (tiered: opus→opus, else→sonnet)
 │   │   ├── analyzer.md      # Глубокий анализ кода
 │   │   └── analyst-*.md     # 5 аналитиков (Sonnet)
 │   ├── scripts/             # Bash скрипты (10 шт)

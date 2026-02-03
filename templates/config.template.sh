@@ -21,6 +21,9 @@ ITERATION_DELAY=30
 # Таймаут выполнения задачи агентом
 TASK_TIMEOUT="10m"
 
+# Таймаут code review (короче т.к. контекст передаётся в prompt)
+REVIEW_TIMEOUT="5m"
+
 # Таймаут ожидания ввода пользователя (Tech Writer)
 USER_INPUT_TIMEOUT="30m"
 
@@ -40,7 +43,8 @@ ALLOWED_MODELS="opus,sonnet,haiku"
 MODEL_TECH_WRITER="opus"
 MODEL_ARCHITECT="opus"
 MODEL_ANALYSTS="sonnet"
-MODEL_SENIOR_EXECUTOR="opus"
+# MODEL_SENIOR_EXECUTOR не используется напрямую —
+# tiered review: opus задачи → opus review, остальные → sonnet
 MODEL_MANAGER="sonnet"
 MODEL_ANALYZER="opus"
 

@@ -87,12 +87,20 @@ export -f append_notes 2>/dev/null || true
 # Использование: reset_stale_tasks [THRESHOLD_SECONDS] [LOG_PREFIX]
 # По умолчанию: 600 секунд (10 минут)
 # Пример: reset_stale_tasks 300 "shutdown"
+# ВАЖНО: НЕ сбрасывает задачи с needs-review — они ждут ревью, не stale
 reset_stale_tasks() {
     local stale_threshold="${1:-600}"
     local log_prefix="${2:-stale}"
     local reset_count=0
 
     for task_id in $(bd list --status=in_progress --json 2>/dev/null | jq -r '.[].id' 2>/dev/null || true); do
+        # Skip tasks waiting for review - they're not stale, just queued
+        local has_needs_review
+        has_needs_review=$(bd show "$task_id" --json 2>/dev/null | jq -r '.[0].labels | index("needs-review") // empty' 2>/dev/null || echo "")
+        if [ -n "$has_needs_review" ]; then
+            continue
+        fi
+
         local updated_at
         updated_at=$(bd show "$task_id" --json 2>/dev/null | jq -r '.[0].updated_at' 2>/dev/null || echo "")
 

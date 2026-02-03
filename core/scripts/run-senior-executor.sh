@@ -3,6 +3,12 @@
 # Обрабатывает задачи с label=needs-review через Senior Executor агента.
 # Работает ПОСЛЕДОВАТЕЛЬНО — один PR за раз (quality gate).
 #
+# Оптимизации:
+# - Pre-flight checks (reject без Claude если очевидные проблемы)
+# - Context injection (diff/commits/task передаются в prompt)
+# - Tiered review (opus задачи → opus review, остальные → sonnet)
+# - Executor logs передаются для контекста
+#
 # Использование: ./scripts/run-senior-executor.sh
 
 set -euo pipefail
@@ -22,6 +28,7 @@ if [ -f "$CONFIG_FILE" ]; then
 fi
 
 TASK_TIMEOUT="${TASK_TIMEOUT:-10m}"
+REVIEW_TIMEOUT="${REVIEW_TIMEOUT:-5m}"  # Shorter timeout for optimized reviews
 
 mkdir -p "$LOGS_DIR"
 
@@ -50,6 +57,138 @@ get_review_tasks() {
         jq -r '.[] | select((.labels | index("needs-review")) and ((.labels | index("executor")) | not)) | .id' 2>/dev/null || true
 }
 
+# === Pre-flight checks (reject without Claude) ===
+
+preflight_check() {
+    local task_id=$1
+    local branch_name="task/beads-$task_id"
+    local task_json=$2
+
+    # Check 1: Branch exists?
+    if ! git rev-parse --verify "$branch_name" &>/dev/null; then
+        if ! git rev-parse --verify "origin/$branch_name" &>/dev/null; then
+            echo "NO_BRANCH"
+            return 0
+        fi
+    fi
+
+    # Fetch and checkout branch for checks
+    git fetch origin "$branch_name" 2>/dev/null || true
+
+    # Check 2: Has commits?
+    local commit_count
+    commit_count=$(git log --oneline "origin/main..origin/$branch_name" 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$commit_count" -eq 0 ]; then
+        echo "NO_COMMITS"
+        return 0
+    fi
+
+    # Check 3: Secrets in diff?
+    if git diff "origin/main..origin/$branch_name" 2>/dev/null | grep -qiE "(sk-[a-zA-Z0-9]{20,}|api_key\s*=|password\s*=|secret\s*=|\.env)"; then
+        echo "SECRETS_DETECTED"
+        return 0
+    fi
+
+    # Check 4: Scope violation?
+    local allowed_files
+    allowed_files=$(echo "$task_json" | jq -r '.[0].description // ""' 2>/dev/null | grep -oE 'files?:\s*[^\n]+' | sed 's/files?:\s*//' | tr ',' '\n' | tr -d ' ')
+
+    if [ -n "$allowed_files" ]; then
+        local changed_files
+        changed_files=$(git diff --name-only "origin/main..origin/$branch_name" 2>/dev/null)
+
+        for changed in $changed_files; do
+            local allowed=false
+            for pattern in $allowed_files; do
+                # Simple glob match
+                if [[ "$changed" == $pattern ]] || [[ "$changed" == *"$pattern"* ]]; then
+                    allowed=true
+                    break
+                fi
+            done
+            if [ "$allowed" = false ]; then
+                echo "SCOPE_VIOLATION:$changed"
+                return 0
+            fi
+        done
+    fi
+
+    echo "PASS"
+}
+
+# === Get review model based on task model ===
+
+get_review_model() {
+    local task_json=$1
+
+    # Extract model from task labels (model:opus, model:sonnet, model:haiku)
+    local task_model
+    task_model=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("model:")) | split(":")[1]' 2>/dev/null | head -1)
+
+    # Tiered review: opus tasks → opus review, others → sonnet
+    if [ "$task_model" = "opus" ]; then
+        echo "opus"
+    else
+        echo "sonnet"
+    fi
+}
+
+# === Build context for Claude ===
+
+build_review_context() {
+    local task_id=$1
+    local task_json=$2
+    local branch_name="task/beads-$task_id"
+
+    # Task details
+    local task_title task_description task_notes done_when
+    task_title=$(echo "$task_json" | jq -r '.[0].title // "Unknown"' 2>/dev/null)
+    task_description=$(echo "$task_json" | jq -r '.[0].description // ""' 2>/dev/null)
+    task_notes=$(echo "$task_json" | jq -r '.[0].notes // ""' 2>/dev/null)
+    done_when=$(echo "$task_description" | grep -oE 'done_when:\s*[^\n]+' | sed 's/done_when:\s*//' || true)
+
+    # Git data
+    local commits diff diff_stat
+    commits=$(git log --oneline "origin/main..origin/$branch_name" 2>/dev/null || echo "No commits")
+    diff_stat=$(git diff --stat "origin/main..origin/$branch_name" 2>/dev/null | tail -5 || echo "No changes")
+    diff=$(git diff "origin/main..origin/$branch_name" 2>/dev/null | head -500 || echo "No diff")
+
+    # Executor logs (last 50 lines)
+    local executor_log=""
+    local executor_log_file="$LOGS_DIR/executor-$task_id.log"
+    if [ -f "$executor_log_file" ]; then
+        executor_log=$(tail -50 "$executor_log_file" 2>/dev/null || true)
+    fi
+
+    cat <<EOF
+## Task: $task_title
+ID: $task_id
+Branch: $branch_name
+
+### Done When
+$done_when
+
+### Task Notes
+$task_notes
+
+### Commits
+$commits
+
+### Diff Stats
+$diff_stat
+
+### Diff (first 500 lines)
+\`\`\`diff
+$diff
+\`\`\`
+
+### Executor Log (last 50 lines)
+\`\`\`
+$executor_log
+\`\`\`
+EOF
+}
+
 # === Process single review task ===
 
 process_review() {
@@ -70,6 +209,40 @@ process_review() {
         return 0
     fi
 
+    # === PRE-FLIGHT CHECKS ===
+    local preflight_result
+    preflight_result=$(preflight_check "$task_id" "$task_json")
+
+    case "$preflight_result" in
+        NO_BRANCH)
+            log "WARN" "REJECT: $task_id - no branch found"
+            bd update "$task_id" --status=open --remove-label=needs-review \
+                --notes="Review rejected: Branch task/beads-$task_id not found. Please push your changes."
+            return 0
+            ;;
+        NO_COMMITS)
+            log "WARN" "REJECT: $task_id - no commits in branch"
+            bd update "$task_id" --status=open --remove-label=needs-review \
+                --notes="Review rejected: No commits found. Please implement the task."
+            return 0
+            ;;
+        SECRETS_DETECTED)
+            log "ERROR" "REJECT: $task_id - secrets detected in diff"
+            bd update "$task_id" --status=open --remove-label=needs-review \
+                --notes="SECURITY: Potential secrets detected in diff. Remove sensitive data and resubmit."
+            return 0
+            ;;
+        SCOPE_VIOLATION:*)
+            local bad_file="${preflight_result#SCOPE_VIOLATION:}"
+            log "WARN" "REJECT: $task_id - scope violation ($bad_file)"
+            bd update "$task_id" --status=open --remove-label=needs-review \
+                --notes="Scope violation: Changed file outside allowed scope: $bad_file"
+            return 0
+            ;;
+    esac
+
+    log "INFO" "Pre-flight passed for $task_id"
+
     # Remember main SHA before Claude runs (to detect if merge happened)
     local main_ref main_before
     if git remote get-url origin &>/dev/null; then
@@ -80,6 +253,15 @@ process_review() {
     fi
     main_before=$(git rev-parse "$main_ref" 2>/dev/null || echo "unknown")
 
+    # === BUILD CONTEXT ===
+    local review_context
+    review_context=$(build_review_context "$task_id" "$task_json")
+
+    # === DETERMINE REVIEW MODEL ===
+    local review_model
+    review_model=$(get_review_model "$task_json")
+    log "INFO" "Using $review_model for review (tiered)"
+
     # Check if senior-executor agent exists
     local agent_file=".claude/agents/senior-executor.md"
     local agent_prompt
@@ -89,7 +271,7 @@ process_review() {
         agent_prompt="# Senior Executor
 You are a senior developer doing code review.
 Review the code, check for issues, and either approve or request changes.
-If approved, mark the task as complete with bd close."
+If approved, merge and mark the task as complete with bd close."
     fi
 
     # Run senior executor (with tool use enabled)
@@ -100,14 +282,23 @@ If approved, mark the task as complete with bd close."
 ---
 TASK_ID: $task_id
 PROJECT_ROOT: $PROJECT_DIR
-ACTION: Review and merge if ready"
+ACTION: Review and merge if ready
+
+## PRE-COMPUTED CONTEXT (no need to run git commands)
+$review_context
+
+## YOUR JOB
+1. Review the diff above
+2. Check if it matches done_when criteria
+3. If good: checkout branch, merge to main, push, bd close
+4. If bad: bd update --status=open --notes=\"reason\""
 
     # Use stdin to avoid issues with prompts starting with "---"
     # Streaming: tee for real-time logs, strip_ansi removes terminal garbage
-    local senior_model
-    senior_model=$(map_model "${MODEL_SENIOR_EXECUTOR:-opus}")
+    local mapped_model
+    mapped_model=$(map_model "$review_model")
     set -o pipefail
-    if printf '%s' "$full_prompt" | timeout_cmd "$TASK_TIMEOUT" claude --model "$senior_model" 2>&1 | strip_ansi | tee "$output_file" >/dev/null; then
+    if printf '%s' "$full_prompt" | timeout_cmd "$REVIEW_TIMEOUT" claude --model "$mapped_model" 2>&1 | strip_ansi | tee "$output_file" >/dev/null; then
         log "INFO" "Review completed for $task_id"
     else
         local exit_code=$?

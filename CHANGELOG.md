@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.5.0] - 2026-02-03
+
+### Added
+
+- **Optimized code review** - 5-10x faster reviews with pre-flight checks and context injection:
+  - Pre-flight checks in bash: reject NO_BRANCH, NO_COMMITS, SECRETS_DETECTED, SCOPE_VIOLATION instantly (no Claude needed)
+  - Context injection: diff, commits, task notes, executor logs passed directly in prompt (no git commands in Claude)
+  - Executor logs included for reviewer context (last 50 lines)
+
+- **Tiered review models** - Review model matches task complexity:
+  - `model:opus` tasks → Opus review (quality gate for complex work)
+  - All other tasks → Sonnet review (3-5x faster)
+
+- **New REVIEW_TIMEOUT setting** - Separate timeout for optimized reviews:
+  - `REVIEW_TIMEOUT="5m"` (default, shorter than TASK_TIMEOUT)
+  - Reviews now complete in 1-2 minutes instead of 10
+
+### Fixed
+
+- **P0: Tasks with needs-review lost on stale reset** - When review queue was blocked (e.g., 10min timeout), completed tasks were incorrectly reset to open status and re-executed instead of being reviewed.
+  - `reset_stale_tasks()` now skips tasks with `needs-review` label
+  - Tasks waiting for review are queued, not stale
+
+### Changed
+
+- senior-executor.md: simplified from 249 to 95 lines (context provided, no git/bd commands needed)
+- run-senior-executor.sh: complete rewrite with pre-flight checks and context building
+- config.template.sh: MODEL_SENIOR_EXECUTOR removed (tiered review replaces it)
+
+---
+
 ## [1.4.2] - 2026-02-03
 
 ### Added

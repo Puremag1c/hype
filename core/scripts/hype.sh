@@ -456,7 +456,9 @@ $retry_tasks
 2. Для retry limit — эскалируй к Architect (создай задачу) или закрой как невозможную"
 
     # Use stdin to avoid issues with prompts starting with "---"
-    printf '%s' "$full_prompt" | timeout_cmd "$TASK_TIMEOUT" claude --model sonnet > "$output_file" 2>&1 || true
+    local mgr_model
+    mgr_model=$(map_model "${MODEL_MANAGER:-sonnet}")
+    printf '%s' "$full_prompt" | timeout_cmd "$TASK_TIMEOUT" claude --model "$mgr_model" > "$output_file" 2>&1 || true
 
     log "INFO" "Manager problem resolution complete (see $output_file)"
 }
@@ -648,7 +650,9 @@ dispatch_phase() {
             # Tech Writer creates SPEC.md (INTERACTIVE - needs user dialogue)
             if [ -f ".claude/agents/tech-writer.md" ]; then
                 log "INFO" "INIT: Starting Tech Writer (interactive)..."
-                if ! run_interactive_agent "tech-writer" ".claude/agents/tech-writer.md" "opus"; then
+                local tw_model
+                tw_model=$(map_model "${MODEL_TECH_WRITER:-opus}")
+                if ! run_interactive_agent "tech-writer" ".claude/agents/tech-writer.md" "$tw_model"; then
                     log "WARN" "Tech Writer exited with error. Check SPEC.draft.md for progress."
                     if [ -f "$PROJECT_DIR/SPEC.draft.md" ]; then
                         log "INFO" "Draft exists — will continue from draft next cycle"
@@ -685,9 +689,11 @@ dispatch_phase() {
         PLANNING)
             # Architect creates plan from SPEC.md
             log "INFO" "PLANNING: Starting Architect to create plan..."
+            local arch_model
+            arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
             local spec_content
             spec_content=$(cat SPEC.md 2>/dev/null || echo "SPEC.md not found")
-            run_agent_with_mode "architect" ".claude/agents/architect.md" "opus" "create_plan" "SPEC:
+            run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "create_plan" "SPEC:
 $spec_content"
 
             # Ensure milestone exists (architect may forget step 7)
@@ -729,11 +735,13 @@ $spec_content"
         PLAN_REVIEW)
             # Architect reviews additions from Analysts
             log "INFO" "PLAN_REVIEW: Starting Architect to review plan..."
+            local arch_model
+            arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
             # Create trigger task if not exists
             if ! bd list --json 2>/dev/null | jq -e '.[] | select(.title == "run-plan-review")' > /dev/null 2>&1; then
                 bd create --title="run-plan-review" --type=task --priority=0 >/dev/null 2>&1 || true
             fi
-            run_agent_with_mode "architect" ".claude/agents/architect.md" "opus" "plan_review" ""
+            run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "plan_review" ""
             ;;
 
         IMPLEMENTATION)
@@ -746,7 +754,9 @@ $spec_content"
         FINAL_REVIEW)
             # Architect does final review and versioning
             log "INFO" "FINAL_REVIEW: Starting Architect for final review..."
-            run_agent_with_mode "architect" ".claude/agents/architect.md" "opus" "final_review" ""
+            local arch_model
+            arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
+            run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "final_review" ""
             # Check if architect created project-done milestone
             check_and_create_done_milestone
 

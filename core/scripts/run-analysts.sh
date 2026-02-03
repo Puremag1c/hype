@@ -98,8 +98,10 @@ $spec_content"
 
     # Use stdin to avoid issues with prompts starting with "---"
     # Streaming: tee for real-time logs, strip_ansi removes terminal garbage
+    local analyst_model
+    analyst_model=$(map_model "${MODEL_ANALYSTS:-sonnet}")
     set -o pipefail
-    if ! printf '%s' "$full_prompt" | timeout_cmd "$TASK_TIMEOUT" claude --model sonnet 2>&1 | strip_ansi | tee "$output_file" >/dev/null; then
+    if ! printf '%s' "$full_prompt" | timeout_cmd "$TASK_TIMEOUT" claude --model "$analyst_model" 2>&1 | strip_ansi | tee "$output_file" >/dev/null; then
         local exit_code=$?
         if [ $exit_code -eq 124 ]; then
             log "WARN" "Analyst $analyst timeout"

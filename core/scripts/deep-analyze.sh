@@ -16,6 +16,13 @@ source "$SCRIPT_DIR/common.sh"
 
 HYPE_HOME="${HYPE_HOME:-$HOME/.hype}"
 PROJECT_ROOT="${PROJECT_ROOT:-$(pwd)}"
+CONFIG_FILE="$PROJECT_ROOT/.hype/config.sh"
+
+# Load config
+if [ -f "$CONFIG_FILE" ]; then
+    # shellcheck source=/dev/null
+    source "$CONFIG_FILE"
+fi
 
 # === Check if deep analysis needed ===
 
@@ -68,7 +75,9 @@ main() {
     echo "Running deep analysis with Claude..."
 
     # Run analyzer agent
-    timeout_cmd 5m claude --model opus --print < "$HYPE_HOME/core/agents/analyzer.md" << EOF
+    local analyzer_model
+    analyzer_model=$(map_model "${MODEL_ANALYZER:-opus}")
+    timeout_cmd 5m claude --model "$analyzer_model" --print < "$HYPE_HOME/core/agents/analyzer.md" << EOF
 
 ---
 PROJECT_ROOT: $PROJECT_ROOT

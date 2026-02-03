@@ -26,7 +26,7 @@ USER_INPUT_TIMEOUT="30m"
 
 # === Модели ===
 
-# Разрешённые модели для executor'ов (через запятую)
+# Разрешённые модели (через запятую)
 # Варианты: opus, sonnet, haiku
 # Примеры:
 #   "opus,sonnet,haiku" — все модели (default)
@@ -35,6 +35,14 @@ USER_INPUT_TIMEOUT="30m"
 #   "opus"              — только opus
 #   "sonnet"            — только sonnet
 ALLOWED_MODELS="opus,sonnet,haiku"
+
+# Модели для каждой роли (применяется map_model с ALLOWED_MODELS)
+MODEL_TECH_WRITER="opus"
+MODEL_ARCHITECT="opus"
+MODEL_ANALYSTS="sonnet"
+MODEL_SENIOR_EXECUTOR="opus"
+MODEL_MANAGER="sonnet"
+MODEL_ANALYZER="opus"
 
 # === CI/CD ===
 

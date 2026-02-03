@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.4.2] - 2026-02-03
+
+### Added
+
+- **Per-role model configuration** - New settings in `.hype/config.sh`:
+  - `MODEL_TECH_WRITER="opus"` — model for requirements gathering
+  - `MODEL_ARCHITECT="opus"` — model for planning and review
+  - `MODEL_ANALYSTS="sonnet"` — model for parallel analysis
+  - `MODEL_SENIOR_EXECUTOR="opus"` — model for code review
+  - `MODEL_MANAGER="sonnet"` — model for problem resolution
+  - `MODEL_ANALYZER="opus"` — model for deep project analysis
+- All role models respect `ALLOWED_MODELS` restriction via `map_model()`
+
+### Changed
+
+- hype.sh: Tech Writer, Architect, Manager now use configurable models
+- run-analysts.sh: uses `MODEL_ANALYSTS` setting
+- run-senior-executor.sh: uses `MODEL_SENIOR_EXECUTOR` setting
+- deep-analyze.sh: uses `MODEL_ANALYZER` setting, added config loading
+
+---
+
 ## [1.4.1] - 2026-02-03
 
 ### Added

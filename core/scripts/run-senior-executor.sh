@@ -104,8 +104,10 @@ ACTION: Review and merge if ready"
 
     # Use stdin to avoid issues with prompts starting with "---"
     # Streaming: tee for real-time logs, strip_ansi removes terminal garbage
+    local senior_model
+    senior_model=$(map_model "${MODEL_SENIOR_EXECUTOR:-opus}")
     set -o pipefail
-    if printf '%s' "$full_prompt" | timeout_cmd "$TASK_TIMEOUT" claude --model opus 2>&1 | strip_ansi | tee "$output_file" >/dev/null; then
+    if printf '%s' "$full_prompt" | timeout_cmd "$TASK_TIMEOUT" claude --model "$senior_model" 2>&1 | strip_ansi | tee "$output_file" >/dev/null; then
         log "INFO" "Review completed for $task_id"
     else
         local exit_code=$?

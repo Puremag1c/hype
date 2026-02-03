@@ -100,8 +100,10 @@ preflight_check() {
         for changed in $changed_files; do
             local allowed=false
             for pattern in $allowed_files; do
-                # Simple glob match
-                if [[ "$changed" == $pattern ]] || [[ "$changed" == *"$pattern"* ]]; then
+                # Clean pattern: remove suffixes like "(new)", "(edit)", "(modify)"
+                local clean_pattern="${pattern%% (*}"
+                # Match: exact, glob, or directory prefix (templates/ matches templates/*)
+                if [[ "$changed" == "$clean_pattern" ]] || [[ "$changed" == $clean_pattern ]] || [[ "$changed" == "$clean_pattern"* ]]; then
                     allowed=true
                     break
                 fi

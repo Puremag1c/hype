@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.4] - 2026-02-03
+
+### Fixed
+
+- **Scope check regex broken** - Files list parsing failed completely (`grep [^\n]` doesn't work in shell, `sed` without `-E` ignores regex). Now uses simple `grep -m1 "^files:"` approach.
+
+---
+
 ## [1.5.3] - 2026-02-03
 
 ### Fixed

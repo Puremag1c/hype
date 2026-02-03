@@ -91,7 +91,7 @@ preflight_check() {
 
     # Check 4: Scope violation?
     local allowed_files
-    allowed_files=$(echo "$task_json" | jq -r '.[0].description // ""' 2>/dev/null | grep -oE 'files?:\s*[^\n]+' | sed 's/files?:\s*//' | tr ',' '\n' | tr -d ' ')
+    allowed_files=$(echo "$task_json" | jq -r '.[0].description // ""' 2>/dev/null | grep -m1 "^files:" | sed 's/^files:[[:space:]]*//' | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 
     if [ -n "$allowed_files" ]; then
         local changed_files

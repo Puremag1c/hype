@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.5.2] - 2026-02-03
+
+### Fixed
+
+- **Scope check false positives** - File patterns with annotations like `(new)`, `(edit)` now match correctly. Previously `files: docs/STATUS.md (new)` would reject changes to `docs/STATUS.md`.
+- **Directory patterns in scope check** - Patterns like `templates/` now match `templates/index.html` and subdirectories.
+- **Worktree slot conflicts** - New executors now get slots offset by active count (3, 4, 5...) instead of always starting from 0, preventing worktree overwrites.
+
+---
+
 ## [1.5.1] - 2026-02-03
 
 ### Fixed

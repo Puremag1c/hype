@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.5] - 2026-02-03
+
+### Fixed
+
+- **Stale reviews loop** - When reviewer completed but took no action, task retries review up to 3 times. After 3 failures, escalates to opus model.
+
+---
+
 ## [1.5.4] - 2026-02-03
 
 ### Fixed

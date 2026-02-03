@@ -52,7 +52,6 @@ log() {
 
 get_review_tasks() {
     # Tasks with label=needs-review but WITHOUT executor label
-    # (executor label means task is being worked on, not ready for review)
     bd list --status=in_progress --json 2>/dev/null | \
         jq -r '.[] | select((.labels | index("needs-review")) and ((.labels | index("executor")) | not)) | .id' 2>/dev/null || true
 }
@@ -342,6 +341,22 @@ $review_context
             log "WARN" "RETURNED: $task_id - $notes"
         else
             log "WARN" "RETURNED: $task_id (no reason given)"
+        fi
+    else
+        # Task still in_progress - reviewer didn't take action, retry review
+        local review_retry
+        review_retry=$(echo "$updated_json" | jq -r '.[0].labels[]? | select(startswith("review-retry:")) | split(":")[1]' 2>/dev/null | head -1)
+        review_retry=${review_retry:-0}
+        ((review_retry++))
+
+        if [ "$review_retry" -ge 3 ]; then
+            log "WARN" "REVIEW ESCALATE: $task_id - 3 attempts without action, escalating to opus"
+            bd update "$task_id" --remove-label="review-retry:$((review_retry-1))" --add-label="model:opus" \
+                --notes="Review escalated to opus after 3 failed attempts."
+        else
+            log "WARN" "REVIEW RETRY: $task_id - no action taken (attempt $review_retry/3)"
+            bd update "$task_id" --remove-label="review-retry:$((review_retry-1))" --add-label="review-retry:$review_retry" >/dev/null 2>&1 || \
+            bd update "$task_id" --add-label="review-retry:$review_retry" >/dev/null 2>&1
         fi
     fi
 }

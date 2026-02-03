@@ -32,6 +32,14 @@ mkdir -p "$LOGS_DIR"
 # === Worktree management ===
 # Изоляция executors через git worktrees (избегает HEAD conflicts и beads import storms)
 
+find_free_slot() {
+    local slot=0
+    while [ -d "$WORKTREES_DIR/executor-$slot" ]; do
+        ((slot++))
+    done
+    echo "$slot"
+}
+
 create_worktree() {
     local slot=$1
     local task_id=$2
@@ -293,11 +301,11 @@ main() {
         model=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("model:")) | split(":")[1]' 2>/dev/null | head -1)
         model="${model:-sonnet}"
 
-        local slot=$((active + started))
+        local slot=$(find_free_slot)
         log "TASK_START" "$task_id \"$task_title\" (slot $slot, $model)"
 
         # Launch in subshell, detached from parent
-        # Pass slot number for worktree isolation (offset by active to avoid conflicts)
+        # Pass slot number for worktree isolation (finds first unused slot)
         ( run_executor "$slot" "$task_id" ) &
         ((started++))
     done

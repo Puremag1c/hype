@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.16] - 2026-02-03
+
+### Fixed
+
+- **hype upgrade now updates .beads/.gitignore** - Added `update_beads_gitignore()` function that adds `export-state/` to existing projects during upgrade.
+
+---
+
 ## [1.3.15] - 2026-02-03
 
 ### Fixed

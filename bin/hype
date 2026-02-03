@@ -645,6 +645,7 @@ upgrade_project() {
 
     # Update .gitignore entries
     update_gitignore
+    update_beads_gitignore
 
     # Update version marker
     echo "$VERSION" > .hype/version
@@ -669,6 +670,26 @@ update_gitignore() {
 
     if [[ ${#added[@]} -gt 0 ]]; then
         success "Added to .gitignore: ${added[*]}"
+    fi
+}
+
+update_beads_gitignore() {
+    if [[ ! -f ".beads/.gitignore" ]]; then
+        return
+    fi
+
+    local entries=("export-state/")
+    local added=()
+
+    for entry in "${entries[@]}"; do
+        if ! grep -qF "$entry" .beads/.gitignore 2>/dev/null; then
+            echo "$entry" >> .beads/.gitignore
+            added+=("$entry")
+        fi
+    done
+
+    if [[ ${#added[@]} -gt 0 ]]; then
+        success "Added to .beads/.gitignore: ${added[*]}"
     fi
 }
 

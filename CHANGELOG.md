@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.1] - 2026-02-03
+
+### Fixed
+
+- **hype upgrade now adds new config variables** - Previously upgrade skipped config.sh if user had customizations, losing new variables like REVIEW_TIMEOUT. Now `merge_config()` adds missing variables while preserving user values.
+
+---
+
 ## [1.5.0] - 2026-02-03
 
 ### Added

@@ -626,20 +626,11 @@ upgrade_project() {
         success "Updated scripts/ symlink"
     fi
 
-    # Update config.sh (merge strategy: keep user customizations)
+    # Update config.sh (merge strategy: add new variables, keep user values)
     if [[ -f ".hype/config.sh" ]]; then
         local template="$HYPE_HOME/templates/config.template.sh"
         if [[ -f "$template" ]]; then
-            # Check if user has customized the file
-            if diff -q "$template" ".hype/config.sh" &>/dev/null; then
-                # Not customized, safe to replace
-                cp "$template" ".hype/config.sh"
-                success "Updated .hype/config.sh"
-            else
-                # User has customizations, keep them but warn
-                warn ".hype/config.sh has customizations, keeping current version"
-                info "Template at: $template"
-            fi
+            merge_config ".hype/config.sh" "$template"
         fi
     fi
 
@@ -651,6 +642,40 @@ upgrade_project() {
     echo "$VERSION" > .hype/version
 
     success "Upgraded to $VERSION"
+}
+
+# Merge config: add new variables from template, keep user values
+merge_config() {
+    local user_config="$1"
+    local template="$2"
+    local added=()
+
+    # Extract variable names from template (lines like VAR_NAME=)
+    while IFS= read -r line; do
+        # Skip comments and empty lines
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "$line" ]] && continue
+
+        # Match variable assignment (VAR=value or VAR="value")
+        if [[ "$line" =~ ^([A-Z_][A-Z0-9_]*)= ]]; then
+            local var_name="${BASH_REMATCH[1]}"
+
+            # Check if variable exists in user config
+            if ! grep -q "^${var_name}=" "$user_config" 2>/dev/null; then
+                # Add the variable (and preceding comment if any)
+                echo "" >> "$user_config"
+                echo "# Added in upgrade" >> "$user_config"
+                echo "$line" >> "$user_config"
+                added+=("$var_name")
+            fi
+        fi
+    done < "$template"
+
+    if [[ ${#added[@]} -gt 0 ]]; then
+        success "Added new config variables: ${added[*]}"
+    else
+        info "Config up to date"
+    fi
 }
 
 update_gitignore() {

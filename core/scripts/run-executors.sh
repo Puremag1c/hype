@@ -163,13 +163,19 @@ run_executor() {
     local executor_prompt
     executor_prompt=$(cat .claude/agents/executor.md 2>/dev/null || echo "# Executor agent not found")
 
+    # Build retry context if this is a retry attempt
+    local retry_context
+    retry_context=$(build_retry_context "$task_id")
+
     local full_prompt="$executor_prompt
 
 ---
 TASK_ID: $task_id
 TASK: $task_json
 PROJECT_ROOT: $PROJECT_DIR
-WORKTREE_PATH: $worktree_path"
+WORKTREE_PATH: $worktree_path
+${retry_context:+
+$retry_context}"
 
     # Use stdin to avoid issues with prompts starting with "---"
     # Run claude in worktree directory for git isolation
@@ -194,10 +200,11 @@ WORKTREE_PATH: $worktree_path"
             current_retry="${current_retry:-0}"
             local new_retry=$((current_retry + 1))
 
-            # Remove old retry label if exists, add new one
-            # Use append_notes to preserve review feedback
+            # Save structured attempt result
             local updated_notes
-            updated_notes=$(append_notes "$task_id" "Timeout at $(date '+%Y-%m-%d %H:%M:%S')")
+            updated_notes=$(save_attempt_result "$task_id" "TIMEOUT after $TASK_TIMEOUT - task may be too large or complex")
+
+            # Remove old retry label if exists, add new one
             old_retry_label=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("retry:"))' 2>/dev/null | head -1)
             if [ -n "$old_retry_label" ]; then
                 bd update "$task_id" --status=open --remove-label=executor --remove-label="$old_retry_label" --add-label="retry:$new_retry" --notes="$updated_notes" >/dev/null 2>&1 || true
@@ -206,8 +213,9 @@ WORKTREE_PATH: $worktree_path"
             fi
         else
             log "ERROR" "Executor failed for $task_id (exit: $exit_code)"
+            # Save structured attempt result
             local updated_notes
-            updated_notes=$(append_notes "$task_id" "Executor failed (exit: $exit_code)")
+            updated_notes=$(save_attempt_result "$task_id" "FAILED with exit code $exit_code")
             bd update "$task_id" --status=open --remove-label=executor --notes="$updated_notes" >/dev/null 2>&1 || true
         fi
         return 0

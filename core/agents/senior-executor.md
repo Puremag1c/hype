@@ -48,6 +48,33 @@ bd update $TASK_ID --status=in_progress --add-label=reviewing
 ```bash
 git fetch origin
 git checkout "task/beads-$TASK_ID"
+```
+
+### 3.1. Work validation (ветка имеет коммиты?)
+
+**КРИТИЧНО:** Проверь что ветка содержит реальную работу.
+
+```bash
+COMMIT_COUNT=$(git log --oneline origin/main..HEAD | wc -l | tr -d ' ')
+DIFF_LINES=$(git diff --stat origin/main..HEAD | tail -1)
+
+echo "Commits: $COMMIT_COUNT"
+echo "Changes: $DIFF_LINES"
+```
+
+**Если нет коммитов или пустой diff → REJECT:**
+```bash
+if [ "$COMMIT_COUNT" -eq 0 ]; then
+    bd update $TASK_ID --status=open \
+        --remove-label=needs-review --remove-label=reviewing \
+        --notes="NO WORK DONE: Branch has no commits. Please implement the task."
+    exit 0
+fi
+```
+
+### 3.2. Inspect changes
+
+```bash
 git log --oneline origin/main..HEAD
 git diff origin/main..HEAD
 ```
@@ -78,7 +105,34 @@ elif [ -f go.mod ]; then
 fi
 ```
 
-### 6. Код ревью
+### 6. Scope check
+
+**КРИТИЧНО:** Перед код ревью проверь scope.
+
+```bash
+# Получи разрешённые файлы из description задачи
+TASK_DESC=$(echo "$TASK_JSON" | jq -r '.[0].description // ""')
+ALLOWED_FILES=$(echo "$TASK_DESC" | grep -oE 'files:\s*[^\n]+' | sed 's/files:\s*//')
+
+# Получи изменённые файлы
+CHANGED_FILES=$(git diff --name-only origin/main..HEAD)
+
+echo "Scope: $ALLOWED_FILES"
+echo "Changed: $CHANGED_FILES"
+```
+
+**Если есть out-of-scope файлы → REJECT + CLEANUP:**
+```bash
+# Удаляем грязную ветку с remote (следующий executor начнёт с чистого main)
+git push origin --delete "task/beads-$TASK_ID" 2>/dev/null || true
+
+bd update $TASK_ID --status=open \
+    --remove-label=needs-review --remove-label=reviewing \
+    --notes="SCOPE VIOLATION: Changed files outside scope ($CHANGED_FILES). Branch deleted. Fix and resubmit with ONLY allowed files: $ALLOWED_FILES"
+exit 0
+```
+
+### 6.1. Код ревью
 
 Проверь:
 - Код соответствует задаче (не больше, не меньше)
@@ -114,6 +168,14 @@ else
 Task: $TASK_ID"
     git push 2>/dev/null || echo "WARN: Cannot push to remote"
     git branch -D "task/beads-$TASK_ID"
+fi
+
+# Валидация: main действительно изменился?
+MAIN_CHANGED=$(git diff HEAD~1 --name-only | wc -l | tr -d ' ')
+if [ "$MAIN_CHANGED" -eq 0 ]; then
+    echo "WARNING: main unchanged after merge - something went wrong"
+    bd update $TASK_ID --status=open --notes="Merge completed but main unchanged. Please investigate."
+    exit 1
 fi
 
 bd close $TASK_ID --notes="Merged and deployed"

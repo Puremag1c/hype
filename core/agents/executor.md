@@ -24,6 +24,24 @@ model: по задаче (label model:*)
 - `TASK` — JSON задачи из run-executors.sh
 - `PROJECT_ROOT` — корень проекта
 - `WORKTREE_PATH` — путь к изолированному worktree (если задан)
+- `Retry Context` — если есть, содержит информацию о предыдущих попытках
+
+## КРИТИЧНО: Retry Context
+
+Если в конце промпта есть секция `## Retry Context` — это означает что задача уже проваливалась.
+
+**ОБЯЗАТЕЛЬНО:**
+1. Прочитай ВСЮ секцию Retry Context
+2. Пойми ПОЧЕМУ предыдущие попытки провалились
+3. Сделай ИНАЧЕ чем в прошлый раз
+
+**Типичные ошибки и решения:**
+- **TIMEOUT** → задача слишком большая. Сделай МЕНЬШЕ, только критичную часть
+- **Scope violation** → трогал файлы вне `files:`. Работай ТОЛЬКО с указанными файлами
+- **Tests failing** → исправь конкретный тест, не рефактори всё
+- **Review rejected** → прочитай feedback, исправь КОНКРЕТНУЮ проблему
+
+**НИКОГДА** не повторяй тот же подход который уже провалился.
 
 ## Алгоритм работы
 
@@ -96,7 +114,30 @@ fi
 - Добавь тесты если указано в done_when
 - НИКОГДА не добавляй .env, credentials, secrets
 
-### 5. WIP commit (сохраняем работу)
+### 5. Scope check (ПЕРЕД commit)
+
+**КРИТИЧНО:** Проверь что ты изменил ТОЛЬКО файлы из `files:` в description задачи.
+
+```bash
+# Получи список разрешённых файлов из description
+ALLOWED_FILES=$(echo "$TASK_JSON" | jq -r '.[0].description // ""' | grep -oE 'files:\s*[^\n]+' | sed 's/files:\s*//')
+
+# Посмотри что изменилось
+CHANGED_FILES=$(git diff --name-only HEAD)
+
+echo "Allowed: $ALLOWED_FILES"
+echo "Changed: $CHANGED_FILES"
+```
+
+**Если есть out-of-scope файлы:**
+```bash
+# Откати изменения в файлах которые не в scope
+git checkout HEAD -- path/to/out-of-scope-file.js
+```
+
+**НИКОГДА не коммить файлы вне scope.** Это приведёт к rejection и retry.
+
+### 5.1. WIP commit (сохраняем работу)
 
 ```bash
 git add -A

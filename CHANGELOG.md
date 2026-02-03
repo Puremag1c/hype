@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.4.0] - 2026-02-03
+
+### Added
+
+- **Retry Context Injection** - Executor now receives structured context about previous failed attempts:
+  - `build_retry_context()` in common.sh builds context from task notes and retry labels
+  - `save_attempt_result()` saves structured results after each attempt
+  - Executor prompt includes recommendations based on failure type (timeout, scope, tests)
+
+- **Hard Scope Enforcement** - Two-level protection against scope creep:
+  - Executor self-check: verifies changed files against `files:` in task description before commit
+  - Senior Executor: deletes remote branch on scope violation (next retry starts clean)
+
+- **Work Validation Before Close** - Prevents closing tasks without real work:
+  - Senior Executor checks branch has commits before review
+  - Validates main actually changed after merge
+
+### Changed
+
+- executor.md: added Retry Context section and scope check before commit
+- senior-executor.md: added work validation, scope check with branch cleanup, post-merge validation
+- run-executors.sh: integrates retry context into executor prompts
+
+---
+
 ## [1.3.16] - 2026-02-03
 
 ### Fixed

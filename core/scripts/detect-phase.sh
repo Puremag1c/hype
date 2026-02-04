@@ -77,8 +77,8 @@ if [ ! -f "$PROJECT_ROOT/SPEC.md" ]; then
 fi
 
 if [ "$HAS_PROJECT_DONE" -gt 0 ]; then
-    # Итерация завершена → Tech Writer спросит что дальше
-    echo "INIT"
+    # Итерация завершена → DONE, hype.sh завершит работу
+    echo "DONE"
     exit 0
 fi
 

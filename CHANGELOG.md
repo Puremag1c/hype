@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.9] - 2026-02-04
+
+### Fixed
+
+- **FINAL_REVIEW loops back to INIT** - After project completion, `detect-phase.sh` returned INIT instead of DONE when `milestone:project-done` existed. Now correctly returns DONE to finish the iteration.
+
+---
+
 ## [1.5.8] - 2026-02-04
 
 ### Fixed

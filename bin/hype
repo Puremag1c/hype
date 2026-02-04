@@ -463,7 +463,12 @@ cmd_start() {
     current_phase=$(./scripts/detect-phase.sh 2>/dev/null || echo "UNKNOWN")
     if [[ "$current_phase" == "DONE" ]]; then
         info "Previous iteration complete. Starting new iteration..."
+        # Remove ALL milestones to start fresh
         delete_milestone "milestone:project-done"
+        delete_milestone "milestone:smoke-test-done"
+        delete_milestone "milestone:plan-reviewed"
+        delete_milestone "milestone:analysts-done"
+        delete_milestone "milestone:planning-done"
     fi
 
     info "Starting HYPE..."

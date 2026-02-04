@@ -1,10 +1,14 @@
 # Changelog
 
-## [1.6.6] - 2026-02-04
+## [1.6.7] - 2026-02-04
 
 ### Added
 
-- **Auto-start new iteration from DONE** - Running `hype start` when project is DONE now automatically starts a new iteration instead of exiting. System removes `milestone:project-done` and continues to INIT phase where Tech Writer asks what to do next.
+- **Auto-start new iteration from DONE** - Running `hype start` when project is DONE now automatically starts a new iteration instead of exiting. System removes ALL milestones (project-done, smoke-test-done, plan-reviewed, analysts-done, planning-done) and continues to INIT phase where Tech Writer asks what to do next.
+
+---
+
+## [1.6.6] - 2026-02-04
 
 ### Fixed
 

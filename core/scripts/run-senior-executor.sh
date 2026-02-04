@@ -51,9 +51,9 @@ log() {
 # === Get tasks needing review ===
 
 get_review_tasks() {
-    # Tasks with label=needs-review but WITHOUT executor label
+    # Tasks with label=needs-review (executor label irrelevant - needs-review means executor finished)
     bd list --status=in_progress --json 2>/dev/null | \
-        jq -r '.[] | select((.labels | index("needs-review")) and ((.labels | index("executor")) | not)) | .id' 2>/dev/null || true
+        jq -r '.[] | select(.labels | index("needs-review")) | .id' 2>/dev/null || true
 }
 
 # === Pre-flight checks (reject without Claude) ===
@@ -217,19 +217,19 @@ process_review() {
     case "$preflight_result" in
         NO_BRANCH)
             log "WARN" "REJECT: $task_id - no branch found"
-            bd update "$task_id" --status=open --remove-label=needs-review \
+            bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
                 --notes="Review rejected: Branch task/beads-$task_id not found. Please push your changes."
             return 0
             ;;
         NO_COMMITS)
             log "WARN" "REJECT: $task_id - no commits in branch"
-            bd update "$task_id" --status=open --remove-label=needs-review \
+            bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
                 --notes="Review rejected: No commits found. Please implement the task."
             return 0
             ;;
         SECRETS_DETECTED)
             log "ERROR" "REJECT: $task_id - secrets detected in diff"
-            bd update "$task_id" --status=open --remove-label=needs-review \
+            bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
                 --notes="SECURITY: Potential secrets detected in diff. Remove sensitive data and resubmit."
             return 0
             ;;
@@ -244,12 +244,12 @@ process_review() {
 
             if [ "$scope_retry" -ge 3 ]; then
                 log "WARN" "SCOPE ESCALATE: $task_id - 3 scope violations, escalating to opus"
-                bd update "$task_id" --status=open --remove-label=needs-review \
+                bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
                     --remove-label="scope-violation:$((scope_retry-1))" --add-label="model:opus" \
                     --notes="Scope violation ($scope_retry times): $bad_file. Escalated to opus."
             else
                 log "WARN" "REJECT: $task_id - scope violation ($bad_file) (attempt $scope_retry/3)"
-                bd update "$task_id" --status=open --remove-label=needs-review \
+                bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
                     --remove-label="scope-violation:$((scope_retry-1))" --add-label="scope-violation:$scope_retry" \
                     --notes="Scope violation (attempt $scope_retry): Changed file outside allowed scope: $bad_file"
             fi
@@ -343,13 +343,15 @@ $review_context
         # Verify merge actually happened by checking if main changed
         if [ "$main_before" != "unknown" ] && [ "$main_before" = "$main_after" ]; then
             log "WARN" "Task $task_id closed but main unchanged, reopening"
-            bd update "$task_id" --status=open --notes="Auto-reopened: closed without merge to main"
+            bd update "$task_id" --status=open --remove-label=executor --notes="Auto-reopened: closed without merge to main"
         else
             log "SUCCESS" "APPROVED: $task_id (merged)"
-            bd update "$task_id" --remove-label needs-review --add-label reviewed >/dev/null 2>&1 || true
+            bd update "$task_id" --remove-label=needs-review --remove-label=executor --add-label=reviewed >/dev/null 2>&1 || true
         fi
     elif [ "$task_status" = "open" ]; then
-        # Task returned for rework - extract reason from notes
+        # Task returned for rework - cleanup executor label
+        bd update "$task_id" --remove-label=executor >/dev/null 2>&1 || true
+        # Extract reason from notes
         local notes
         notes=$(echo "$updated_json" | jq -r '.[0].notes // ""' 2>/dev/null | tail -1 | head -c 80)
         if [ -n "$notes" ]; then

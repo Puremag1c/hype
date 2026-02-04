@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.5.7] - 2026-02-04
+
+### Fixed
+
+- **Tasks stuck with needs-review + executor** - Review didn't pick up tasks that had both labels. Now `get_review_tasks()` ignores `executor` label - if `needs-review` is set, task is ready for review.
+- **Executor label cleanup** - Review now removes `executor` label on all outcomes (reject, approve, return for rework).
+
+---
+
 ## [1.5.6] - 2026-02-03
 
 ### Fixed

@@ -1,6 +1,6 @@
 # Hype
 
-> v0.9.26
+> v1.6.0
 
 Виртуальный отдел разработки на базе AI. Опишите что хотите — получите готовый продукт.
 
@@ -54,7 +54,7 @@ hype upgrade      # Обновление текущего проекта
 hype upgrade --all    # Обновление всех проектов
 hype delete       # Удалить hype из проекта (сохраняет код и .beads)
 hype wipe         # Полная очистка: удаляет задачи, .beads/, все файлы hype
-hype reset-phase PLAN_REVIEW  # Перезапуск фазы (PLANNING, HELPERS, PLAN_REVIEW)
+hype reset-phase SMOKE_TEST   # Перезапуск фазы (PLANNING, HELPERS, PLAN_REVIEW, SMOKE_TEST)
 ```
 
 ## Требования

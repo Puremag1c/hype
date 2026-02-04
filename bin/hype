@@ -1024,6 +1024,7 @@ cmd_reset_phase() {
         echo "  PLANNING     - Reset to planning (delete all milestones)"
         echo "  HELPERS      - Reset to analysts phase"
         echo "  PLAN_REVIEW  - Reset to plan review (Architect reviews analysts)"
+        echo "  SMOKE_TEST   - Reset to smoke test (testers will run again)"
         echo ""
         echo "Current phase:"
         if [[ -x "./scripts/detect-phase.sh" ]]; then
@@ -1061,9 +1062,23 @@ cmd_reset_phase() {
             success "Reset to PLAN_REVIEW (Architect will review again)"
             ;;
 
+        SMOKE_TEST)
+            info "Resetting to SMOKE_TEST phase..."
+            # Delete smoke-test-done milestone
+            delete_milestone "milestone:smoke-test-done"
+            # Also close any open P0 bugs created by testers (they'll be re-created if still broken)
+            info "Closing existing SMOKE P0 bugs (will be re-created if issues persist)..."
+            bd list --status=open --json 2>/dev/null | jq -r '.[] | select(.priority == 0) | select(.title | startswith("SMOKE:")) | .id' 2>/dev/null | while read -r bug_id; do
+                [ -n "$bug_id" ] && bd close "$bug_id" --reason="Reset for re-test" 2>/dev/null || true
+            done
+            # Remove evidence to force fresh test
+            rm -rf .hype/evidence 2>/dev/null || true
+            success "Reset to SMOKE_TEST (testers will run again)"
+            ;;
+
         *)
             error "Unknown phase: $target_phase"
-            echo "Valid phases: PLANNING, HELPERS, PLAN_REVIEW"
+            echo "Valid phases: PLANNING, HELPERS, PLAN_REVIEW, SMOKE_TEST"
             exit 1
             ;;
     esac
@@ -1161,7 +1176,7 @@ cmd_help() {
     echo "               --force  Force upgrade even if versions match"
     echo "  delete       Remove hype from project (keeps .beads, code, SPEC)"
     echo "  wipe         Full cleanup: close tasks, remove .beads/, all hype files"
-    echo "  reset-phase  Reset to earlier phase (PLANNING, HELPERS, PLAN_REVIEW)"
+    echo "  reset-phase  Reset to earlier phase (PLANNING, HELPERS, PLAN_REVIEW, SMOKE_TEST)"
     echo ""
     echo "Home: $HYPE_HOME"
 }

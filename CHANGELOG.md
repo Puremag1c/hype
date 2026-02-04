@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.13] - 2026-02-04
+
+### Fixed
+
+- **Executor forbidden from creating files in `.beads/`** - Added rule #8 to executor.md: executors must use `bd update` to modify tasks, not create files in `.beads/` directory.
+
+---
+
 ## [1.6.12] - 2026-02-04
 
 ### Fixed

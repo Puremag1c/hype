@@ -1090,6 +1090,11 @@ cmd_reset_phase() {
             esac
 
             info "Resetting to SMOKE_TEST phase..."
+            # If in DONE or FINAL_REVIEW, also need to remove project-done milestone
+            if [[ "$current_phase" == "DONE" || "$current_phase" == "FINAL_REVIEW" ]]; then
+                info "Removing project-done milestone to re-enable testing..."
+                delete_milestone "milestone:project-done"
+            fi
             # Delete smoke-test-done milestone
             delete_milestone "milestone:smoke-test-done"
             # Also close any open P0 bugs created by testers (they'll be re-created if still broken)

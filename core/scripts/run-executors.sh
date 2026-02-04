@@ -32,11 +32,17 @@ mkdir -p "$LOGS_DIR"
 # === Worktree management ===
 # Изоляция executors через git worktrees (избегает HEAD conflicts и beads import storms)
 
+# Track allocated slots in current run to prevent race conditions
+# Initialized in main(), incremented after each allocation
+NEXT_SLOT=0
+
 find_free_slot() {
-    local slot=0
-    while [ -d "$WORKTREES_DIR/executor-$slot" ]; do
-        ((slot++))
+    # Skip existing worktrees (from previous runs or stale)
+    while [ -d "$WORKTREES_DIR/executor-$NEXT_SLOT" ]; do
+        ((NEXT_SLOT++))
     done
+    local slot=$NEXT_SLOT
+    ((NEXT_SLOT++))  # Reserve this slot for current caller
     echo "$slot"
 }
 
@@ -271,6 +277,8 @@ main() {
     # Start executors in parallel (up to available slots)
     # Non-blocking: launch and return immediately (streaming architecture)
     # Each executor gets its own slot number for worktree isolation
+    # Reset slot counter for this run (prevents race condition)
+    NEXT_SLOT=0
     local started=0
     local skipped=0
     for task_id in $tasks; do

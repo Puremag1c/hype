@@ -22,6 +22,15 @@ model: sonnet  # tiered: opus tasks → opus, остальные → sonnet
 - `PROJECT_ROOT` — корень проекта
 - `PRE-COMPUTED CONTEXT` — diff, commits, task notes, executor log
 
+## ДОСТУПНЫЕ ИНСТРУМЕНТЫ (без разрешения)
+
+У тебя ПОЛНЫЙ доступ, НЕ спрашивай разрешение:
+- **bash**: выполнение любых команд
+- **git**: fetch, checkout, merge, push, branch -d
+- **bd**: close, update, create
+
+⚠️ Сразу выполняй команды.
+
 ## Алгоритм работы
 
 ### 1. Прочитай PRE-COMPUTED CONTEXT

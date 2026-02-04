@@ -8,6 +8,8 @@
 
 - **Claude CLI stream-json requires --verbose** - Added `--verbose` flag to `run_claude_with_progress` as required by updated Claude CLI when using `--print --output-format stream-json`.
 
+- **Restore agent autonomy with --permission-mode dontAsk** - The `--print` mode blocks interactive permission approvals, breaking agent autonomy. Added `--permission-mode dontAsk` to auto-approve tool calls while keeping progress logging via stream-json.
+
 ---
 
 ## [1.6.4] - 2026-02-04

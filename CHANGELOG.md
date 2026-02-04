@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.12] - 2026-02-04
+
+### Fixed
+
+- **Scope check false positives on branch divergence** - When main branch had files that a task branch was created before (branch doesn't have those files), `git diff` showed them as "deleted" and triggered scope violations. Now uses `--diff-filter=ACMR` to only check Added/Copied/Modified/Renamed files.
+
+---
+
 ## [1.6.11] - 2026-02-04
 
 ### Fixed

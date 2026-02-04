@@ -94,7 +94,9 @@ preflight_check() {
 
     if [ -n "$allowed_files" ]; then
         local changed_files
-        changed_files=$(git diff --name-only "origin/main..origin/$branch_name" 2>/dev/null)
+        # Only check Added/Copied/Modified/Renamed files, not Deleted
+        # (files in main but not in branch should not trigger scope violation)
+        changed_files=$(git diff --name-only --diff-filter=ACMR "origin/main..origin/$branch_name" 2>/dev/null)
 
         for changed in $changed_files; do
             local allowed=false

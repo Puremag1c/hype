@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.8] - 2026-02-04
+
+### Fixed
+
+- **Empty executor/review logs** - Claude was running without `--print` flag, causing no output in pipe mode. Added `--print` for non-interactive operation.
+
+---
+
 ## [1.5.7] - 2026-02-04
 
 ### Fixed

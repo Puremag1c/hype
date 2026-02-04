@@ -310,11 +310,12 @@ $review_context
 4. If bad: bd update --status=open --notes=\"reason\""
 
     # Use stdin to avoid issues with prompts starting with "---"
+    # --print: non-interactive mode (required for pipe input)
     # Streaming: tee for real-time logs, strip_ansi removes terminal garbage
     local mapped_model
     mapped_model=$(map_model "$review_model")
     set -o pipefail
-    if printf '%s' "$full_prompt" | timeout_cmd "$REVIEW_TIMEOUT" claude --model "$mapped_model" 2>&1 | strip_ansi | tee "$output_file" >/dev/null; then
+    if printf '%s' "$full_prompt" | timeout_cmd "$REVIEW_TIMEOUT" claude --print --model "$mapped_model" 2>&1 | strip_ansi | tee "$output_file" >/dev/null; then
         log "INFO" "Review completed for $task_id"
     else
         local exit_code=$?

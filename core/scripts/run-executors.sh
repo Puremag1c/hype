@@ -196,9 +196,10 @@ $retry_context}"
     # Worktrees use redirect file to share .beads/ with main repo
     # All bd operations go through daemon (serializes SQLite access)
     # Note: must capture exit code BEFORE any other command
+    # --print: non-interactive mode (required for pipe input)
     # Streaming: tee for real-time logs, strip_ansi removes terminal garbage
     set -o pipefail
-    printf '%s' "$full_prompt" | timeout_cmd "$TASK_TIMEOUT" bash -c "cd '$worktree_path' && claude --model '$model'" 2>&1 | strip_ansi | tee "$output_file" >/dev/null
+    printf '%s' "$full_prompt" | timeout_cmd "$TASK_TIMEOUT" bash -c "cd '$worktree_path' && claude --print --model '$model'" 2>&1 | strip_ansi | tee "$output_file" >/dev/null
     local exit_code=$?
     set +o pipefail
 

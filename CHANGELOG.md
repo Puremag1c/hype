@@ -12,7 +12,10 @@
   - `TASK_TIMEOUT` (10m) - Executor task execution
   - `REVIEW_TIMEOUT` (5m) - Senior executor code review
   - `TESTER_TIMEOUT` (10m) - Each tester agent
-  - `USER_INPUT_TIMEOUT` (30m) - Tech Writer waiting for user
+
+### Removed
+
+- `USER_INPUT_TIMEOUT` - Tech Writer runs interactively without timeout (user is typing)
 
 ---
 

@@ -109,7 +109,6 @@ validate_config() {
     validate_bool "DEBUG" "${DEBUG:-false}"
 
     validate_timeout "TASK_TIMEOUT" "$TASK_TIMEOUT"
-    validate_timeout "USER_INPUT_TIMEOUT" "$USER_INPUT_TIMEOUT"
 
     if [ "$errors" -gt 0 ]; then
         log "FATAL" "Config validation failed ($errors errors). Fix .hype/config.sh"

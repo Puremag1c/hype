@@ -24,9 +24,6 @@ TASK_TIMEOUT="10m"
 # Таймаут code review (короче т.к. контекст передаётся в prompt)
 REVIEW_TIMEOUT="5m"
 
-# Таймаут ожидания ввода пользователя (Tech Writer)
-USER_INPUT_TIMEOUT="30m"
-
 # Таймаут для PLANNING (architect создаёт план из SPEC.md)
 PLANNING_TIMEOUT="15m"
 

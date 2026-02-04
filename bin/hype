@@ -463,12 +463,25 @@ cmd_start() {
     current_phase=$(./scripts/detect-phase.sh 2>/dev/null || echo "UNKNOWN")
     if [[ "$current_phase" == "DONE" ]]; then
         info "Previous iteration complete. Starting new iteration..."
-        # Remove ALL milestones to start fresh
+
+        # 1. Remove ALL milestones
         delete_milestone "milestone:project-done"
         delete_milestone "milestone:smoke-test-done"
         delete_milestone "milestone:plan-reviewed"
         delete_milestone "milestone:analysts-done"
         delete_milestone "milestone:planning-done"
+
+        # 2. Archive old tasks (keeps history in beads, clears active list)
+        info "Archiving previous iteration tasks..."
+        bd admin cleanup --force 2>/dev/null || true
+
+        # 3. Archive SPEC.md → SPEC.prev.md (for reference)
+        if [[ -f "SPEC.md" ]]; then
+            mv SPEC.md "SPEC.prev.md"
+            info "Archived SPEC.md → SPEC.prev.md"
+        fi
+
+        # Now detect-phase will return INIT (no SPEC.md)
     fi
 
     info "Starting HYPE..."

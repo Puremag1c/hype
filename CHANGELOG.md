@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.8] - 2026-02-04
+
+### Fixed
+
+- **Complete new iteration reset** - v1.6.7 only removed milestones but left old tasks and SPEC.md, causing system to go to PLANNING instead of INIT. Now properly:
+  1. Removes all milestones
+  2. Archives old tasks via `bd admin cleanup --force`
+  3. Moves SPEC.md → SPEC.prev.md (preserves for reference)
+
+  Result: detect-phase returns INIT, Tech Writer asks what to do next.
+
+---
+
 ## [1.6.7] - 2026-02-04
 
 ### Added

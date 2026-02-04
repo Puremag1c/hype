@@ -56,39 +56,8 @@ get_review_tasks() {
         jq -r '.[] | select(.labels | index("needs-review")) | .id' 2>/dev/null || true
 }
 
-# === Detect audit tasks (no code changes expected) ===
-
-is_audit_task() {
-    local task_json=$1
-    local title description
-
-    title=$(echo "$task_json" | jq -r '.[0].title // ""' 2>/dev/null)
-    description=$(echo "$task_json" | jq -r '.[0].description // ""' 2>/dev/null)
-
-    # Check 1: Title contains audit keywords (Verify, Audit, Check, Validate)
-    if echo "$title" | grep -qiE "(^|\[|\s)(Verify|Audit|Check|Validate)(\s|\]|$)"; then
-        return 0  # true - is audit task
-    fi
-
-    # Check 2: Description contains "AUDIT SCOPE" marker
-    if echo "$description" | grep -qi "AUDIT SCOPE"; then
-        return 0  # true
-    fi
-
-    # Check 3: No files: directive AND no done_when that implies code
-    # (pure analysis task)
-    if ! echo "$description" | grep -q "^files:"; then
-        # Make sure it's not just a missing files: directive
-        # by checking if done_when implies analysis, not code
-        if echo "$description" | grep -qiE "done_when:.*(\bдокументир|\breport|\banalys|\baudit|\bverif)"; then
-            return 0  # true
-        fi
-    fi
-
-    return 1  # false - not audit task
-}
-
 # === Pre-flight checks (reject without Claude) ===
+# Note: is_audit_task() is defined in common.sh
 
 preflight_check() {
     local task_id=$1

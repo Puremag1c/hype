@@ -313,3 +313,39 @@ map_model() {
     echo "$allowed" | cut -d',' -f1
 }
 export -f map_model 2>/dev/null || true
+
+# is_audit_task - определяет audit-задачи (не требуют code changes)
+# Использование: is_audit_task "$task_json"
+# Возвращает: 0 если audit, 1 если code task
+#
+# Критерии audit задачи:
+# 1. Title содержит: Verify, Audit, Check, Validate
+# 2. Description содержит "AUDIT SCOPE"
+# 3. Нет files: директивы И done_when указывает на анализ
+is_audit_task() {
+    local task_json=$1
+    local title description
+
+    title=$(echo "$task_json" | jq -r '.[0].title // ""' 2>/dev/null)
+    description=$(echo "$task_json" | jq -r '.[0].description // ""' 2>/dev/null)
+
+    # Check 1: Title contains audit keywords (Verify, Audit, Check, Validate)
+    if echo "$title" | grep -qiE "(^|\[|\s)(Verify|Audit|Check|Validate)(\s|\]|$)"; then
+        return 0  # true - is audit task
+    fi
+
+    # Check 2: Description contains "AUDIT SCOPE" marker
+    if echo "$description" | grep -qi "AUDIT SCOPE"; then
+        return 0  # true
+    fi
+
+    # Check 3: No files: directive AND done_when implies analysis (not code)
+    if ! echo "$description" | grep -q "^files:"; then
+        if echo "$description" | grep -qiE "done_when:.*(\bдокументир|\breport|\banalys|\baudit|\bverif)"; then
+            return 0  # true
+        fi
+    fi
+
+    return 1  # false - not audit task
+}
+export -f is_audit_task 2>/dev/null || true

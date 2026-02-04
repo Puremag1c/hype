@@ -243,6 +243,70 @@ $retry_context}"
     bd update "$task_id" --remove-label=executor --add-label=needs-review >/dev/null 2>&1 || true
 }
 
+# === Run auditor for analysis tasks ===
+# Auditor: no worktree, no branch, no commits - just reads and writes findings
+
+run_auditor() {
+    local task_id=$1
+
+    # Try to claim the task
+    if ! bd update "$task_id" --status=in_progress --add-label=executor --remove-label=needs-review >/dev/null 2>&1; then
+        log "INFO" "Task $task_id claim failed (race condition), skipping"
+        return 0
+    fi
+
+    # Get task details
+    local task_json
+    task_json=$(bd show "$task_id" --json 2>/dev/null || echo "[]")
+
+    local task_title
+    task_title=$(echo "$task_json" | jq -r '.[0].title // empty' 2>/dev/null || true)
+
+    if [ -z "$task_title" ]; then
+        log "WARN" "Task $task_id not found, skipping"
+        return 0
+    fi
+
+    log "INFO" "Starting auditor for $task_id: $task_title"
+
+    # Auditor always uses sonnet (sufficient for analysis)
+    local model
+    model=$(map_model "sonnet")
+
+    # Build prompt
+    local auditor_prompt
+    auditor_prompt=$(cat .claude/agents/auditor.md 2>/dev/null || echo "# Auditor agent not found")
+
+    local full_prompt="$auditor_prompt
+
+---
+TASK_ID: $task_id
+TASK: $task_json
+PROJECT_ROOT: $PROJECT_DIR"
+
+    local output_file="$LOGS_DIR/auditor-$task_id.log"
+    local audit_timeout="${AUDIT_TIMEOUT:-5m}"
+
+    # Run auditor (no worktree needed - auditor doesn't create branches)
+    run_claude_with_progress "$full_prompt" "$model" "$audit_timeout" "$output_file" "AUDIT" "$LOGS_DIR" "$PROJECT_DIR"
+    local exit_code=$?
+
+    if [ $exit_code -ne 0 ]; then
+        if [ $exit_code -eq 124 ]; then
+            log "WARN" "Auditor timeout for $task_id"
+        else
+            log "ERROR" "Auditor failed for $task_id (exit: $exit_code)"
+        fi
+        bd update "$task_id" --status=open --remove-label=executor >/dev/null 2>&1 || true
+        return 0
+    fi
+
+    log "INFO" "Auditor completed for $task_id"
+
+    # Ensure needs-review is set
+    bd update "$task_id" --remove-label=executor --add-label=needs-review >/dev/null 2>&1 || true
+}
+
 # === Main ===
 
 main() {
@@ -296,19 +360,24 @@ main() {
             continue
         fi
 
-        # Get task details for logging
+        # Get task details for logging and routing
         local task_json
         task_json=$(bd show "$task_id" --json 2>/dev/null || echo "[]")
         task_title=$(echo "$task_json" | jq -r '.[0].title // "unknown"' 2>/dev/null | head -c 40)
         model=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("model:")) | split(":")[1]' 2>/dev/null | head -1)
         model="${model:-sonnet}"
 
-        local slot=$(find_free_slot)
-        log "TASK_START" "$task_id \"$task_title\" (slot $slot, $model)"
-
-        # Launch in subshell, detached from parent
-        # Pass slot number for worktree isolation (finds first unused slot)
-        ( run_executor "$slot" "$task_id" ) &
+        # Route: audit tasks → Auditor, code tasks → Executor
+        if is_audit_task "$task_json"; then
+            log "TASK_START" "$task_id \"$task_title\" (AUDIT, sonnet)"
+            # Auditor: no worktree, no slot (doesn't create branches)
+            ( run_auditor "$task_id" ) &
+        else
+            local slot=$(find_free_slot)
+            log "TASK_START" "$task_id \"$task_title\" (slot $slot, $model)"
+            # Executor: uses worktree for isolation
+            ( run_executor "$slot" "$task_id" ) &
+        fi
         ((started++))
     done
 

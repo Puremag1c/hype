@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.6.16] - 2026-02-04
+
+### Added
+
+- **Dedicated Auditor agent** - New `core/agents/auditor.md` specialized for audit/verify tasks. Auditor analyzes code and writes findings to notes without creating branches or commits.
+
+- **Audit task routing at executor level** - `run-executors.sh` now routes audit tasks directly to Auditor agent instead of Executor. Detection via `is_audit_task()` moved to `common.sh` for reuse.
+
+### Changed
+
+- `is_audit_task()` function moved from `run-senior-executor.sh` to `common.sh` (single source of truth)
+- `run-executors.sh` main loop now checks task type and routes:
+  - Audit tasks → `run_auditor()` (no worktree, sonnet model)
+  - Code tasks → `run_executor()` (worktree isolation, configurable model)
+
+### Flow
+
+```
+Task created → run-executors.sh:
+  ├─ is_audit_task()? → Auditor → writes findings → needs-review → Architect
+  └─ else → Executor → writes code → needs-review → Senior Executor
+```
+
+---
+
 ## [1.6.15] - 2026-02-04
 
 ### Added

@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.18] - 2026-02-04
+
+### Changed
+
+- **tester-functional now requires real UI interaction** - Complete rewrite of tester-functional.md:
+  - MUST use Playwright for web projects (curl is not valid for UI testing)
+  - Screenshots before/after every action as evidence
+  - Reading source code is explicitly NOT valid evidence
+  - Creates bugs for ANY issues found (P0 for Must Have failures, P1-P2 for other bugs)
+  - Clear examples of what IS and what is NOT valid evidence
+
+---
+
 ## [1.6.17] - 2026-02-04
 
 ### Fixed

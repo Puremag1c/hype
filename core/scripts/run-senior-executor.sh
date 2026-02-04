@@ -101,8 +101,17 @@ preflight_check() {
             for pattern in $allowed_files; do
                 # Clean pattern: remove suffixes like "(new)", "(edit)", "(modify)"
                 local clean_pattern="${pattern%% (*}"
-                # Match: exact, glob, or directory prefix (templates/ matches templates/*)
-                if [[ "$changed" == "$clean_pattern" ]] || [[ "$changed" == $clean_pattern ]] || [[ "$changed" == "$clean_pattern"* ]]; then
+                # Match: exact, glob, directory prefix, or basename
+                # - exact: src/foo.py == src/foo.py
+                # - glob: *.py matches foo.py
+                # - prefix: templates/ matches templates/foo.html
+                # - basename: foo.py matches src/dir/foo.py (fallback for short names)
+                local changed_basename
+                changed_basename=$(basename "$changed")
+                if [[ "$changed" == "$clean_pattern" ]] || \
+                   [[ "$changed" == $clean_pattern ]] || \
+                   [[ "$changed" == "$clean_pattern"* ]] || \
+                   [[ "$changed_basename" == "$clean_pattern" ]]; then
                     allowed=true
                     break
                 fi

@@ -33,6 +33,9 @@ TESTER_TIMEOUT="10m"
 # Общий таймаут на SMOKE_TEST фазу
 SMOKE_TEST_TIMEOUT="15m"
 
+# Таймаут для FINAL_REVIEW (architect проверяет весь проект)
+FINAL_REVIEW_TIMEOUT="15m"
+
 # === Модели ===
 
 # Разрешённые модели (через запятую)

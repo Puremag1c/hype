@@ -316,8 +316,9 @@ run_agent_with_mode() {
     local model=$3
     local mode=$4
     local extra_context=${5:-""}
+    local timeout=${6:-"$TASK_TIMEOUT"}  # Optional custom timeout
 
-    log "INFO" "Running agent: $agent_name (mode: $mode, model: $model)"
+    log "INFO" "Running agent: $agent_name (mode: $mode, model: $model, timeout: $timeout)"
 
     if [ ! -f "$agent_file" ]; then
         log "ERROR" "Agent file not found: $agent_file"
@@ -339,7 +340,7 @@ PROJECT_ROOT: $PROJECT_DIR
 $extra_context"
 
     # Use stdin to avoid issues with prompts starting with "---"
-    if printf '%s' "$full_prompt" | timeout_cmd "$TASK_TIMEOUT" claude --model "$model" > "$output_file" 2>&1; then
+    if printf '%s' "$full_prompt" | timeout_cmd "$timeout" claude --model "$model" > "$output_file" 2>&1; then
         log "INFO" "Agent $agent_name completed (mode: $mode)"
         return 0
     else
@@ -787,7 +788,7 @@ $spec_content"
                 ((final_review_attempt++)) || true
                 log "INFO" "FINAL_REVIEW: Starting Architect (attempt $final_review_attempt/${RETRY_LIMIT:-3})..."
 
-                if run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "final_review" ""; then
+                if run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "final_review" "" "${FINAL_REVIEW_TIMEOUT:-15m}"; then
                     # Check if architect actually completed (wrote PASSED)
                     local latest_log
                     latest_log=$(ls -t "$LOGS_DIR"/architect-*.log 2>/dev/null | head -1)

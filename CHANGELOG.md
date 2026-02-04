@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.6.1] - 2026-02-04
+
+### Added
+
+- **Build step before SMOKE_TEST** - Runs `Build command` from SPEC.md before testers start, prevents testing stale compiled artifacts
+- **FINAL_REVIEW retry** - Architect retries up to RETRY_LIMIT times on timeout instead of immediately creating blocker
+
+### Fixed
+
+- **jq error in run-testers.sh** - Fixed "Cannot index array with string" error when checking task status (`bd show` returns array)
+- **Browser isolation warning** - Added critical warning in tester-visual to never use `browser_connect` (prevents hijacking user's browser session)
+
+---
+
 ## [1.6.0] - 2026-02-04
 
 ### Added

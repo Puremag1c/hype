@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.6.0] - 2026-02-04
+
+### Added
+
+- **SMOKE_TEST phase** - New mandatory phase between IMPLEMENTATION and FINAL_REVIEW that verifies the product actually works before delivery
+- **5 parallel testers** (CodeX-Verify pattern):
+  - `tester-functional` (sonnet) - Verifies each Must Have from SPEC.md (ALL projects)
+  - `tester-visual` (opus) - UI verification via Playwright MCP with screenshots (web)
+  - `tester-api` (haiku) - Endpoint testing, status codes, error handling (api, web)
+  - `tester-cli` (haiku) - CLI command verification: --help, --version, main commands (cli)
+  - `tester-regression` (sonnet) - Runs existing test suite (library)
+- **Hard gate mechanism** - P0 bugs block `milestone:smoke-test-done`, system returns to IMPLEMENTATION
+- **Evidence requirement** - All testers save proof to `.hype/evidence/` (screenshots, logs, reports)
+- **Automatic tester selection** - Based on project type from SPEC.md Testing section
+- **Playwright MCP fallback** - Visual tester skips gracefully if Playwright unavailable
+
+### Changed
+
+- Phase flow: `IMPLEMENTATION → SMOKE_TEST → FINAL_REVIEW → DONE`
+- Config: Added `TESTER_TIMEOUT`, `SMOKE_TEST_TIMEOUT`, `MODEL_TESTERS`, `MODEL_TESTER_*`
+
+### New files
+
+- `core/agents/tester-functional.md`
+- `core/agents/tester-visual.md`
+- `core/agents/tester-api.md`
+- `core/agents/tester-cli.md`
+- `core/agents/tester-regression.md`
+- `core/scripts/run-testers.sh`
+
+---
+
 ## [1.5.10] - 2026-02-04
 
 ### Added

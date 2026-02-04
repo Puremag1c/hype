@@ -27,6 +27,12 @@ REVIEW_TIMEOUT="5m"
 # Таймаут ожидания ввода пользователя (Tech Writer)
 USER_INPUT_TIMEOUT="30m"
 
+# Таймаут для каждого tester агента (SMOKE_TEST phase)
+TESTER_TIMEOUT="10m"
+
+# Общий таймаут на SMOKE_TEST фазу
+SMOKE_TEST_TIMEOUT="15m"
+
 # === Модели ===
 
 # Разрешённые модели (через запятую)
@@ -47,6 +53,12 @@ MODEL_ANALYSTS="sonnet"
 # tiered review: opus задачи → opus review, остальные → sonnet
 MODEL_MANAGER="sonnet"
 MODEL_ANALYZER="opus"
+
+# Модели для SMOKE_TEST testers
+MODEL_TESTERS="haiku"               # Default for api, cli testers
+MODEL_TESTER_FUNCTIONAL="sonnet"    # Must Have verification
+MODEL_TESTER_VISUAL="opus"          # UI testing (needs vision)
+MODEL_TESTER_REGRESSION="sonnet"    # Test suite runner
 
 # === CI/CD ===
 

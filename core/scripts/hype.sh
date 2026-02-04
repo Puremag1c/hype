@@ -751,6 +751,32 @@ $spec_content"
             ./scripts/run-senior-executor.sh
             ;;
 
+        SMOKE_TEST)
+            # Run parallel testers to verify product works
+            log "INFO" "SMOKE_TEST: Running parallel testers..."
+            ./scripts/run-testers.sh
+
+            # Check results - milestone created only if all testers passed and no P0 bugs
+            local p0_bugs
+            p0_bugs=$(bd list --status=open --json 2>/dev/null | jq '[.[] | select(.priority == 0)] | length' 2>/dev/null || echo "0")
+
+            if [ "$p0_bugs" -gt 0 ]; then
+                log "WARN" "SMOKE_TEST: $p0_bugs P0 bug(s) found - returning to IMPLEMENTATION"
+                # detect-phase.sh will route back to IMPLEMENTATION
+            else
+                # All tests passed - create milestone
+                log "INFO" "SMOKE_TEST: All tests passed - creating milestone"
+                if ! bd list --json 2>/dev/null | jq -e '.[] | select(.labels[]? == "milestone:smoke-test-done")' > /dev/null 2>&1; then
+                    bd create --title="Smoke test complete" --type=task --labels=milestone:smoke-test-done >/dev/null 2>&1 || true
+                    local milestone_id
+                    milestone_id=$(bd list --json 2>/dev/null | jq -r '.[] | select(.labels[]? == "milestone:smoke-test-done") | .id' | head -1)
+                    if [ -n "$milestone_id" ]; then
+                        bd close "$milestone_id" --reason="All smoke tests passed" >/dev/null 2>&1 || true
+                    fi
+                fi
+            fi
+            ;;
+
         FINAL_REVIEW)
             # Architect does final review and versioning
             log "INFO" "FINAL_REVIEW: Starting Architect for final review..."

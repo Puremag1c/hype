@@ -2,7 +2,7 @@
 # core/scripts/detect-phase.sh
 # Определяет текущую фазу проекта из состояния Beads и файлов.
 #
-# Фазы: INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → FINAL_REVIEW → DONE
+# Фазы: INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST → FINAL_REVIEW → DONE
 #        IDLE — проект существует, но нет активной работы (требует решения пользователя)
 #
 # Использование: ./scripts/detect-phase.sh
@@ -48,6 +48,10 @@ HAS_PLANNING_DONE=$(echo "$CLOSED_TASKS_JSON" | jq '[.[] | select(.labels[]? == 
 HAS_ANALYSTS_DONE=$(echo "$CLOSED_TASKS_JSON" | jq '[.[] | select(.labels[]? == "milestone:analysts-done")] | length' 2>/dev/null || echo "0")
 HAS_PLAN_REVIEWED=$(echo "$CLOSED_TASKS_JSON" | jq '[.[] | select(.labels[]? == "milestone:plan-reviewed")] | length' 2>/dev/null || echo "0")
 HAS_PROJECT_DONE=$(echo "$CLOSED_TASKS_JSON" | jq '[.[] | select(.labels[]? == "milestone:project-done")] | length' 2>/dev/null || echo "0")
+HAS_SMOKE_TEST_DONE=$(echo "$CLOSED_TASKS_JSON" | jq '[.[] | select(.labels[]? == "milestone:smoke-test-done")] | length' 2>/dev/null || echo "0")
+
+# P0 bugs (block SMOKE_TEST milestone)
+P0_BUGS_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open") | select(.priority == 0)] | length' 2>/dev/null || echo "0")
 
 # Trigger tasks для analysts (из open tasks)
 ANALYST_TRIGGERS_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open") | select(.title | test("^run-analyst-"))] | length' 2>/dev/null || echo "0")
@@ -59,8 +63,9 @@ if [ "${CLAUDEV_DEBUG:-false}" = "true" ]; then
     >&2 echo "PROJECT_ROOT: $PROJECT_ROOT"
     >&2 echo "SPEC.md exists: $([ -f "$PROJECT_ROOT/SPEC.md" ] && echo "yes" || echo "no")"
     >&2 echo "Tasks: total=$TOTAL, open=$OPEN, in_progress=$IN_PROGRESS, closed=$CLOSED"
-    >&2 echo "Milestones: planning=$HAS_PLANNING_DONE, analysts=$HAS_ANALYSTS_DONE, reviewed=$HAS_PLAN_REVIEWED, done=$HAS_PROJECT_DONE"
+    >&2 echo "Milestones: planning=$HAS_PLANNING_DONE, analysts=$HAS_ANALYSTS_DONE, reviewed=$HAS_PLAN_REVIEWED, smoke=$HAS_SMOKE_TEST_DONE, done=$HAS_PROJECT_DONE"
     >&2 echo "Triggers: analyst_open=$ANALYST_TRIGGERS_OPEN, plan_review=$PLAN_REVIEW_OPEN"
+    >&2 echo "P0 bugs open: $P0_BUGS_OPEN"
     >&2 echo "==========================="
 fi
 
@@ -127,8 +132,20 @@ if [ "$OPEN" -gt 0 ] || [ "$IN_PROGRESS" -gt 0 ]; then
     exit 0
 fi
 
-# FINAL_REVIEW: все задачи closed, финальная проверка
+# SMOKE_TEST: все задачи closed, но smoke test не пройден
+# P0 bugs возвращают в IMPLEMENTATION для фикса
 if [ "$CLOSED" -gt 0 ] && [ "$OPEN" -eq 0 ] && [ "$IN_PROGRESS" -eq 0 ]; then
+    if [ "$HAS_SMOKE_TEST_DONE" -eq 0 ]; then
+        # P0 bugs block smoke test - return to IMPLEMENTATION
+        if [ "$P0_BUGS_OPEN" -gt 0 ]; then
+            >&2 echo "P0 bugs found ($P0_BUGS_OPEN), returning to IMPLEMENTATION"
+            echo "IMPLEMENTATION"
+            exit 0
+        fi
+        echo "SMOKE_TEST"
+        exit 0
+    fi
+    # Smoke test passed → FINAL_REVIEW
     echo "FINAL_REVIEW"
     exit 0
 fi

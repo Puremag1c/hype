@@ -202,27 +202,41 @@ echo "FINAL_REVIEW: NEEDS_FIXES"
 exit 1
 ```
 
-#### 3.2 Тестирование по типу
+#### 3.2 Извлеки параметры из SPEC.md
+
+```bash
+# ОБЯЗАТЕЛЬНО прочитай Testing секцию и извлеки параметры
+START_CMD=$(grep -A1 "Start command" SPEC.md | tail -1 | sed 's/^[- ]*//')
+TEST_URL=$(grep -A1 "Test URL" SPEC.md | tail -1 | sed 's/^[- ]*//')
+PROJECT_TYPE=$(grep -A1 "Type:" SPEC.md | tail -1 | sed 's/^[- ]*//')
+
+echo "Project type: $PROJECT_TYPE"
+echo "Start command: $START_CMD"
+echo "Test URL: $TEST_URL"
+```
+
+#### 3.3 Тестирование по типу
 
 **Type: web (ОБЯЗАТЕЛЬНО браузер!)**
 
 ```bash
-# Запусти сервер (команда из SPEC.md)
-npm run dev &   # или mix phx.server, etc.
+# Запусти сервер КОМАНДОЙ ИЗ SPEC.md (не выдумывай свою!)
+$START_CMD &
 DEV_PID=$!
 sleep 5
 
-# ОБЯЗАТЕЛЬНО открой в браузере и проверь визуально!
-# Используй Playwright MCP или открой браузер вручную:
-open http://localhost:3000  # macOS
+# ОБЯЗАТЕЛЬНО открой TEST_URL в браузере!
+open "$TEST_URL"  # macOS - используй URL из SPEC.md!
 
-# Проверь:
+# Проверь ВИЗУАЛЬНО:
 # - Страница загружается без ошибок
 # - Основной UI отображается корректно
 # - Must Have функции работают
 
 kill $DEV_PID 2>/dev/null
 ```
+
+**НИКОГДА не используй захардкоженные порты!** Всегда бери TEST_URL из SPEC.md.
 
 **НЕ ИСПОЛЬЗУЙ curl для web проектов!** Curl не проверяет CSS, JS, интерактивность.
 

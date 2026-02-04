@@ -54,7 +54,7 @@ hype/
 ## Фазы работы
 
 ```
-INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → FINAL_REVIEW → DONE
+INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST → FINAL_REVIEW → DONE
 ```
 
 | Фаза | Агент | Что происходит |
@@ -64,8 +64,21 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → FINAL_REVIE
 | HELPERS | Analysts ×5 | Параллельный аудит плана |
 | PLAN_REVIEW | Architect | Ревью добавлений от Analysts |
 | IMPLEMENTATION | Executors | Параллельная реализация задач |
+| SMOKE_TEST | Testers ×N | Параллельная проверка работоспособности (по типу проекта) |
 | FINAL_REVIEW | Architect | Проверка целостности |
 | DONE | — | Проект завершён |
+
+### SMOKE_TEST Testers
+
+| Tester | Model | Project Types | Focus |
+|--------|-------|---------------|-------|
+| tester-functional | sonnet | ALL | Must Have из SPEC.md |
+| tester-visual | opus | web | UI через Playwright MCP |
+| tester-api | haiku | api, web | Endpoints, статус коды |
+| tester-cli | haiku | cli | Команды, --help |
+| tester-regression | sonnet | library | Тестовый suite |
+
+**Hard gate:** P0 bugs блокируют milestone:smoke-test-done → возврат в IMPLEMENTATION
 
 ## Ключевые принципы
 

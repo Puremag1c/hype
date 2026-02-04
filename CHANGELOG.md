@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.11] - 2026-02-04
+
+### Fixed
+
+- **Scope check now matches basename** - Tasks defining short filenames like `session_row.html` in their `files:` field would fail scope validation against full paths like `src/chatfilter/templates/partials/session_row.html`. Added basename matching as fallback to existing exact/glob/prefix matching.
+
+---
+
 ## [1.6.10] - 2026-02-04
 
 ### Fixed

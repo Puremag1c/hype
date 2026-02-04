@@ -24,7 +24,8 @@
 
 ## Testing
 - **Type**: web | api | cli | library
-- **Start command**: [как запустить, например: `npm run dev`, `mix phx.server`]
+- **Build command**: [сборка перед тестами: `npm run build`, `go build ./...`, `mix compile`]
+- **Start command**: [как запустить: `npm run dev`, `mix phx.server`]
 - **Test URL**: [если web/api: http://localhost:PORT]
 
 ## Open Questions (for Architect)

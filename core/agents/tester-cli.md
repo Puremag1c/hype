@@ -23,6 +23,9 @@ You are a CLI tester verifying that **command-line application works correctly**
 - `TRIGGER_TASK` — your trigger task ID
 - `PROJECT_ROOT` — project root directory
 - `PROJECT_TYPE` — should be "cli"
+- `BUILD_CMD` — build command (already executed before you start)
+
+**NOTE:** The project was freshly built by run-testers.sh before you started. You are testing current code, not stale artifacts.
 
 ## Algorithm
 

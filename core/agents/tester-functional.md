@@ -21,6 +21,11 @@ You are a QA tester verifying that **Must Have** features from SPEC.md actually 
 - `TRIGGER_TASK` — your trigger task ID (close it when done)
 - `PROJECT_ROOT` — project root directory
 - `PROJECT_TYPE` — project type from SPEC.md (web|api|cli|library)
+- `BUILD_CMD` — build command (already executed before you start)
+- `START_CMD` — command to start the dev server
+- `TEST_URL` — URL for web/api testing
+
+**NOTE:** The project was freshly built by run-testers.sh before you started. You are testing current code, not stale artifacts.
 
 ## Algorithm
 

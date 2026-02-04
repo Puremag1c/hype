@@ -144,7 +144,8 @@ run_tester() {
     spec_content=$(cat "$PROJECT_DIR/SPEC.md" 2>/dev/null || echo "SPEC.md not found")
 
     # Extract testing params from SPEC.md
-    local start_cmd test_url
+    local build_cmd start_cmd test_url
+    build_cmd=$(grep -A1 "Build command" "$PROJECT_DIR/SPEC.md" 2>/dev/null | tail -1 | sed 's/^[- ]*//' || echo "")
     start_cmd=$(grep -A1 "Start command" "$PROJECT_DIR/SPEC.md" 2>/dev/null | tail -1 | sed 's/^[- ]*//' || echo "")
     test_url=$(grep -A1 "Test URL" "$PROJECT_DIR/SPEC.md" 2>/dev/null | tail -1 | sed 's/^[- ]*//' || echo "http://localhost:3000")
 
@@ -155,6 +156,7 @@ TESTER: $tester
 TRIGGER_TASK: $task_id
 PROJECT_ROOT: $PROJECT_DIR
 PROJECT_TYPE: $project_type
+BUILD_CMD: $build_cmd
 START_CMD: $start_cmd
 TEST_URL: $test_url
 
@@ -210,11 +212,53 @@ create_tester_triggers() {
     done
 }
 
+# Run build command before testing
+run_build() {
+    local build_cmd
+    build_cmd=$(grep -A1 "Build command" "$PROJECT_DIR/SPEC.md" 2>/dev/null | tail -1 | sed 's/^[- ]*//' || echo "")
+
+    # Skip if no build command or placeholder
+    if [ -z "$build_cmd" ] || [[ "$build_cmd" == *"["* ]]; then
+        log "INFO" "No build command specified, skipping build step"
+        return 0
+    fi
+
+    log "INFO" "Building project: $build_cmd"
+
+    # Run build with timeout
+    if ! timeout_cmd "5m" bash -c "$build_cmd" > "$LOGS_DIR/build.log" 2>&1; then
+        log "ERROR" "Build failed! See $LOGS_DIR/build.log"
+        # Create P0 bug for build failure
+        bd create --title="SMOKE: [Build] Build command failed" \
+            --type=bug --priority=0 \
+            --description="## Build Command
+$build_cmd
+
+## Error
+\`\`\`
+$(tail -50 "$LOGS_DIR/build.log")
+\`\`\`
+
+## Context
+Build failed before SMOKE_TEST could run. Fix build errors first." >/dev/null 2>&1
+        return 1
+    fi
+
+    log "INFO" "Build completed successfully"
+    return 0
+}
+
 # Main
 main() {
     # Visual separation
     echo ""
     echo "" >> "$LOGS_DIR/hype.log"
+
+    # Run build first to ensure fresh artifacts
+    if ! run_build; then
+        log "ERROR" "SMOKE_TEST aborted due to build failure"
+        exit 1
+    fi
 
     # Get project type
     local project_type

@@ -23,7 +23,11 @@ You are a UI/UX tester verifying that the web application **looks correct** and 
 - `TRIGGER_TASK` — your trigger task ID
 - `PROJECT_ROOT` — project root directory
 - `PROJECT_TYPE` — should be "web" for this tester
+- `BUILD_CMD` — build command (already executed before you start)
+- `START_CMD` — command to start the dev server
 - `TEST_URL` — URL to test (from SPEC.md)
+
+**NOTE:** The project was freshly built by run-testers.sh before you started.
 
 ## Prerequisites Check
 

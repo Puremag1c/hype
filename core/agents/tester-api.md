@@ -23,7 +23,11 @@ You are an API tester verifying that **endpoints work correctly** — right stat
 - `TRIGGER_TASK` — your trigger task ID
 - `PROJECT_ROOT` — project root directory
 - `PROJECT_TYPE` — "api" or "web"
+- `BUILD_CMD` — build command (already executed before you start)
+- `START_CMD` — command to start the dev server
 - `TEST_URL` — base URL (from SPEC.md)
+
+**NOTE:** The project was freshly built by run-testers.sh before you started.
 
 ## Algorithm
 

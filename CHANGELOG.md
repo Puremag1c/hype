@@ -2,6 +2,10 @@
 
 ## [1.6.6] - 2026-02-04
 
+### Added
+
+- **Auto-start new iteration from DONE** - Running `hype start` when project is DONE now automatically starts a new iteration instead of exiting. System removes `milestone:project-done` and continues to INIT phase where Tech Writer asks what to do next.
+
 ### Fixed
 
 - **Smoke test skipped after FINAL_REVIEW bug fix** - When Architect found a bug during FINAL_REVIEW and returned to IMPLEMENTATION, the `milestone:smoke-test-done` was not invalidated. After fixing the bug, the system skipped SMOKE_TEST and went directly to FINAL_REVIEW again. Now the milestone is properly removed when returning from FINAL_REVIEW, ensuring smoke tests re-run after fixes.

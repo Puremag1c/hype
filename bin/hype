@@ -458,6 +458,14 @@ cmd_start() {
         success "beads daemon started"
     fi
 
+    # If DONE, start new iteration automatically
+    local current_phase
+    current_phase=$(./scripts/detect-phase.sh 2>/dev/null || echo "UNKNOWN")
+    if [[ "$current_phase" == "DONE" ]]; then
+        info "Previous iteration complete. Starting new iteration..."
+        delete_milestone "milestone:project-done"
+    fi
+
     info "Starting HYPE..."
     exec "$HYPE_HOME/core/scripts/hype.sh"
 }

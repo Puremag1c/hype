@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.6.10] - 2026-02-04
+
+### Fixed
+
+- **Race condition in worktree slot allocation** - Multiple executors could get the same slot because `find_free_slot()` checked directory existence but worktree was created later in background subshell. Now uses `NEXT_SLOT` counter that increments immediately after each allocation.
+
+- **Explicit tool availability in executor prompts** - Added "ДОСТУПНЫЕ ИНСТРУМЕНТЫ" section to executor.md and senior-executor.md to explicitly tell agents that bash/git/bd are available without asking permission.
+
+---
+
 ## [1.6.9] - 2026-02-04
 
 ### Fixed

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.17] - 2026-02-04
+
+### Fixed
+
+- **Critical: Agents can now execute bash commands** - Changed `--permission-mode dontAsk` to `--permission-mode bypassPermissions` in `run_claude_with_progress()`. The `dontAsk` mode was incorrectly assumed to auto-approve tool calls, but it actually auto-DENIES them unless explicitly in project's allowed list. This caused testers and architects to report "I cannot execute bash commands" and mark tests as passed without actually running them.
+
+---
+
 ## [1.6.16] - 2026-02-04
 
 ### Added

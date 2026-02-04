@@ -29,6 +29,17 @@ You are a UI/UX tester verifying that the web application **looks correct** and 
 
 **NOTE:** The project was freshly built by run-testers.sh before you started.
 
+## CRITICAL: Browser Isolation
+
+**NEVER use `browser_connect` to attach to user's existing browser!**
+
+Always use `browser_new_context` to create an isolated browser context. This prevents:
+- Hijacking user's active browser session
+- Deleting user's history, bookmarks, cookies
+- Interfering with user's logged-in sessions
+
+If Playwright MCP offers `browser_connect` — DO NOT USE IT.
+
 ## Prerequisites Check
 
 ```bash

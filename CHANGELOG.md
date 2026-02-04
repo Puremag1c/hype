@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.10] - 2026-02-04
+
+### Added
+
+- **Final review report on completion** - When project completes, shows last 40 lines of architect's final review log.
+
+---
+
 ## [1.5.9] - 2026-02-04
 
 ### Fixed

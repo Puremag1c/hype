@@ -1008,6 +1008,18 @@ main() {
             log "INFO" "PROJECT COMPLETE"
             log "INFO" "=========================================="
 
+            # Show architect's final review report
+            local final_review_log
+            final_review_log=$(ls -t "$LOGS_DIR"/architect-*.log 2>/dev/null | head -1)
+            if [ -n "$final_review_log" ] && [ -f "$final_review_log" ]; then
+                echo ""
+                echo "=== FINAL REVIEW REPORT ==="
+                # Show last 50 lines of architect log (contains summary)
+                tail -50 "$final_review_log" | grep -v "^$" | head -40
+                echo "==========================="
+                echo ""
+            fi
+
             # Generate iteration stats
             local timestamp
             timestamp=$(date +%Y%m%d-%H%M%S)

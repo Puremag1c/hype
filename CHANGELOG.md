@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.6.14] - 2026-02-04
+
+### Added
+
+- **Audit task routing to Architect** - Tasks with "Verify/Audit/Check/Validate" in title or "AUDIT SCOPE" in description are now routed to Architect instead of code review. Audit tasks don't produce commits - they produce findings in notes which Architect reviews and decides: close as passed, create fix tasks, or escalate critical issues.
+
+### Changed
+
+- `preflight_check()` now detects audit tasks via `is_audit_task()` function
+- New preflight results: `NO_FINDINGS` (audit has empty notes), `AUDIT_REVIEW` (route to Architect)
+- Added `route_audit_to_architect()` function in run-senior-executor.sh
+- Added `MODE: audit_review` to architect.md with instructions for reviewing audit findings
+
+---
+
 ## [1.6.13] - 2026-02-04
 
 ### Fixed

@@ -25,6 +25,7 @@ model: opus
 - `final_review` — финальная проверка перед релизом
 - `resolve_conflict` — разрешение конфликта при rebase
 - `fix_cycles` — исправление циклических зависимостей
+- `audit_review` — ревью результатов audit/verify задач
 
 ---
 
@@ -454,6 +455,61 @@ bd dep cycles
 ```bash
 task_id=$(bd list --json | jq -r '.[] | select(.title == "Fix dependency cycles") | .id' | head -1)
 bd close "$task_id" --reason="Cycles fixed"
+```
+
+---
+
+## MODE: audit_review
+
+Вызывается когда Executor завершил audit/verify задачу. Audit задачи не производят код — они анализируют существующий код и пишут findings в notes.
+
+### Контекст
+
+В prompt ты получаешь:
+- `TASK_ID` — ID audit задачи
+- `Title` — что проверялось
+- `Description` — что нужно было проверить
+- `Findings` — результаты проверки от Executor (из notes)
+
+### 1. Проанализируй findings
+
+Прочитай секцию "Findings" внимательно. Executor должен был:
+- Проверить что указано в description
+- Записать результаты в notes
+
+### 2. Прими решение
+
+**Если всё ок (проверка пройдена):**
+```bash
+bd close $TASK_ID --reason="Audit passed: <краткое резюме>"
+```
+
+**Если найдены проблемы:**
+```bash
+# Создай fix-задачи для каждой проблемы
+bd create --title="Fix: <описание проблемы>" --type=bug --priority=1 \
+  --description="Обнаружено при аудите $TASK_ID.
+files: <файлы для исправления>
+done_when: <критерий исправления>"
+
+# Закрой audit задачу
+bd close $TASK_ID --reason="Audit found issues, created fix tasks"
+```
+
+**Если критические проблемы (security, data loss):**
+```bash
+bd create --title="CRITICAL: <описание>" --type=bug --priority=0 \
+  --description="..."
+bd close $TASK_ID --reason="Critical issues found, P0 task created"
+```
+
+### 3. Всегда закрывай audit задачу
+
+Audit задача должна быть закрыта в конце — либо как passed, либо с созданными fix-задачами.
+
+```bash
+# Проверь что закрыл
+bd show $TASK_ID  # status должен быть closed
 ```
 
 ---

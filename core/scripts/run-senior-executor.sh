@@ -56,12 +56,61 @@ get_review_tasks() {
         jq -r '.[] | select(.labels | index("needs-review")) | .id' 2>/dev/null || true
 }
 
+# === Detect audit tasks (no code changes expected) ===
+
+is_audit_task() {
+    local task_json=$1
+    local title description
+
+    title=$(echo "$task_json" | jq -r '.[0].title // ""' 2>/dev/null)
+    description=$(echo "$task_json" | jq -r '.[0].description // ""' 2>/dev/null)
+
+    # Check 1: Title contains audit keywords (Verify, Audit, Check, Validate)
+    if echo "$title" | grep -qiE "(^|\[|\s)(Verify|Audit|Check|Validate)(\s|\]|$)"; then
+        return 0  # true - is audit task
+    fi
+
+    # Check 2: Description contains "AUDIT SCOPE" marker
+    if echo "$description" | grep -qi "AUDIT SCOPE"; then
+        return 0  # true
+    fi
+
+    # Check 3: No files: directive AND no done_when that implies code
+    # (pure analysis task)
+    if ! echo "$description" | grep -q "^files:"; then
+        # Make sure it's not just a missing files: directive
+        # by checking if done_when implies analysis, not code
+        if echo "$description" | grep -qiE "done_when:.*(\bдокументир|\breport|\banalys|\baudit|\bverif)"; then
+            return 0  # true
+        fi
+    fi
+
+    return 1  # false - not audit task
+}
+
 # === Pre-flight checks (reject without Claude) ===
 
 preflight_check() {
     local task_id=$1
     local branch_name="task/beads-$task_id"
     local task_json=$2
+
+    # Check 0: Is this an audit task? (different flow)
+    if is_audit_task "$task_json"; then
+        # Audit tasks don't need commits - they produce findings in notes
+        local notes
+        notes=$(echo "$task_json" | jq -r '.[0].notes // ""' 2>/dev/null)
+
+        # Check that executor wrote findings (at least 50 chars)
+        if [ -z "$notes" ] || [ ${#notes} -lt 50 ]; then
+            echo "NO_FINDINGS"
+            return 0
+        fi
+
+        # Route to Architect for review
+        echo "AUDIT_REVIEW"
+        return 0
+    fi
 
     # Check 1: Branch exists?
     if ! git rev-parse --verify "$branch_name" &>/dev/null; then
@@ -142,6 +191,88 @@ get_review_model() {
         echo "opus"
     else
         echo "sonnet"
+    fi
+}
+
+# === Route audit task to Architect ===
+
+route_audit_to_architect() {
+    local task_id=$1
+    local task_json=$2
+
+    # Extract task details
+    local task_title task_description task_notes
+    task_title=$(echo "$task_json" | jq -r '.[0].title // "Unknown"' 2>/dev/null)
+    task_description=$(echo "$task_json" | jq -r '.[0].description // ""' 2>/dev/null)
+    task_notes=$(echo "$task_json" | jq -r '.[0].notes // ""' 2>/dev/null)
+
+    # Check if architect agent exists
+    local agent_file=".claude/agents/architect.md"
+    local agent_prompt
+    if [ -f "$agent_file" ]; then
+        agent_prompt=$(cat "$agent_file")
+    else
+        # Fallback minimal prompt
+        agent_prompt="# Architect
+You review audit findings and decide next steps."
+    fi
+
+    local full_prompt="$agent_prompt
+
+---
+MODE: audit_review
+TASK_ID: $task_id
+PROJECT_ROOT: $PROJECT_DIR
+
+## AUDIT TASK
+Title: $task_title
+
+### Description
+$task_description
+
+### Findings (from executor)
+$task_notes
+
+## YOUR JOB
+1. Read the audit findings above
+2. Decide:
+   - If findings show everything is OK → bd close $task_id --reason=\"Audit passed: <summary>\"
+   - If findings show issues → create fix tasks with bd create, then bd close $task_id
+   - If critical issues → create P0 tasks
+3. Always close the audit task when done"
+
+    local output_file="$LOGS_DIR/architect-audit-$task_id.log"
+    local mapped_model
+    mapped_model=$(map_model "opus")
+
+    log "INFO" "Running Architect for audit review"
+
+    set -o pipefail
+    if printf '%s' "$full_prompt" | timeout_cmd "${REVIEW_TIMEOUT:-5m}" claude --print --model "$mapped_model" 2>&1 | strip_ansi | tee "$output_file" >/dev/null; then
+        log "INFO" "Architect audit review completed for $task_id"
+    else
+        local exit_code=$?
+        if [ $exit_code -eq 124 ]; then
+            log "WARN" "Architect audit review timeout for $task_id"
+        else
+            log "ERROR" "Architect audit review failed for $task_id (exit: $exit_code)"
+        fi
+    fi
+    set +o pipefail
+
+    # Check result
+    local updated_json
+    updated_json=$(bd show "$task_id" --json 2>/dev/null || echo "[]")
+    local task_status
+    task_status=$(echo "$updated_json" | jq -r '.[0].status // "unknown"' 2>/dev/null || echo "unknown")
+
+    if [ "$task_status" = "closed" ]; then
+        log "SUCCESS" "AUDIT CLOSED: $task_id"
+        bd update "$task_id" --remove-label=needs-review --remove-label=executor --add-label=reviewed >/dev/null 2>&1 || true
+    else
+        # Architect didn't close - might have created tasks, clean up labels
+        bd update "$task_id" --remove-label=needs-review --remove-label=executor >/dev/null 2>&1 || true
+        log "WARN" "AUDIT PENDING: $task_id - Architect may have created follow-up tasks"
     fi
 }
 
@@ -264,6 +395,18 @@ process_review() {
                     --remove-label="scope-violation:$((scope_retry-1))" --add-label="scope-violation:$scope_retry" \
                     --notes="Scope violation (attempt $scope_retry): Changed file outside allowed scope: $bad_file"
             fi
+            return 0
+            ;;
+        NO_FINDINGS)
+            log "WARN" "REJECT: $task_id - audit task has no findings in notes"
+            bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
+                --notes="Review rejected: Audit task requires findings in notes field (min 50 chars)."
+            return 0
+            ;;
+        AUDIT_REVIEW)
+            # Route audit task to Architect instead of code review
+            log "INFO" "AUDIT: $task_id - routing to Architect for review"
+            route_audit_to_architect "$task_id" "$task_json"
             return 0
             ;;
     esac

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.15] - 2026-02-04
+
+### Added
+
+- **Executor instructions for audit tasks** - Added "КРИТИЧНО: Audit/Verify задачи" section to executor.md. Executors now know to write findings to notes via `bd update --notes` instead of creating commits for audit tasks.
+
+---
+
 ## [1.6.14] - 2026-02-04
 
 ### Added

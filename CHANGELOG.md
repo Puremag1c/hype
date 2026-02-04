@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.6.5] - 2026-02-04
+
+### Fixed
+
+- **Smoke test skipped after FINAL_REVIEW bug fix** - When Architect found a bug during FINAL_REVIEW and returned to IMPLEMENTATION, the `milestone:smoke-test-done` was not invalidated. After fixing the bug, the system skipped SMOKE_TEST and went directly to FINAL_REVIEW again. Now the milestone is properly removed when returning from FINAL_REVIEW, ensuring smoke tests re-run after fixes.
+
+- **Claude CLI stream-json requires --verbose** - Added `--verbose` flag to `run_claude_with_progress` as required by updated Claude CLI when using `--print --output-format stream-json`.
+
+---
+
 ## [1.6.4] - 2026-02-04
 
 ### Added

@@ -807,6 +807,13 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
                     open_count=$(bd list --status=open --json 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
                     if [ "$open_count" -gt 0 ]; then
                         log "INFO" "FINAL_REVIEW: Architect created $open_count task(s), returning to IMPLEMENTATION"
+                        # Invalidate smoke-test-done milestone — need to re-test after fix
+                        local smoke_id
+                        smoke_id=$(bd list --status=closed --json 2>/dev/null | jq -r '.[] | select(.labels[]? == "milestone:smoke-test-done") | .id' | head -1)
+                        if [ -n "$smoke_id" ]; then
+                            bd update "$smoke_id" --remove-label="milestone:smoke-test-done" >/dev/null 2>&1 || true
+                            log "INFO" "Invalidated smoke-test-done milestone (will re-run smoke test)"
+                        fi
                         break
                     fi
                     log "WARN" "FINAL_REVIEW: Architect didn't complete review, retrying..."

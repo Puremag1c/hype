@@ -779,24 +779,52 @@ $spec_content"
 
         FINAL_REVIEW)
             # Architect does final review and versioning
-            log "INFO" "FINAL_REVIEW: Starting Architect for final review..."
-            local arch_model
+            # Retry up to RETRY_LIMIT times on failure/timeout
+            local arch_model final_review_attempt=0 final_review_success=false
             arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
-            run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "final_review" ""
+
+            while [ $final_review_attempt -lt "${RETRY_LIMIT:-3}" ]; do
+                ((final_review_attempt++)) || true
+                log "INFO" "FINAL_REVIEW: Starting Architect (attempt $final_review_attempt/${RETRY_LIMIT:-3})..."
+
+                if run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "final_review" ""; then
+                    # Check if architect actually completed (wrote PASSED)
+                    local latest_log
+                    latest_log=$(ls -t "$LOGS_DIR"/architect-*.log 2>/dev/null | head -1)
+                    if [ -n "$latest_log" ] && grep -q "FINAL_REVIEW: PASSED" "$latest_log" 2>/dev/null; then
+                        final_review_success=true
+                        break
+                    fi
+                    # Agent ran but didn't write PASSED - might have created tasks
+                    local open_count
+                    open_count=$(bd list --status=open --json 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+                    if [ "$open_count" -gt 0 ]; then
+                        log "INFO" "FINAL_REVIEW: Architect created $open_count task(s), returning to IMPLEMENTATION"
+                        break
+                    fi
+                    log "WARN" "FINAL_REVIEW: Architect didn't complete review, retrying..."
+                else
+                    log "WARN" "FINAL_REVIEW: Architect failed/timed out (attempt $final_review_attempt)"
+                fi
+
+                # Brief pause before retry
+                sleep 5
+            done
+
             # Check if architect created project-done milestone
             check_and_create_done_milestone
 
-            # Safety: if no PASSED and no new tasks, create blocker to prevent infinite loop
-            local latest_log
-            latest_log=$(ls -t "$LOGS_DIR"/architect-*.log 2>/dev/null | head -1)
-            if [ -z "$latest_log" ] || ! grep -q "FINAL_REVIEW: PASSED" "$latest_log" 2>/dev/null; then
-                local open_count
+            # Safety: if still no PASSED and no new tasks after all retries, create blocker
+            if [ "$final_review_success" = false ]; then
+                local latest_log open_count
+                latest_log=$(ls -t "$LOGS_DIR"/architect-*.log 2>/dev/null | head -1)
                 open_count=$(bd list --status=open --json 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
-                if [ "$open_count" -eq 0 ]; then
-                    log "WARN" "FINAL_REVIEW incomplete (no PASSED, no new tasks), creating blocker"
+
+                if [ "$open_count" -eq 0 ] && { [ -z "$latest_log" ] || ! grep -q "FINAL_REVIEW: PASSED" "$latest_log" 2>/dev/null; }; then
+                    log "WARN" "FINAL_REVIEW incomplete after $final_review_attempt attempts, creating blocker"
                     bd create --title="FINAL_REVIEW incomplete - check logs" \
                         --type=bug --priority=0 \
-                        --description="Architect did not complete FINAL_REVIEW. Manual intervention required." >/dev/null 2>&1 || true
+                        --description="Architect did not complete FINAL_REVIEW after $final_review_attempt attempts. Manual intervention required." >/dev/null 2>&1 || true
                 fi
             fi
             ;;

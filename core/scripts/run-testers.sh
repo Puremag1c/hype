@@ -190,7 +190,8 @@ $spec_content"
     # Note: tester should close its own trigger task
     # But verify it's closed
     local task_status
-    task_status=$(bd show "$task_id" --json 2>/dev/null | jq -r '.status' || echo "unknown")
+    # bd show returns array, not object
+    task_status=$(bd show "$task_id" --json 2>/dev/null | jq -r 'if type == "array" then .[0].status else .status end' 2>/dev/null || echo "unknown")
     if [ "$task_status" != "closed" ]; then
         log "WARN" "Tester $tester didn't close trigger, closing now"
         bd close "$task_id" --reason="Tester completed (auto-closed)" >/dev/null 2>&1

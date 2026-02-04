@@ -23,7 +23,7 @@ if [ -f "$CONFIG_FILE" ]; then
     source "$CONFIG_FILE"
 fi
 
-TASK_TIMEOUT="${TASK_TIMEOUT:-10m}"
+ANALYST_TIMEOUT="${ANALYST_TIMEOUT:-10m}"
 
 mkdir -p "$LOGS_DIR"
 
@@ -101,7 +101,7 @@ $spec_content"
     local analyst_model
     analyst_model=$(map_model "${MODEL_ANALYSTS:-sonnet}")
     set -o pipefail
-    if ! printf '%s' "$full_prompt" | timeout_cmd "$TASK_TIMEOUT" claude --model "$analyst_model" 2>&1 | strip_ansi | tee "$output_file" >/dev/null; then
+    if ! printf '%s' "$full_prompt" | timeout_cmd "$ANALYST_TIMEOUT" claude --model "$analyst_model" 2>&1 | strip_ansi | tee "$output_file" >/dev/null; then
         local exit_code=$?
         if [ $exit_code -eq 124 ]; then
             log "WARN" "Analyst $analyst timeout"

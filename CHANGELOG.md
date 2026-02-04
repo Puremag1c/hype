@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.6.2] - 2026-02-04
+
+### Added
+
+- **Separate timeouts for each phase** - Each agent type now has its own configurable timeout:
+  - `PLANNING_TIMEOUT` (15m) - Architect creates plan from SPEC.md
+  - `ANALYST_TIMEOUT` (10m) - Each analyst agent
+  - `PLAN_REVIEW_TIMEOUT` (10m) - Architect reviews analyst additions
+  - `FINAL_REVIEW_TIMEOUT` (15m) - Architect final project review
+  - `TASK_TIMEOUT` (10m) - Executor task execution
+  - `REVIEW_TIMEOUT` (5m) - Senior executor code review
+  - `TESTER_TIMEOUT` (10m) - Each tester agent
+  - `USER_INPUT_TIMEOUT` (30m) - Tech Writer waiting for user
+
+---
+
 ## [1.6.1] - 2026-02-04
 
 ### Added

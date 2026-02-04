@@ -18,7 +18,7 @@ ITERATION_DELAY=30
 
 # === Таймауты ===
 
-# Таймаут выполнения задачи агентом
+# Таймаут выполнения задачи агентом (executor)
 TASK_TIMEOUT="10m"
 
 # Таймаут code review (короче т.к. контекст передаётся в prompt)
@@ -26,6 +26,15 @@ REVIEW_TIMEOUT="5m"
 
 # Таймаут ожидания ввода пользователя (Tech Writer)
 USER_INPUT_TIMEOUT="30m"
+
+# Таймаут для PLANNING (architect создаёт план из SPEC.md)
+PLANNING_TIMEOUT="15m"
+
+# Таймаут для каждого analyst агента
+ANALYST_TIMEOUT="10m"
+
+# Таймаут для PLAN_REVIEW (architect ревьюит добавления analysts)
+PLAN_REVIEW_TIMEOUT="10m"
 
 # Таймаут для каждого tester агента (SMOKE_TEST phase)
 TESTER_TIMEOUT="10m"

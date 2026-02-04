@@ -695,7 +695,7 @@ dispatch_phase() {
             local spec_content
             spec_content=$(cat SPEC.md 2>/dev/null || echo "SPEC.md not found")
             run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "create_plan" "SPEC:
-$spec_content"
+$spec_content" "${PLANNING_TIMEOUT:-15m}"
 
             # Ensure milestone exists (architect may forget step 7)
             local task_count milestone_exists
@@ -742,7 +742,7 @@ $spec_content"
             if ! bd list --json 2>/dev/null | jq -e '.[] | select(.title == "run-plan-review")' > /dev/null 2>&1; then
                 bd create --title="run-plan-review" --type=task --priority=0 >/dev/null 2>&1 || true
             fi
-            run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "plan_review" ""
+            run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "plan_review" "" "${PLAN_REVIEW_TIMEOUT:-10m}"
             ;;
 
         IMPLEMENTATION)

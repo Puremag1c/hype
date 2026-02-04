@@ -1063,6 +1063,32 @@ cmd_reset_phase() {
             ;;
 
         SMOKE_TEST)
+            # Check if project has reached SMOKE_TEST or later
+            local current_phase=""
+            if [[ -x "./scripts/detect-phase.sh" ]]; then
+                current_phase=$(./scripts/detect-phase.sh 2>/dev/null || echo "UNKNOWN")
+            fi
+
+            # SMOKE_TEST reset only makes sense if we're at SMOKE_TEST, FINAL_REVIEW, or DONE
+            case "$current_phase" in
+                SMOKE_TEST|FINAL_REVIEW|DONE)
+                    # OK to reset
+                    ;;
+                *)
+                    error "Cannot reset to SMOKE_TEST from $current_phase"
+                    echo ""
+                    echo "SMOKE_TEST reset is only valid after IMPLEMENTATION completes."
+                    echo "Current phase: $current_phase"
+                    echo ""
+                    echo "To reach SMOKE_TEST, you need to:"
+                    echo "  1. Complete all tasks in IMPLEMENTATION"
+                    echo "  2. Pass all code reviews"
+                    echo ""
+                    echo "Run 'hype start' to continue from current phase."
+                    exit 1
+                    ;;
+            esac
+
             info "Resetting to SMOKE_TEST phase..."
             # Delete smoke-test-done milestone
             delete_milestone "milestone:smoke-test-done"

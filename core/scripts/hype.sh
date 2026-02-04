@@ -329,8 +329,7 @@ run_agent_with_mode() {
 
     local output_file="$LOGS_DIR/${agent_name}-$(date +%s).log"
 
-    # Run with tool use enabled (NO --print flag!)
-    # Claude Code can execute bd, git, and other commands
+    # Build full prompt with mode and context
     local full_prompt="$agent_prompt
 
 ---
@@ -338,8 +337,16 @@ MODE: $mode
 PROJECT_ROOT: $PROJECT_DIR
 $extra_context"
 
-    # Use stdin to avoid issues with prompts starting with "---"
-    if printf '%s' "$full_prompt" | timeout_cmd "$timeout" claude --model "$model" > "$output_file" 2>&1; then
+    # Map agent name to short label for progress logging
+    local label
+    case "$agent_name" in
+        architect) label="ARCH" ;;
+        manager)   label="MGR" ;;
+        *)         label=$(echo "$agent_name" | tr '[:lower:]' '[:upper:]' | cut -c1-4) ;;
+    esac
+
+    # Run with real-time progress logging
+    if run_claude_with_progress "$full_prompt" "$model" "$timeout" "$output_file" "$label" "$LOGS_DIR"; then
         log "INFO" "Agent $agent_name completed (mode: $mode)"
         return 0
     else

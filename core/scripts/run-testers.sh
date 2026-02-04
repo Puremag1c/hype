@@ -172,10 +172,11 @@ $spec_content"
         *)          tester_model=$(map_model "${MODEL_TESTERS:-haiku}") ;;
     esac
 
-    # Run tester with timeout
-    set -o pipefail
-    if ! printf '%s' "$full_prompt" | timeout_cmd "$TESTER_TIMEOUT" claude --model "$tester_model" 2>&1 | strip_ansi | tee "$output_file" >/dev/null; then
-        local exit_code=$?
+    # Run tester with real-time progress logging
+    run_claude_with_progress "$full_prompt" "$tester_model" "$TESTER_TIMEOUT" "$output_file" "TESTER $tester" "$LOGS_DIR"
+    local exit_code=$?
+
+    if [ $exit_code -ne 0 ]; then
         if [ $exit_code -eq 124 ]; then
             log "WARN" "Tester $tester timeout"
             bd update "$task_id" --status=open --notes="Timeout at $(date '+%Y-%m-%d %H:%M:%S')" >/dev/null 2>&1
@@ -185,7 +186,6 @@ $spec_content"
         fi
         return 0
     fi
-    set +o pipefail
 
     # Note: tester should close its own trigger task
     # But verify it's closed

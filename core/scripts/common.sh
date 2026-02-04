@@ -209,6 +209,59 @@ save_attempt_result() {
 }
 export -f save_attempt_result 2>/dev/null || true
 
+# run_claude_with_progress - запускает claude с real-time progress logging
+# Использование: run_claude_with_progress PROMPT MODEL TIMEOUT OUTPUT_FILE LABEL LOGS_DIR [WORKDIR]
+# LABEL: короткий идентификатор для логов (например "EXEC 0", "ANALYST ux", "ARCH")
+# WORKDIR: опциональная директория для запуска claude (для worktree isolation)
+# Возвращает: exit code от claude
+run_claude_with_progress() {
+    local prompt="$1"
+    local model="$2"
+    local timeout="$3"
+    local output_file="$4"
+    local label="$5"
+    local logs_dir="$6"
+    local workdir="${7:-$(pwd)}"
+
+    local raw_output="$output_file.stream"
+
+    # Create raw output file before starting tail
+    : > "$raw_output"
+
+    # Start progress extractor in background (shows tool calls in real-time)
+    # tail -F retries if file is replaced, jq --unbuffered for immediate output
+    (
+        sleep 0.2
+        tail -F "$raw_output" 2>/dev/null | \
+        jq -r --unbuffered 'select(.type == "tool_use") | .name' 2>/dev/null | \
+        while IFS= read -r tool_name; do
+            printf '\033[90m%s\033[0m [%s] → \033[36m%s\033[0m\n' "$(date '+%H:%M:%S')" "$label" "$tool_name"
+            printf '%s [%s] → %s\n' "$(date '+%H:%M:%S')" "$label" "$tool_name" >> "$logs_dir/hype.log"
+        done
+    ) &
+    local progress_pid=$!
+
+    # Run claude with stream-json output (in specified workdir)
+    # Use env vars to safely pass workdir/model (avoids quote escaping issues)
+    # Use PIPESTATUS to get timeout_cmd exit code (not tee's)
+    printf '%s' "$prompt" | \
+        CLAUDE_WORKDIR="$workdir" CLAUDE_MODEL="$model" \
+        timeout_cmd "$timeout" bash -c 'cd "$CLAUDE_WORKDIR" && claude --print --model "$CLAUDE_MODEL" --output-format stream-json' 2>&1 | \
+        tee "$raw_output" >/dev/null
+    local exit_code=${PIPESTATUS[1]}
+
+    # Cleanup progress extractor
+    kill $progress_pid 2>/dev/null || true
+    wait $progress_pid 2>/dev/null || true
+
+    # Convert stream-json to readable log (extract assistant text messages)
+    jq -r 'select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text' "$raw_output" 2>/dev/null > "$output_file" || cp "$raw_output" "$output_file"
+    rm -f "$raw_output"
+
+    return $exit_code
+}
+export -f run_claude_with_progress 2>/dev/null || true
+
 # map_model - маппит модель на ближайшую разрешённую
 # Использование: map_model MODEL [ALLOWED_MODELS]
 # Иерархия: opus > sonnet > haiku

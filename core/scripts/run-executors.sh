@@ -191,17 +191,10 @@ WORKTREE_PATH: $worktree_path
 ${retry_context:+
 $retry_context}"
 
-    # Use stdin to avoid issues with prompts starting with "---"
-    # Run claude in worktree directory for git isolation
-    # Worktrees use redirect file to share .beads/ with main repo
-    # All bd operations go through daemon (serializes SQLite access)
-    # Note: must capture exit code BEFORE any other command
-    # --print: non-interactive mode (required for pipe input)
-    # Streaming: tee for real-time logs, strip_ansi removes terminal garbage
-    set -o pipefail
-    printf '%s' "$full_prompt" | timeout_cmd "$TASK_TIMEOUT" bash -c "cd '$worktree_path' && claude --print --model '$model'" 2>&1 | strip_ansi | tee "$output_file" >/dev/null
+    # Run executor with real-time progress logging
+    # Uses worktree for git isolation, all bd operations through daemon
+    run_claude_with_progress "$full_prompt" "$model" "$TASK_TIMEOUT" "$output_file" "EXEC $slot" "$LOGS_DIR" "$worktree_path"
     local exit_code=$?
-    set +o pipefail
 
     # Always cleanup worktree (success or failure)
     cleanup_worktree "$slot"

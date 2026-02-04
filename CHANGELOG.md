@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.6.4] - 2026-02-04
+
+### Added
+
+- **Real-time progress logging** - All agents now show tool calls as they happen:
+  ```
+  14:32:15 [EXEC 0] → Read
+  14:32:16 [ANALYST ux] → Grep
+  14:32:18 [ARCH] → Edit
+  ```
+- New `run_claude_with_progress` helper in common.sh for unified progress logging
+- Uses `--output-format stream-json` for real-time streaming
+
+### Changed
+
+- All agent runners (executors, analysts, testers, architect) now use centralized progress function
+
+---
+
+## [1.6.3] - 2026-02-04
+
+### Fixed
+
+- Version bump only (no functional changes)
+
+---
+
 ## [1.6.2] - 2026-02-04
 
 ### Added

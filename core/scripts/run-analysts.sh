@@ -96,13 +96,14 @@ PROJECT_ROOT: $PROJECT_DIR
 ## SCOPE (SPEC.md):
 $spec_content"
 
-    # Use stdin to avoid issues with prompts starting with "---"
-    # Streaming: tee for real-time logs, strip_ansi removes terminal garbage
+    # Run analyst with real-time progress logging
     local analyst_model
     analyst_model=$(map_model "${MODEL_ANALYSTS:-sonnet}")
-    set -o pipefail
-    if ! printf '%s' "$full_prompt" | timeout_cmd "$ANALYST_TIMEOUT" claude --model "$analyst_model" 2>&1 | strip_ansi | tee "$output_file" >/dev/null; then
-        local exit_code=$?
+
+    run_claude_with_progress "$full_prompt" "$analyst_model" "$ANALYST_TIMEOUT" "$output_file" "ANALYST $analyst" "$LOGS_DIR"
+    local exit_code=$?
+
+    if [ $exit_code -ne 0 ]; then
         if [ $exit_code -eq 124 ]; then
             log "WARN" "Analyst $analyst timeout"
             bd update "$task_id" --status=open --notes="Timeout at $(date '+%Y-%m-%d %H:%M:%S')" >/dev/null 2>&1
@@ -112,7 +113,6 @@ $spec_content"
         fi
         return 0
     fi
-    set +o pipefail
 
     # Close trigger task
     bd close "$task_id" --reason="Analyst $analyst completed" >/dev/null 2>&1

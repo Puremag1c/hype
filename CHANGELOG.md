@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.9] - 2026-02-04
+
+### Fixed
+
+- **Tech Writer now reads SPEC.prev.md** - After new iteration starts, SPEC.md is archived to SPEC.prev.md. Tech Writer now checks for this file and uses it to understand previous iteration context, allowing user to request bug fixes or new features based on what was done before.
+
+---
+
 ## [1.6.8] - 2026-02-04
 
 ### Fixed

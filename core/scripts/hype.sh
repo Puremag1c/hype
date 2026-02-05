@@ -660,6 +660,23 @@ dispatch_phase() {
             # Check draft TTL first
             check_draft_ttl
 
+            # Deep analysis for large existing projects (before Tech Writer)
+            # Only runs once per project (marker: .hype/deep-analyzed)
+            if [ -f "$PROJECT_DIR/PROJECT_CONTEXT.md" ] && [ ! -f "$CLAUDEV_DIR/deep-analyzed" ]; then
+                # Source needs_deep_analysis function from deep-analyze.sh
+                source "$HYPE_HOME/core/scripts/deep-analyze.sh" 2>/dev/null || true
+
+                if type needs_deep_analysis &>/dev/null && needs_deep_analysis; then
+                    log "INFO" "INIT: Large project detected, running deep analysis..."
+                    if "$HYPE_HOME/core/scripts/deep-analyze.sh" --force; then
+                        touch "$CLAUDEV_DIR/deep-analyzed"
+                        log "INFO" "Deep analysis complete — enriched PROJECT_CONTEXT.md"
+                    else
+                        log "WARN" "Deep analysis failed, continuing with basic context"
+                    fi
+                fi
+            fi
+
             # Tech Writer creates SPEC.md (INTERACTIVE - needs user dialogue)
             if [ -f ".claude/agents/tech-writer.md" ]; then
                 log "INFO" "INIT: Starting Tech Writer (interactive)..."

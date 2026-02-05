@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.6.20] - 2026-02-05
+
+### Fixed
+
+- **Testers now kill stale servers and rebuild** - tester-functional.md now:
+  - Kills any existing process on TEST_URL port before starting
+  - Runs build command if specified in SPEC.md
+  - Auto-reinstalls Python projects (`pip install -e .`) if no build command
+  - Verifies server actually started before testing
+
+- **run-testers.sh kills stale processes** - Before launching testers, kills any existing process on test port to ensure fresh server
+
+---
+
 ## [1.6.19] - 2026-02-05
 
 ### Fixed

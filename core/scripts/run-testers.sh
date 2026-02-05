@@ -261,6 +261,18 @@ main() {
         exit 1
     fi
 
+    # Kill any existing process on test port to ensure fresh server
+    local test_url test_port
+    test_url=$(grep -A1 "Test URL" "$PROJECT_DIR/SPEC.md" 2>/dev/null | tail -1 | sed 's/^[- ]*//' || echo "http://localhost:3000")
+    test_port=$(echo "$test_url" | grep -oE ':[0-9]+' | tr -d ':')
+    test_port=${test_port:-3000}
+
+    if lsof -ti:"$test_port" >/dev/null 2>&1; then
+        log "WARN" "Killing existing process on port $test_port"
+        lsof -ti:"$test_port" | xargs kill -9 2>/dev/null || true
+        sleep 1
+    fi
+
     # Get project type
     local project_type
     project_type=$(get_project_type)

@@ -53,15 +53,52 @@ Extract:
 - User Stories (how features should work)
 - Specific actions mentioned (Connect, Submit, etc.)
 
-### 3. Start the application
+### 3. Kill existing process and rebuild
+
+**CRITICAL:** You must test FRESH code, not stale artifacts!
 
 ```bash
+# Extract port from TEST_URL
+PORT=$(echo "$TEST_URL" | grep -oE ':[0-9]+' | tr -d ':')
+PORT=${PORT:-8000}
+
+# Kill any existing process on that port
+lsof -ti:$PORT | xargs kill -9 2>/dev/null || true
+
+# If there's a build command, run it
+BUILD_CMD=$(grep -A1 "Build command" SPEC.md 2>/dev/null | tail -1 | sed 's/^[- ]*//')
+if [ -n "$BUILD_CMD" ] && [[ ! "$BUILD_CMD" == *"["* ]]; then
+    echo "Building: $BUILD_CMD"
+    eval "$BUILD_CMD"
+fi
+
+# For Python projects without explicit build: reinstall in dev mode
+if [ -f "pyproject.toml" ] && [ -z "$BUILD_CMD" ]; then
+    pip install -e . --quiet 2>/dev/null || true
+fi
+```
+
+### 4. Start YOUR OWN server
+
+```bash
+# Start fresh server
 $START_CMD &
 DEV_PID=$!
 sleep 5
+
+# Verify it's running
+if ! curl -s "$TEST_URL" > /dev/null 2>&1; then
+    echo "ERROR: Server failed to start!"
+    bd create --title="SMOKE: [Startup] Server failed to start" \
+      --type=bug --priority=0 \
+      --description="START_CMD: $START_CMD
+TEST_URL: $TEST_URL
+Server did not respond after 5 seconds."
+    exit 1
+fi
 ```
 
-### 4. For web projects — USE PLAYWRIGHT (MANDATORY)
+### 5. For web projects — USE PLAYWRIGHT (MANDATORY)
 
 ```
 # Create isolated browser context (NEVER use browser_connect!)
@@ -71,7 +108,7 @@ mcp__playwright__browser_new_context
 mcp__playwright__browser_navigate: url=$TEST_URL
 ```
 
-### 5. For EACH Must Have — test the COMPLETE user journey
+### 6. For EACH Must Have — test the COMPLETE user journey
 
 **Example: "Loading state on button click"**
 
@@ -114,7 +151,7 @@ mcp__playwright__browser_screenshot: name="realtime-after"
 mcp__playwright__browser_evaluate: script="document.querySelector('.status').textContent"
 ```
 
-### 6. Verify each acceptance criterion
+### 7. Verify each acceptance criterion
 
 For each Must Have in SPEC.md:
 1. Understand the user story
@@ -122,7 +159,7 @@ For each Must Have in SPEC.md:
 3. Capture evidence (screenshots)
 4. Record PASS or FAIL
 
-### 7. Create bugs for ANY issues found
+### 8. Create bugs for ANY issues found
 
 **Must Have failure → P0:**
 ```bash
@@ -161,7 +198,7 @@ Navigation links overflow on mobile viewport (375px)
 Discovered during SMOKE_TEST phase."
 ```
 
-### 8. Generate report with actual evidence
+### 9. Generate report with actual evidence
 
 ```bash
 cat > .hype/evidence/functional/report.md << 'EOF'
@@ -187,7 +224,7 @@ $(bd list --status=open --json | jq -r '.[] | select(.title | startswith("SMOKE:
 EOF
 ```
 
-### 9. Close browser and server
+### 10. Close browser and server
 
 ```bash
 # Close Playwright browser
@@ -197,7 +234,7 @@ mcp__playwright__browser_close
 kill $DEV_PID 2>/dev/null || true
 ```
 
-### 10. Close trigger task
+### 11. Close trigger task
 
 ```bash
 bd close $TRIGGER_TASK --reason="Functional testing complete. See report."

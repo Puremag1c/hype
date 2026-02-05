@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.8.1] - 2026-02-05
+
+### Fixed
+
+- **Executors grab regression tasks before Architect** - Added filter to `get_ready_tasks()` to exclude tasks with `regression` label. These now wait for Architect smoke_review.
+
+- **Regressions not processed in IMPLEMENTATION phase** - Added regression check at start of IMPLEMENTATION phase. If regressions exist, Architect runs smoke_review before executors start.
+
+---
+
 ## [1.8.0] - 2026-02-05
 
 ### Added

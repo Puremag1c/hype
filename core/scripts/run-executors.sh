@@ -112,10 +112,11 @@ get_ready_tasks() {
     # Фильтруем:
     #   - type: task, bug, feature (исключаем epic - это контейнеры)
     #   - исключаем служебные (triggers, milestones)
+    #   - исключаем regression (ждут smoke_review от Architect)
     #   - сортируем по приоритету (P0 первые)
     #   - sort -u для дедупликации (bd ready может вернуть дубликаты)
     bd ready --json 2>/dev/null | \
-        jq -r '.[] | select(.issue_type == "task" or .issue_type == "bug" or .issue_type == "feature") | select(.title | test("^run-|^milestone:") | not) | "\(.priority):\(.id)"' 2>/dev/null | \
+        jq -r '.[] | select(.issue_type == "task" or .issue_type == "bug" or .issue_type == "feature") | select(.title | test("^run-|^milestone:") | not) | select((.labels // []) | index("regression") | not) | "\(.priority):\(.id)"' 2>/dev/null | \
         sort -n | \
         cut -d: -f2 | \
         head -n "$MAX_PARALLEL"

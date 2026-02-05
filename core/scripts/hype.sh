@@ -736,6 +736,25 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
         IMPLEMENTATION)
             # Streaming: launch executors (non-blocking) + process one review
             log "INFO" "IMPLEMENTATION: Streaming cycle..."
+
+            # Check for regressions first - route to Architect before executors
+            local regression_count
+            regression_count=$(bd list --status=open --json 2>/dev/null | jq '[.[] | select(.labels | index("regression"))] | length' 2>/dev/null || echo "0")
+
+            if [ "$regression_count" -gt 0 ]; then
+                log "WARN" "IMPLEMENTATION: $regression_count regression(s) found - routing to Architect"
+
+                # Create trigger task for smoke_review if not exists
+                if ! bd list --json 2>/dev/null | jq -e '.[] | select(.title == "run-smoke-review")' > /dev/null 2>&1; then
+                    bd create --title="run-smoke-review" --type=task --priority=0 >/dev/null 2>&1 || true
+                fi
+
+                # Run architect in smoke_review mode
+                local arch_model
+                arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
+                run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "smoke_review" "" "${SMOKE_REVIEW_TIMEOUT:-10m}"
+            fi
+
             ./scripts/run-executors.sh
             ./scripts/run-senior-executor.sh
             ;;

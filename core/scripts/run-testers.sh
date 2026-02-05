@@ -506,13 +506,17 @@ main() {
         fi
     done
 
-    # Run all testers in parallel
+    # Run all testers in parallel, collect PIDs
+    local tester_pids=""
     for tester in $testers; do
         run_tester "$tester" "$project_type" &
+        tester_pids="$tester_pids $!"
     done
 
-    # Wait for all
-    wait
+    # Wait for testers only (not server which runs in background)
+    for pid in $tester_pids; do
+        wait "$pid" 2>/dev/null || true
+    done
 
     # Stop dev server
     if [ "$server_started" = true ]; then

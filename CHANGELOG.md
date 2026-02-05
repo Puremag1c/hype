@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.4] - 2026-02-05
+
+### Fixed
+
+- **SMOKE_TEST hangs after testers complete** - `wait` without arguments waits for ALL background processes including the dev server. Server runs indefinitely → deadlock. Now collects tester PIDs and waits only for them.
+
+---
+
 ## [1.7.3] - 2026-02-05
 
 ### Fixed

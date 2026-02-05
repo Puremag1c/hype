@@ -34,8 +34,9 @@ fi
 
 # Собираем статистику из beads (batched - 2 запроса вместо 11)
 # Кэшируем JSON для всех фильтров через jq
-ALL_TASKS_JSON=$(bd list --json 2>/dev/null || echo "[]")
-CLOSED_TASKS_JSON=$(bd list --status=closed --json 2>/dev/null || echo "[]")
+# ВАЖНО: --limit 0 для unlimited (по умолчанию 50, что ломает milestone detection)
+ALL_TASKS_JSON=$(bd list --json --limit 0 2>/dev/null || echo "[]")
+CLOSED_TASKS_JSON=$(bd list --status=closed --json --limit 0 2>/dev/null || echo "[]")
 
 # Статистика из кэшированных данных
 TOTAL=$(echo "$ALL_TASKS_JSON" | jq 'length' 2>/dev/null || echo "0")
@@ -70,6 +71,18 @@ if [ "${CLAUDEV_DEBUG:-false}" = "true" ]; then
 fi
 
 # === Определение фазы ===
+
+# FORCE PHASE: позволяет переместиться к любой фазе
+# Используется: echo "SMOKE_TEST" > .hype/force-phase
+# Файл удаляется после прочтения (one-shot)
+if [ -f "$PROJECT_ROOT/.hype/force-phase" ]; then
+    FORCED_PHASE=$(cat "$PROJECT_ROOT/.hype/force-phase" | tr -d '[:space:]')
+    rm -f "$PROJECT_ROOT/.hype/force-phase"
+    if [ -n "$FORCED_PHASE" ]; then
+        echo "$FORCED_PHASE"
+        exit 0
+    fi
+fi
 
 # INIT: нужен Tech Writer для сбора требований
 # Условия:
@@ -119,8 +132,6 @@ fi
 # IMPLEMENTATION: есть открытые или in_progress задачи
 if [ "$OPEN" -gt 0 ] || [ "$IN_PROGRESS" -gt 0 ]; then
     # Safety net: проверяем циклы перед началом реализации
-    # NOTE: "bd dep cycles" outputs "✓ No dependency cycles detected" when clean
-    # We check for actual cycle output (contains "→" arrow) not just word "cycle"
     cycles_output=$(bd dep cycles 2>&1 || true)
     if echo "$cycles_output" | grep -q "→"; then
         echo "BLOCKED_CYCLES"

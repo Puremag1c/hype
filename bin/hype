@@ -1043,14 +1043,20 @@ cmd_reset_phase() {
         exit 1
     fi
 
+    # Valid phases
+    local valid_phases="INIT PLANNING HELPERS PLAN_REVIEW IMPLEMENTATION SMOKE_TEST FINAL_REVIEW"
+
     if [[ -z "$target_phase" ]]; then
         echo "Usage: hype reset-phase <PHASE>"
         echo ""
         echo "Available phases:"
-        echo "  PLANNING     - Reset to planning (delete all milestones)"
-        echo "  HELPERS      - Reset to analysts phase"
-        echo "  PLAN_REVIEW  - Reset to plan review (Architect reviews analysts)"
-        echo "  SMOKE_TEST   - Reset to smoke test (testers will run again)"
+        echo "  INIT           - Start fresh (Tech Writer)"
+        echo "  PLANNING       - Architect creates plan"
+        echo "  HELPERS        - Analysts run"
+        echo "  PLAN_REVIEW    - Architect reviews analysts"
+        echo "  IMPLEMENTATION - Executors work on tasks"
+        echo "  SMOKE_TEST     - Testers verify product"
+        echo "  FINAL_REVIEW   - Architect final review"
         echo ""
         echo "Current phase:"
         if [[ -x "./scripts/detect-phase.sh" ]]; then
@@ -1063,108 +1069,130 @@ cmd_reset_phase() {
 
     target_phase=$(echo "$target_phase" | tr '[:lower:]' '[:upper:]')
 
+    # Validate phase
+    if ! echo "$valid_phases" | grep -wq "$target_phase"; then
+        error "Unknown phase: $target_phase"
+        echo "Valid phases: $valid_phases"
+        exit 1
+    fi
+
+    local current_phase=""
+    if [[ -x "./scripts/detect-phase.sh" ]]; then
+        current_phase=$(./scripts/detect-phase.sh 2>/dev/null || echo "UNKNOWN")
+    fi
+
+    info "Forcing phase: $current_phase → $target_phase"
+
+    # Write force-phase file (detect-phase.sh will read and delete it)
+    echo "$target_phase" > .hype/force-phase
+
+    # Clean up milestones/state for consistency
+    # Delete milestones AFTER target phase, create milestones BEFORE target phase
     case "$target_phase" in
-        PLANNING)
-            info "Resetting to PLANNING phase..."
-            # Delete all milestones except project-done
+        INIT)
+            # Remove SPEC to trigger Tech Writer
+            if [[ -f "SPEC.md" ]]; then
+                warn "Moving SPEC.md to SPEC.md.bak"
+                mv SPEC.md SPEC.md.bak
+            fi
             delete_milestone "milestone:planning-done"
             delete_milestone "milestone:analysts-done"
             delete_milestone "milestone:plan-reviewed"
-            success "Reset to PLANNING"
+            delete_milestone "milestone:smoke-test-done"
+            delete_milestone "milestone:project-done"
             ;;
-
-        HELPERS)
-            info "Resetting to HELPERS phase..."
-            # Delete analysts-done and plan-reviewed
+        PLANNING)
+            # Need: nothing before
+            # Delete: all after
+            delete_milestone "milestone:planning-done"
             delete_milestone "milestone:analysts-done"
             delete_milestone "milestone:plan-reviewed"
-            success "Reset to HELPERS (analysts will run again)"
-            ;;
-
-        PLAN_REVIEW)
-            info "Resetting to PLAN_REVIEW phase..."
-            # Delete only plan-reviewed
-            delete_milestone "milestone:plan-reviewed"
-            success "Reset to PLAN_REVIEW (Architect will review again)"
-            ;;
-
-        SMOKE_TEST)
-            # Check if project has reached SMOKE_TEST or later
-            local current_phase=""
-            if [[ -x "./scripts/detect-phase.sh" ]]; then
-                current_phase=$(./scripts/detect-phase.sh 2>/dev/null || echo "UNKNOWN")
-            fi
-
-            # SMOKE_TEST reset only makes sense if we're at SMOKE_TEST, FINAL_REVIEW, or DONE
-            case "$current_phase" in
-                SMOKE_TEST|FINAL_REVIEW|DONE)
-                    # OK to reset
-                    ;;
-                *)
-                    error "Cannot reset to SMOKE_TEST from $current_phase"
-                    echo ""
-                    echo "SMOKE_TEST reset is only valid after IMPLEMENTATION completes."
-                    echo "Current phase: $current_phase"
-                    echo ""
-                    echo "To reach SMOKE_TEST, you need to:"
-                    echo "  1. Complete all tasks in IMPLEMENTATION"
-                    echo "  2. Pass all code reviews"
-                    echo ""
-                    echo "Run 'hype start' to continue from current phase."
-                    exit 1
-                    ;;
-            esac
-
-            info "Resetting to SMOKE_TEST phase..."
-            # If in DONE or FINAL_REVIEW, also need to remove project-done milestone
-            if [[ "$current_phase" == "DONE" || "$current_phase" == "FINAL_REVIEW" ]]; then
-                info "Removing project-done milestone to re-enable testing..."
-                delete_milestone "milestone:project-done"
-            fi
-            # Delete smoke-test-done milestone
             delete_milestone "milestone:smoke-test-done"
-            # Also close any open P0 bugs created by testers (they'll be re-created if still broken)
-            info "Closing existing SMOKE P0 bugs (will be re-created if issues persist)..."
-            bd list --status=open --json 2>/dev/null | jq -r '.[] | select(.priority == 0) | select(.title | startswith("SMOKE:")) | .id' 2>/dev/null | while read -r bug_id; do
-                [ -n "$bug_id" ] && bd close "$bug_id" --reason="Reset for re-test" 2>/dev/null || true
-            done
-            # Remove evidence to force fresh test
-            rm -rf .hype/evidence 2>/dev/null || true
-            success "Reset to SMOKE_TEST (testers will run again)"
+            delete_milestone "milestone:project-done"
             ;;
-
-        *)
-            error "Unknown phase: $target_phase"
-            echo "Valid phases: PLANNING, HELPERS, PLAN_REVIEW, SMOKE_TEST"
-            exit 1
+        HELPERS)
+            # Need: planning-done
+            # Delete: analysts-done and after
+            ensure_milestone "milestone:planning-done" "Planning complete"
+            delete_milestone "milestone:analysts-done"
+            delete_milestone "milestone:plan-reviewed"
+            delete_milestone "milestone:smoke-test-done"
+            delete_milestone "milestone:project-done"
+            ;;
+        PLAN_REVIEW)
+            # Need: planning-done, analysts-done
+            # Delete: plan-reviewed and after
+            ensure_milestone "milestone:planning-done" "Planning complete"
+            ensure_milestone "milestone:analysts-done" "Analysts complete"
+            delete_milestone "milestone:plan-reviewed"
+            delete_milestone "milestone:smoke-test-done"
+            delete_milestone "milestone:project-done"
+            ;;
+        IMPLEMENTATION)
+            # Need: planning-done, analysts-done, plan-reviewed
+            # Delete: smoke-test-done and after
+            ensure_milestone "milestone:planning-done" "Planning complete"
+            ensure_milestone "milestone:analysts-done" "Analysts complete"
+            ensure_milestone "milestone:plan-reviewed" "Plan reviewed"
+            delete_milestone "milestone:smoke-test-done"
+            delete_milestone "milestone:project-done"
+            ;;
+        SMOKE_TEST)
+            # Need: planning-done, analysts-done, plan-reviewed
+            # Delete: smoke-test-done and after
+            ensure_milestone "milestone:planning-done" "Planning complete"
+            ensure_milestone "milestone:analysts-done" "Analysts complete"
+            ensure_milestone "milestone:plan-reviewed" "Plan reviewed"
+            delete_milestone "milestone:smoke-test-done"
+            delete_milestone "milestone:project-done"
+            rm -rf .hype/evidence 2>/dev/null || true
+            ;;
+        FINAL_REVIEW)
+            # Need: all milestones except project-done
+            ensure_milestone "milestone:planning-done" "Planning complete"
+            ensure_milestone "milestone:analysts-done" "Analysts complete"
+            ensure_milestone "milestone:plan-reviewed" "Plan reviewed"
+            ensure_milestone "milestone:smoke-test-done" "Smoke test complete"
+            delete_milestone "milestone:project-done"
             ;;
     esac
 
+    success "Phase set to $target_phase"
     echo ""
-    info "New phase:"
-    if [[ -x "./scripts/detect-phase.sh" ]]; then
-        ./scripts/detect-phase.sh
-    fi
+    info "Run 'hype start' to continue"
 }
 
 delete_milestone() {
     local label="$1"
 
-    # Find tasks with this label and reopen them (delete milestone effect)
+    # Find tasks with this label (--limit 0 for all closed tasks)
     local task_ids
-    task_ids=$(bd list --status=closed --json 2>/dev/null | jq -r ".[] | select(.labels[]? == \"$label\") | .id" 2>/dev/null || true)
+    task_ids=$(bd list --status=closed --json --limit 0 2>/dev/null | jq -r ".[] | select(.labels[]? == \"$label\") | .id" 2>/dev/null || true)
 
     if [[ -n "$task_ids" ]]; then
         for task_id in $task_ids; do
-            # Cannot reopen, so we delete the task entirely
-            # Actually bd doesn't have delete, so we close with a different reason
-            # The milestone detection uses labels on closed tasks
-            # To "remove" a milestone, we need to remove the label
             bd update "$task_id" --remove-label="$label" 2>/dev/null || true
             info "Removed $label from $task_id"
         done
-    else
-        info "No tasks with $label found"
+    fi
+}
+
+ensure_milestone() {
+    local label="$1"
+    local title="$2"
+
+    # Check if milestone exists (--limit 0 for all closed tasks)
+    local exists
+    exists=$(bd list --status=closed --json --limit 0 2>/dev/null | jq -r ".[] | select(.labels[]? == \"$label\") | .id" 2>/dev/null | head -1)
+
+    if [[ -z "$exists" ]]; then
+        # Create and close milestone
+        local new_id
+        new_id=$(bd create --title="$title" --type=task --labels="$label" 2>&1 | grep -oE '[A-Za-z]+-[a-z0-9]+' | head -1)
+        if [[ -n "$new_id" ]]; then
+            bd close "$new_id" --reason="Phase reset" 2>/dev/null || true
+            info "Created $label"
+        fi
     fi
 }
 

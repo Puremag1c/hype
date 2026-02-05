@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.6.19] - 2026-02-05
+
+### Fixed
+
+- **Critical: Milestones not detected with >50 tasks** - Added `--limit 0` to `bd list` calls in `detect-phase.sh`. Default limit of 50 caused milestones to be invisible when project had many closed tasks, resulting in incorrect phase detection (e.g., jumping back to HELPERS from FINAL_REVIEW).
+
+### Added
+
+- **Force phase mechanism** - `detect-phase.sh` now checks `.hype/force-phase` file first, allowing immediate transition to any phase. File is one-shot (deleted after read).
+
+- **Flexible phase navigation** - `hype reset-phase` now supports ALL phases (INIT, PLANNING, HELPERS, PLAN_REVIEW, IMPLEMENTATION, SMOKE_TEST, FINAL_REVIEW) and can move forward or backward:
+  - Moving forward: creates missing prerequisite milestones
+  - Moving backward: removes milestones after target phase
+  - Uses force-phase for immediate effect
+
+- **ensure_milestone() helper** - New function in bin/hype to create milestones if they don't exist
+
+### Changed
+
+- `delete_milestone()` now uses `--limit 0` for reliable milestone detection
+
+---
+
 ## [1.6.18] - 2026-02-04
 
 ### Changed

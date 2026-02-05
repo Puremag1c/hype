@@ -160,8 +160,8 @@ check_beads() {
     while [ $attempts -lt 3 ]; do
         ((attempts++))
 
-        # Restart daemon with timeout
-        timeout_cmd 10s bd daemon restart &>/dev/null || true
+        # Restart daemon with timeout (requires workspace path)
+        timeout_cmd 10s bd daemon restart . &>/dev/null || true
         sleep 2
 
         if timeout_cmd 5s bd sync --status &>/dev/null; then

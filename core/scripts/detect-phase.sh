@@ -2,7 +2,8 @@
 # core/scripts/detect-phase.sh
 # Определяет текущую фазу проекта из состояния Beads и файлов.
 #
-# Фазы: INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST → FINAL_REVIEW → DONE
+# Фазы: INIT → PLANNING → HELPERS → PLAN_REVIEW → [SMOKE_REVIEW] → IMPLEMENTATION → SMOKE_TEST → FINAL_REVIEW → DONE
+#        SMOKE_REVIEW — срабатывает когда есть regression tasks (после SMOKE_TEST нашёл баги)
 #        IDLE — проект существует, но нет активной работы (требует решения пользователя)
 #
 # Использование: ./scripts/detect-phase.sh
@@ -54,6 +55,9 @@ HAS_SMOKE_TEST_DONE=$(echo "$CLOSED_TASKS_JSON" | jq '[.[] | select(.labels[]? =
 # P0 bugs (block SMOKE_TEST milestone)
 P0_BUGS_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open") | select(.priority == 0)] | length' 2>/dev/null || echo "0")
 
+# Regression tasks (from SMOKE_TEST, need Architect review)
+REGRESSION_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open") | select(.labels[]? == "regression")] | length' 2>/dev/null || echo "0")
+
 # Trigger tasks для analysts (из open tasks)
 ANALYST_TRIGGERS_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open") | select(.title | test("^run-analyst-"))] | length' 2>/dev/null || echo "0")
 PLAN_REVIEW_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open") | select(.title == "run-plan-review")] | length' 2>/dev/null || echo "0")
@@ -66,7 +70,7 @@ if [ "${CLAUDEV_DEBUG:-false}" = "true" ]; then
     >&2 echo "Tasks: total=$TOTAL, open=$OPEN, in_progress=$IN_PROGRESS, closed=$CLOSED"
     >&2 echo "Milestones: planning=$HAS_PLANNING_DONE, analysts=$HAS_ANALYSTS_DONE, reviewed=$HAS_PLAN_REVIEWED, smoke=$HAS_SMOKE_TEST_DONE, done=$HAS_PROJECT_DONE"
     >&2 echo "Triggers: analyst_open=$ANALYST_TRIGGERS_OPEN, plan_review=$PLAN_REVIEW_OPEN"
-    >&2 echo "P0 bugs open: $P0_BUGS_OPEN"
+    >&2 echo "P0 bugs open: $P0_BUGS_OPEN, regressions: $REGRESSION_OPEN"
     >&2 echo "==========================="
 fi
 
@@ -126,6 +130,13 @@ fi
 # PLAN_REVIEW: analysts закончили, Architect ревьюит
 if [ "$HAS_PLAN_REVIEWED" -eq 0 ]; then
     echo "PLAN_REVIEW"
+    exit 0
+fi
+
+# SMOKE_REVIEW: regression tasks найдены - Architect обрабатывает перед executors
+# Предотвращает race condition между Architect и Executor
+if [ "$REGRESSION_OPEN" -gt 0 ]; then
+    echo "SMOKE_REVIEW"
     exit 0
 fi
 

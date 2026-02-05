@@ -744,38 +744,35 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "plan_review" "" "${PLAN_REVIEW_TIMEOUT:-10m}"
             ;;
 
-        IMPLEMENTATION)
-            # Streaming: launch executors (non-blocking) + process one review
-            log "INFO" "IMPLEMENTATION: Streaming cycle..."
+        SMOKE_REVIEW)
+            # Architect reviews regression tasks before executors can grab them
+            # Prevents race condition between Architect and Executor
+            log "INFO" "SMOKE_REVIEW: Processing regression tasks..."
 
-            # Check for regressions first - route to Architect before executors
-            # Only check OPEN tasks - if executor already grabbed (in_progress), let it finish
-            # v1.8.1 filter prevents executors from grabbing regression tasks going forward
-            local regression_count
-            regression_count=$(bd list --status=open --json 2>/dev/null | jq '[.[] | select(.labels | index("regression"))] | length' 2>/dev/null || echo "0")
+            local arch_model
+            arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
 
-            if [ "$regression_count" -gt 0 ]; then
-                log "WARN" "IMPLEMENTATION: $regression_count regression(s) found - routing to Architect"
+            # Create trigger task if not exists
+            if ! bd list --json 2>/dev/null | jq -e '.[] | select(.title == "run-smoke-review")' > /dev/null 2>&1; then
+                bd create --title="run-smoke-review" --type=task --priority=0 >/dev/null 2>&1 || true
+            fi
 
-                # Create trigger task for smoke_review if not exists
-                if ! bd list --json 2>/dev/null | jq -e '.[] | select(.title == "run-smoke-review")' > /dev/null 2>&1; then
-                    bd create --title="run-smoke-review" --type=task --priority=0 >/dev/null 2>&1 || true
-                fi
-
-                # Collect regression task IDs for Architect prompt
-                local regression_prompt regression_tasks
-                regression_tasks=$(bd list --status=open --json 2>/dev/null | jq -r '.[] | select(.labels | index("regression")) | "\(.id): \(.title)"' 2>/dev/null || echo "")
-                regression_prompt="
+            # Collect regression task IDs for Architect prompt
+            local regression_tasks regression_prompt
+            regression_tasks=$(bd list --status=open --json 2>/dev/null | jq -r '.[] | select(.labels | index("regression")) | "\(.id): \(.title)"' 2>/dev/null || echo "")
+            regression_prompt="
 REGRESSION TASKS TO REVIEW:
 $regression_tasks
 
 For each task: bd show <id> --json, then decide action and REMOVE regression label."
 
-                # Run architect in smoke_review mode with task IDs
-                local arch_model
-                arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
-                run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "smoke_review" "$regression_prompt" "${SMOKE_REVIEW_TIMEOUT:-10m}"
-            fi
+            run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "smoke_review" "$regression_prompt" "${SMOKE_REVIEW_TIMEOUT:-10m}"
+            ;;
+
+        IMPLEMENTATION)
+            # Streaming: launch executors (non-blocking) + process one review
+            # Note: regression tasks are handled in SMOKE_REVIEW phase before reaching here
+            log "INFO" "IMPLEMENTATION: Streaming cycle..."
 
             ./scripts/run-executors.sh
             ./scripts/run-senior-executor.sh
@@ -786,41 +783,14 @@ For each task: bd show <id> --json, then decide action and REMOVE regression lab
             log "INFO" "SMOKE_TEST: Running parallel testers..."
             ./scripts/run-testers.sh
 
-            # Check results - milestone created only if ALL tasks are closed (not just P0)
-            # This prevents skipping SMOKE_TEST when P1+ bugs exist
-            local open_tasks regression_count
+            # Check results - milestone created only if ALL tasks are closed
+            local open_tasks
             open_tasks=$(bd list --status=open --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
 
             if [ "$open_tasks" -gt 0 ]; then
-                # Check for regressions (bugs that were "fixed" but came back)
-                # Only check OPEN - if in_progress, let executor finish first
-                regression_count=$(bd list --status=open --json 2>/dev/null | jq '[.[] | select(.labels | index("regression"))] | length' 2>/dev/null || echo "0")
-
-                if [ "$regression_count" -gt 0 ]; then
-                    log "WARN" "SMOKE_TEST: $regression_count regression(s) found - routing to Architect for review"
-
-                    # Create trigger task for smoke_review
-                    if ! bd list --json 2>/dev/null | jq -e '.[] | select(.title == "run-smoke-review")' > /dev/null 2>&1; then
-                        bd create --title="run-smoke-review" --type=task --priority=0 >/dev/null 2>&1 || true
-                    fi
-
-                    # Collect regression task IDs for Architect prompt
-                    local regression_prompt regression_tasks
-                    regression_tasks=$(bd list --status=open --json 2>/dev/null | jq -r '.[] | select(.labels | index("regression")) | "\(.id): \(.title)"' 2>/dev/null || echo "")
-                    regression_prompt="
-REGRESSION TASKS TO REVIEW:
-$regression_tasks
-
-For each task: bd show <id> --json, then decide action and REMOVE regression label."
-
-                    # Run architect in smoke_review mode with task IDs
-                    local arch_model
-                    arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
-                    run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "smoke_review" "$regression_prompt" "${SMOKE_REVIEW_TIMEOUT:-10m}"
-                fi
-
-                log "WARN" "SMOKE_TEST: $open_tasks open task(s) found - returning to IMPLEMENTATION"
-                # detect-phase.sh will route back to IMPLEMENTATION
+                # Testers created tasks (bugs, regressions)
+                # detect-phase.sh will route to SMOKE_REVIEW (if regression) or IMPLEMENTATION
+                log "WARN" "SMOKE_TEST: $open_tasks open task(s) found"
             else
                 # All tasks closed - create milestone
                 log "INFO" "SMOKE_TEST: All tests passed - creating milestone"

@@ -55,6 +55,8 @@ hype/
 
 ```
 INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST → FINAL_REVIEW → DONE
+                                              ↑                 ↓
+                                              └── SMOKE_REVIEW ←┘ (если есть regression)
 ```
 
 | Фаза | Агент | Что происходит |
@@ -65,6 +67,7 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 | PLAN_REVIEW | Architect | Ревью добавлений от Analysts |
 | IMPLEMENTATION | Executors | Параллельная реализация задач |
 | SMOKE_TEST | Testers ×N | Параллельная проверка работоспособности (по типу проекта) |
+| SMOKE_REVIEW | Architect | Обработка regression bugs (эскалация, контекст, приоритет) |
 | FINAL_REVIEW | Architect | Проверка целостности |
 | DONE | — | Проект завершён |
 

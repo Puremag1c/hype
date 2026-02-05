@@ -12,6 +12,10 @@ set -euo pipefail
 HYPE_HOME="${HYPE_HOME:-$HOME/.hype}"
 VERSION=$(cat "$HYPE_HOME/VERSION" 2>/dev/null || echo "dev")
 
+# Source common functions (milestone management, etc.)
+# shellcheck source=../core/scripts/common.sh
+source "$HYPE_HOME/core/scripts/common.sh"
+
 # === Colors ===
 
 RED='\033[0;31m'
@@ -1160,40 +1164,6 @@ cmd_reset_phase() {
     success "Phase set to $target_phase"
     echo ""
     info "Run 'hype start' to continue"
-}
-
-delete_milestone() {
-    local label="$1"
-
-    # Find tasks with this label (--limit 0 for all closed tasks)
-    local task_ids
-    task_ids=$(bd list --status=closed --json --limit 0 2>/dev/null | jq -r ".[] | select(.labels[]? == \"$label\") | .id" 2>/dev/null || true)
-
-    if [[ -n "$task_ids" ]]; then
-        for task_id in $task_ids; do
-            bd update "$task_id" --remove-label="$label" 2>/dev/null || true
-            info "Removed $label from $task_id"
-        done
-    fi
-}
-
-ensure_milestone() {
-    local label="$1"
-    local title="$2"
-
-    # Check if milestone exists (--limit 0 for all closed tasks)
-    local exists
-    exists=$(bd list --status=closed --json --limit 0 2>/dev/null | jq -r ".[] | select(.labels[]? == \"$label\") | .id" 2>/dev/null | head -1)
-
-    if [[ -z "$exists" ]]; then
-        # Create and close milestone
-        local new_id
-        new_id=$(bd create --title="$title" --type=task --labels="$label" 2>&1 | grep -oE '[A-Za-z]+-[a-z0-9]+' | head -1)
-        if [[ -n "$new_id" ]]; then
-            bd close "$new_id" --reason="Phase reset" 2>/dev/null || true
-            info "Created $label"
-        fi
-    fi
 }
 
 # === Stop ===

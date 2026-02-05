@@ -349,3 +349,81 @@ is_audit_task() {
     return 1  # false - not audit task
 }
 export -f is_audit_task 2>/dev/null || true
+
+# =============================================================================
+# Milestone Management Functions
+# =============================================================================
+# Milestones are marker tasks with labels like "milestone:planning-done"
+# They track phase completion and are stored as closed tasks in beads.
+#
+# IMPORTANT: All functions use --limit 0 to handle projects with >50 tasks.
+# =============================================================================
+
+# has_milestone - проверяет существование milestone
+# Использование: has_milestone "milestone:planning-done"
+# Возвращает: 0 (true) если milestone существует, 1 (false) если нет
+has_milestone() {
+    local label="$1"
+    local found
+    found=$(bd list --status=closed --json --limit 0 2>/dev/null | \
+        jq -r ".[] | select(.labels[]? == \"$label\") | .id" 2>/dev/null | head -1)
+    [ -n "$found" ]
+}
+export -f has_milestone 2>/dev/null || true
+
+# ensure_milestone - создаёт milestone если не существует (идемпотентно)
+# Использование: ensure_milestone "milestone:planning-done" "Planning complete"
+# Создаёт task с label и сразу закрывает его.
+ensure_milestone() {
+    local label="$1"
+    local title="$2"
+
+    if has_milestone "$label"; then
+        return 0
+    fi
+
+    # Create and immediately close
+    local new_id
+    new_id=$(bd create --title="$title" --type=task --labels="$label" 2>&1 | \
+        grep -oE '[A-Za-z]+-[a-z0-9]+' | head -1)
+    if [ -n "$new_id" ]; then
+        bd close "$new_id" --reason="Phase milestone" >/dev/null 2>&1 || true
+    fi
+}
+export -f ensure_milestone 2>/dev/null || true
+
+# delete_milestone - удаляет milestone task полностью
+# Использование: delete_milestone "milestone:planning-done"
+# Удаляет ВСЕ tasks с данным label (на случай дубликатов).
+delete_milestone() {
+    local label="$1"
+    local task_ids
+    task_ids=$(bd list --status=closed --json --limit 0 2>/dev/null | \
+        jq -r ".[] | select(.labels[]? == \"$label\") | .id" 2>/dev/null || true)
+
+    if [ -n "$task_ids" ]; then
+        for task_id in $task_ids; do
+            bd delete "$task_id" >/dev/null 2>&1 || true
+        done
+    fi
+}
+export -f delete_milestone 2>/dev/null || true
+
+# delete_all_milestones - удаляет все milestone tasks
+# Использование: delete_all_milestones
+# Используется при начале новой итерации (INIT phase).
+delete_all_milestones() {
+    local task_ids
+    task_ids=$(bd list --status=closed --json --limit 0 2>/dev/null | \
+        jq -r '.[] | select(.labels[]? | test("^milestone:")) | .id' 2>/dev/null || true)
+
+    local count=0
+    if [ -n "$task_ids" ]; then
+        for task_id in $task_ids; do
+            bd delete "$task_id" >/dev/null 2>&1 || true
+            ((count++)) || true
+        done
+    fi
+    echo "$count"
+}
+export -f delete_all_milestones 2>/dev/null || true

@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.7.1] - 2026-02-05
+
+### Fixed
+
+- **SMOKE_TEST skipped when P1+ bugs exist** - SMOKE_TEST now checks ALL open tasks, not just P0 bugs. Previously, if a tester created a P1 bug, the milestone was still created and system jumped to FINAL_REVIEW, skipping smoke tests after the fix.
+
+### Changed
+
+- **Centralized milestone management** - Extracted 4 idempotent functions to `common.sh`:
+  - `has_milestone(label)` - check if milestone exists
+  - `ensure_milestone(label, title)` - create if not exists
+  - `delete_milestone(label)` - delete milestone task completely
+  - `delete_all_milestones()` - delete all milestones (for INIT phase)
+
+- **Unified milestone deletion** - All code now uses `bd delete` instead of mixed `bd delete` / `bd update --remove-label`. Cleaner, no orphaned tasks.
+
+- **All milestone operations use --limit 0** - Ensures correct behavior with >50 closed tasks.
+
+---
+
 ## [1.7.0] - 2026-02-05
 
 ### Added

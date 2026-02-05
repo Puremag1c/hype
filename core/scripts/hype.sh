@@ -378,12 +378,7 @@ check_and_create_done_milestone() {
 
     if [ -n "$latest_log" ] && grep -q "FINAL_REVIEW: PASSED" "$latest_log" 2>/dev/null; then
         log "INFO" "Final review passed, creating project-done milestone"
-        bd create --title="Project complete" --type=task --labels=milestone:project-done >/dev/null 2>&1 || true
-        local milestone_id
-        milestone_id=$(bd list --json 2>/dev/null | jq -r '.[] | select(.labels[]? == "milestone:project-done") | .id' | head -1)
-        if [ -n "$milestone_id" ]; then
-            bd close "$milestone_id" --reason="Final review passed" >/dev/null 2>&1 || true
-        fi
+        ensure_milestone "milestone:project-done" "Project complete"
 
         # Create marker for next iteration
         # Tech Writer will see this and ask what to do next
@@ -680,15 +675,10 @@ dispatch_phase() {
                 fi
 
                 # Remove ALL milestone tasks (new iteration = clean slate)
-                local milestone_ids
-                milestone_ids=$(bd list --status=closed --json 2>/dev/null | jq -r '.[] | select(.labels[]? | test("^milestone:")) | .id' 2>/dev/null || true)
-                if [ -n "$milestone_ids" ]; then
-                    local count=0
-                    for mid in $milestone_ids; do
-                        bd delete "$mid" >/dev/null 2>&1 || true
-                        ((count++)) || true
-                    done
-                    log "INFO" "Removed $count milestone(s) (new iteration started)"
+                local deleted_count
+                deleted_count=$(delete_all_milestones)
+                if [ "$deleted_count" -gt 0 ]; then
+                    log "INFO" "Removed $deleted_count milestone(s) (new iteration started)"
                 fi
             fi
             ;;
@@ -704,17 +694,12 @@ dispatch_phase() {
 $spec_content" "${PLANNING_TIMEOUT:-15m}"
 
             # Ensure milestone exists (architect may forget step 7)
-            local task_count milestone_exists
-            task_count=$(bd list --json 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
-            milestone_exists=$(bd list --status=closed --json 2>/dev/null | jq '[.[] | select(.labels[]? == "milestone:planning-done")] | length' 2>/dev/null || echo "0")
-
-            if [ "$task_count" -gt 0 ] && [ "$milestone_exists" -eq 0 ]; then
-                log "INFO" "Creating planning-done milestone (architect skipped step 7)"
-                local milestone_id
-                # Extract issue ID from "Created issue: ProjectName-xxxx" output
-                milestone_id=$(bd create --title="Planning complete" --type=task --labels=milestone:planning-done 2>/dev/null | grep -oE '[A-Za-z]+-[a-z0-9]+' | head -1)
-                if [ -n "$milestone_id" ]; then
-                    bd close "$milestone_id" >/dev/null 2>&1 || true
+            local task_count
+            task_count=$(bd list --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+            if [ "$task_count" -gt 0 ]; then
+                if ! has_milestone "milestone:planning-done"; then
+                    log "INFO" "Creating planning-done milestone (architect skipped step 7)"
+                    ensure_milestone "milestone:planning-done" "Planning complete"
                 fi
             fi
             ;;
@@ -727,14 +712,11 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
 
             # Check if all analysts done and create milestone (single source of truth)
             local open_triggers
-            open_triggers=$(bd list --status=open --json 2>/dev/null | jq '[.[] | select(.title | startswith("run-analyst-"))] | length' 2>/dev/null || echo "0")
+            open_triggers=$(bd list --status=open --json --limit 0 2>/dev/null | jq '[.[] | select(.title | startswith("run-analyst-"))] | length' 2>/dev/null || echo "0")
             if [ "$open_triggers" -eq 0 ]; then
-                if ! bd list --json 2>/dev/null | jq -e '.[] | select(.labels[]? == "milestone:analysts-done")' > /dev/null 2>&1; then
+                if ! has_milestone "milestone:analysts-done"; then
                     log "INFO" "All analysts done, creating milestone"
-                    bd create --title="Analysts complete" --type=task --labels=milestone:analysts-done >/dev/null 2>&1 || true
-                    local milestone_id
-                    milestone_id=$(bd list --json 2>/dev/null | jq -r '.[] | select(.labels[]? == "milestone:analysts-done") | .id' | head -1)
-                    [ -n "$milestone_id" ] && bd close "$milestone_id" >/dev/null 2>&1 || true
+                    ensure_milestone "milestone:analysts-done" "Analysts complete"
                 fi
             fi
             ;;
@@ -763,24 +745,18 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             log "INFO" "SMOKE_TEST: Running parallel testers..."
             ./scripts/run-testers.sh
 
-            # Check results - milestone created only if all testers passed and no P0 bugs
-            local p0_bugs
-            p0_bugs=$(bd list --status=open --json 2>/dev/null | jq '[.[] | select(.priority == 0)] | length' 2>/dev/null || echo "0")
+            # Check results - milestone created only if ALL tasks are closed (not just P0)
+            # This prevents skipping SMOKE_TEST when P1+ bugs exist
+            local open_tasks
+            open_tasks=$(bd list --status=open --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
 
-            if [ "$p0_bugs" -gt 0 ]; then
-                log "WARN" "SMOKE_TEST: $p0_bugs P0 bug(s) found - returning to IMPLEMENTATION"
+            if [ "$open_tasks" -gt 0 ]; then
+                log "WARN" "SMOKE_TEST: $open_tasks open task(s) found - returning to IMPLEMENTATION"
                 # detect-phase.sh will route back to IMPLEMENTATION
             else
-                # All tests passed - create milestone
+                # All tasks closed - create milestone
                 log "INFO" "SMOKE_TEST: All tests passed - creating milestone"
-                if ! bd list --json 2>/dev/null | jq -e '.[] | select(.labels[]? == "milestone:smoke-test-done")' > /dev/null 2>&1; then
-                    bd create --title="Smoke test complete" --type=task --labels=milestone:smoke-test-done >/dev/null 2>&1 || true
-                    local milestone_id
-                    milestone_id=$(bd list --json 2>/dev/null | jq -r '.[] | select(.labels[]? == "milestone:smoke-test-done") | .id' | head -1)
-                    if [ -n "$milestone_id" ]; then
-                        bd close "$milestone_id" --reason="All smoke tests passed" >/dev/null 2>&1 || true
-                    fi
-                fi
+                ensure_milestone "milestone:smoke-test-done" "Smoke test complete"
             fi
             ;;
 
@@ -808,12 +784,8 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
                     if [ "$open_count" -gt 0 ]; then
                         log "INFO" "FINAL_REVIEW: Architect created $open_count task(s), returning to IMPLEMENTATION"
                         # Invalidate smoke-test-done milestone — need to re-test after fix
-                        local smoke_id
-                        smoke_id=$(bd list --status=closed --json 2>/dev/null | jq -r '.[] | select(.labels[]? == "milestone:smoke-test-done") | .id' | head -1)
-                        if [ -n "$smoke_id" ]; then
-                            bd update "$smoke_id" --remove-label="milestone:smoke-test-done" >/dev/null 2>&1 || true
-                            log "INFO" "Invalidated smoke-test-done milestone (will re-run smoke test)"
-                        fi
+                        delete_milestone "milestone:smoke-test-done"
+                        log "INFO" "Invalidated smoke-test-done milestone (will re-run smoke test)"
                         break
                     fi
                     log "WARN" "FINAL_REVIEW: Architect didn't complete review, retrying..."

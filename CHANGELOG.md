@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.8.4] - 2026-02-05
+
+### Fixed
+
+- **Architect smoke_review gets no task IDs** - The `run_agent_with_mode` call had empty prompt, so Architect didn't know which regression tasks to review. Now passes task IDs: `"REGRESSION TASKS TO REVIEW: <id>: <title>..."`.
+
+- **Stale reset loops regression tasks** - `reset_stale_tasks()` was resetting regression tasks to `open` status while keeping the label, causing infinite smoke_review cycles. Now skips tasks with `regression` label.
+
+---
+
 ## [1.8.3] - 2026-02-05
 
 ### Fixed

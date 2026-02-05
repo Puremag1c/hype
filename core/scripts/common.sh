@@ -101,6 +101,13 @@ reset_stale_tasks() {
             continue
         fi
 
+        # Skip regression tasks - they're waiting for Architect smoke_review
+        local has_regression
+        has_regression=$(bd show "$task_id" --json 2>/dev/null | jq -r '.[0].labels | index("regression") // empty' 2>/dev/null || echo "")
+        if [ -n "$has_regression" ]; then
+            continue
+        fi
+
         local updated_at
         updated_at=$(bd show "$task_id" --json 2>/dev/null | jq -r '.[0].updated_at' 2>/dev/null || echo "")
 

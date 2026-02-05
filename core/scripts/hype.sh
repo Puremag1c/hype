@@ -751,10 +751,18 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
                     bd create --title="run-smoke-review" --type=task --priority=0 >/dev/null 2>&1 || true
                 fi
 
-                # Run architect in smoke_review mode
+                # Collect regression task IDs for Architect prompt
+                local regression_prompt regression_tasks
+                regression_tasks=$(bd list --status=open --json 2>/dev/null | jq -r '.[] | select(.labels | index("regression")) | "\(.id): \(.title)"' 2>/dev/null || echo "")
+                regression_prompt="REGRESSION TASKS TO REVIEW:
+$regression_tasks
+
+For each task: bd show <id> --json, then decide action and REMOVE regression label."
+
+                # Run architect in smoke_review mode with task IDs
                 local arch_model
                 arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
-                run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "smoke_review" "" "${SMOKE_REVIEW_TIMEOUT:-10m}"
+                run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "smoke_review" "$regression_prompt" "${SMOKE_REVIEW_TIMEOUT:-10m}"
             fi
 
             ./scripts/run-executors.sh
@@ -784,10 +792,18 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
                         bd create --title="run-smoke-review" --type=task --priority=0 >/dev/null 2>&1 || true
                     fi
 
-                    # Run architect in smoke_review mode to analyze regressions
+                    # Collect regression task IDs for Architect prompt
+                    local regression_prompt regression_tasks
+                    regression_tasks=$(bd list --status=open --json 2>/dev/null | jq -r '.[] | select(.labels | index("regression")) | "\(.id): \(.title)"' 2>/dev/null || echo "")
+                    regression_prompt="REGRESSION TASKS TO REVIEW:
+$regression_tasks
+
+For each task: bd show <id> --json, then decide action and REMOVE regression label."
+
+                    # Run architect in smoke_review mode with task IDs
                     local arch_model
                     arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
-                    run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "smoke_review" "" "${SMOKE_REVIEW_TIMEOUT:-10m}"
+                    run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "smoke_review" "$regression_prompt" "${SMOKE_REVIEW_TIMEOUT:-10m}"
                 fi
 
                 log "WARN" "SMOKE_TEST: $open_tasks open task(s) found - returning to IMPLEMENTATION"

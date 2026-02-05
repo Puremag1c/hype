@@ -106,43 +106,6 @@ preflight_check() {
         return 0
     fi
 
-    # Check 4: Scope violation?
-    local allowed_files
-    allowed_files=$(echo "$task_json" | jq -r '.[0].description // ""' 2>/dev/null | grep -m1 "^files:" | sed 's/^files:[[:space:]]*//' | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-
-    if [ -n "$allowed_files" ]; then
-        local changed_files
-        # Only check Added/Copied/Modified/Renamed files, not Deleted
-        # (files in main but not in branch should not trigger scope violation)
-        changed_files=$(git diff --name-only --diff-filter=ACMR "origin/main..origin/$branch_name" 2>/dev/null)
-
-        for changed in $changed_files; do
-            local allowed=false
-            for pattern in $allowed_files; do
-                # Clean pattern: remove suffixes like "(new)", "(edit)", "(modify)"
-                local clean_pattern="${pattern%% (*}"
-                # Match: exact, glob, directory prefix, or basename
-                # - exact: src/foo.py == src/foo.py
-                # - glob: *.py matches foo.py
-                # - prefix: templates/ matches templates/foo.html
-                # - basename: foo.py matches src/dir/foo.py (fallback for short names)
-                local changed_basename
-                changed_basename=$(basename "$changed")
-                if [[ "$changed" == "$clean_pattern" ]] || \
-                   [[ "$changed" == $clean_pattern ]] || \
-                   [[ "$changed" == "$clean_pattern"* ]] || \
-                   [[ "$changed_basename" == "$clean_pattern" ]]; then
-                    allowed=true
-                    break
-                fi
-            done
-            if [ "$allowed" = false ]; then
-                echo "SCOPE_VIOLATION:$changed"
-                return 0
-            fi
-        done
-    fi
-
     echo "PASS"
 }
 
@@ -342,28 +305,6 @@ process_review() {
             log "ERROR" "REJECT: $task_id - secrets detected in diff"
             bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
                 --notes="SECURITY: Potential secrets detected in diff. Remove sensitive data and resubmit."
-            return 0
-            ;;
-        SCOPE_VIOLATION:*)
-            local bad_file="${preflight_result#SCOPE_VIOLATION:}"
-
-            # Get current scope violation count
-            local scope_retry
-            scope_retry=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("scope-violation:")) | split(":")[1]' 2>/dev/null | head -1)
-            scope_retry=${scope_retry:-0}
-            ((scope_retry++))
-
-            if [ "$scope_retry" -ge 3 ]; then
-                log "WARN" "SCOPE ESCALATE: $task_id - 3 scope violations, escalating to opus"
-                bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
-                    --remove-label="scope-violation:$((scope_retry-1))" --add-label="model:opus" \
-                    --notes="Scope violation ($scope_retry times): $bad_file. Escalated to opus."
-            else
-                log "WARN" "REJECT: $task_id - scope violation ($bad_file) (attempt $scope_retry/3)"
-                bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
-                    --remove-label="scope-violation:$((scope_retry-1))" --add-label="scope-violation:$scope_retry" \
-                    --notes="Scope violation (attempt $scope_retry): Changed file outside allowed scope: $bad_file"
-            fi
             return 0
             ;;
         NO_FINDINGS)

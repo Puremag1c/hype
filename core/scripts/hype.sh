@@ -488,7 +488,7 @@ check_stale_tasks() {
 
 cleanup_stale_worktrees() {
     local worktrees_dir="$PROJECT_DIR/.hype-worktrees"
-    local stale_threshold=900  # 15 minutes in seconds
+    local stale_threshold="${WORKTREE_STALE_TIMEOUT:-900}"  # default 15 minutes
     local cleanup_count=0
 
     if [ ! -d "$worktrees_dir" ]; then

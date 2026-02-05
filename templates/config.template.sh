@@ -42,6 +42,12 @@ SMOKE_TEST_TIMEOUT="15m"
 # Таймаут для FINAL_REVIEW (architect проверяет весь проект)
 FINAL_REVIEW_TIMEOUT="15m"
 
+# Таймаут stale worktrees (секунды) — worktree старше этого удаляется
+WORKTREE_STALE_TIMEOUT=900
+
+# Таймаут stale tasks (секунды) — in_progress задача без обновлений сбрасывается
+TASK_STALE_TIMEOUT=600
+
 # === Модели ===
 
 # Разрешённые модели (через запятую)

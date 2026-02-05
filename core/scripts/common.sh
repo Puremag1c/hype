@@ -85,11 +85,11 @@ export -f append_notes 2>/dev/null || true
 
 # reset_stale_tasks - сбрасывает in_progress задачи старше threshold секунд
 # Использование: reset_stale_tasks [THRESHOLD_SECONDS] [LOG_PREFIX]
-# По умолчанию: 600 секунд (10 минут)
+# По умолчанию: TASK_STALE_TIMEOUT из config или 600 секунд (10 минут)
 # Пример: reset_stale_tasks 300 "shutdown"
 # ВАЖНО: НЕ сбрасывает задачи с needs-review — они ждут ревью, не stale
 reset_stale_tasks() {
-    local stale_threshold="${1:-600}"
+    local stale_threshold="${1:-${TASK_STALE_TIMEOUT:-600}}"
     local log_prefix="${2:-stale}"
     local reset_count=0
 
@@ -117,8 +117,11 @@ reset_stale_tasks() {
             local clean_date="${updated_at%%.*}"
             clean_date="${clean_date%%+*}"
             clean_date="${clean_date%%Z*}"
-            # macOS: date -j -f, Linux: date -d
-            task_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%S" "$clean_date" +%s 2>/dev/null || date -d "$clean_date" +%s 2>/dev/null || echo "0")
+            # macOS: date -j -f, Linux: date -d, WSL fallback: python3
+            task_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%S" "$clean_date" +%s 2>/dev/null || \
+                         date -d "$clean_date" +%s 2>/dev/null || \
+                         python3 -c "from datetime import datetime; print(int(datetime.fromisoformat('$clean_date').timestamp()))" 2>/dev/null || \
+                         echo "0")
             now_epoch=$(date +%s)
             age=$((now_epoch - task_epoch))
 
@@ -155,12 +158,10 @@ build_retry_context() {
 
     # Get all failure counts from labels
     retry_count=$(echo "$task_json" | jq -r '[.[0].labels[]? | select(startswith("retry:")) | split(":")[1] | tonumber] | max // 0' 2>/dev/null || echo "0")
-    scope_count=$(echo "$task_json" | jq -r '[.[0].labels[]? | select(startswith("scope-violation:")) | split(":")[1] | tonumber] | max // 0' 2>/dev/null || echo "0")
     review_count=$(echo "$task_json" | jq -r '[.[0].labels[]? | select(startswith("review-retry:")) | split(":")[1] | tonumber] | max // 0' 2>/dev/null || echo "0")
 
     # Total failures = max of all counters
-    total_failures=$((retry_count > scope_count ? retry_count : scope_count))
-    total_failures=$((total_failures > review_count ? total_failures : review_count))
+    total_failures=$((retry_count > review_count ? retry_count : review_count))
 
     # No failures = no context needed
     if [ "$total_failures" -eq 0 ] || [ -z "$notes" ]; then
@@ -170,9 +171,7 @@ build_retry_context() {
 
     # Build structured context with specific issue type
     local issue_type="general failure"
-    if [ "$scope_count" -gt 0 ]; then
-        issue_type="SCOPE VIOLATION ($scope_count times)"
-    elif [ "$review_count" -gt 0 ]; then
+    if [ "$review_count" -gt 0 ]; then
         issue_type="review rejection ($review_count times)"
     elif [ "$retry_count" -gt 0 ]; then
         issue_type="execution failure ($retry_count times)"
@@ -187,7 +186,6 @@ Previous feedback:
 $notes
 
 Recommendations:
-- If SCOPE VIOLATION: You edited files NOT in the 'files:' list. Work ONLY on listed files!
 - If timeout: task may be too large, consider doing LESS
 - If tests failing: fix the specific test, don't refactor
 - If same error repeats: try a fundamentally different approach

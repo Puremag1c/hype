@@ -28,17 +28,21 @@ hype.sh (bash loop с lock file)
 ## Фазы проекта
 
 ```
-INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → FINAL_REVIEW → DONE
+INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST → FINAL_REVIEW → DONE
+                                              ↑                 ↓
+                                              └── SMOKE_REVIEW ←┘ (если есть regression)
 ```
 
 | Фаза | Условие перехода | Агент | Действие |
 |------|-----------------|-------|----------|
-| INIT | Нет SPEC.md | Tech Writer | Собирает требования от user |
+| INIT | Нет SPEC.md | Tech Writer | Собирает требования от user (+ deep analysis для больших проектов) |
 | PLANNING | Есть SPEC.md | Architect | Создаёт задачи в beads |
 | HELPERS | milestone:planning-done | Analysts ×5 | Параллельный аудит плана |
 | PLAN_REVIEW | milestone:analysts-done | Architect | Ревьюит добавления Analysts |
 | IMPLEMENTATION | milestone:plan-reviewed | Executors | Реализуют задачи |
-| FINAL_REVIEW | Все задачи closed | Architect | Проверяет целостность |
+| SMOKE_TEST | milestone:impl-done | Testers ×N | Параллельная проверка работоспособности (по типу проекта) |
+| SMOKE_REVIEW | P0 bugs найдены | Architect | Обработка regression bugs (эскалация, контекст, приоритет) |
+| FINAL_REVIEW | milestone:smoke-test-done | Architect | Проверяет целостность |
 | DONE | milestone:project-done | — | Проект завершён |
 
 ## Агенты
@@ -83,14 +87,24 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → FINAL_REVIE
   3. Rebase на main
   4. Push и пометить `needs-review`
 
-### Senior Executor (Opus)
+### Senior Executor (tiered)
 - **Роль:** Quality gate перед main
+- **Модель:** opus задачи → opus review, остальные → sonnet
 - **Задачи:**
   - Code review
   - Проверка на secrets
-  - Запуск тестов
   - Merge через PR (или local merge)
   - Релиз
+
+### Testers (SMOKE_TEST фаза)
+- **Роль:** Проверка работоспособности после IMPLEMENTATION
+- **Виды:**
+  - `tester-functional` (sonnet) — Must Have из SPEC.md (все проекты)
+  - `tester-visual` (opus) — UI через Playwright MCP (web)
+  - `tester-api` (haiku) — Endpoints, статус коды (api, web)
+  - `tester-cli` (haiku) — Команды, --help (cli)
+  - `tester-regression` (sonnet) — Тестовый suite (library)
+- **Hard gate:** P0 bugs блокируют milestone:smoke-test-done → возврат в IMPLEMENTATION
 
 ## Скрипты
 
@@ -100,18 +114,40 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → FINAL_REVIE
 | `detect-phase.sh` | Определение текущей фазы |
 | `run-analysts.sh` | Параллельный запуск 5 Analysts |
 | `run-executors.sh` | Параллельный запуск Executors с backpressure |
+| `run-senior-executor.sh` | Code review и merge |
+| `run-testers.sh` | Параллельный запуск Testers (SMOKE_TEST) |
+| `common.sh` | Общие функции (timeout, reset_stale_tasks, milestones) |
 | `log.sh` | Хелпер для логирования |
-| `notify.sh` | Уведомления (macOS) |
+| `notify.sh` | Уведомления (macOS, Linux, WSL) |
+| `analyze-project.sh` | Анализ структуры проекта |
+| `deep-analyze.sh` | Глубокий анализ через Claude (INIT) |
+| `close-completed-parents.sh` | Автозакрытие parent tasks |
 
 ## Конфигурация
 
-`.hype/config.sh`:
+### `.hype/config.sh`
 
 ```bash
 MAX_PARALLEL_EXECUTORS=3    # Лимит параллельных Executors
 RETRY_LIMIT=3               # Retry до эскалации к Architect
 TASK_TIMEOUT="10m"          # Таймаут на задачу
+WORKTREE_STALE_TIMEOUT=900  # Секунды до удаления stale worktree
+TASK_STALE_TIMEOUT=600      # Секунды до сброса stale task
+ALLOWED_MODELS="opus,sonnet,haiku"  # Разрешённые модели
 ```
+
+### `.hype/testing.yaml` (SMOKE_TEST)
+
+```yaml
+type: web                    # web | api | cli | library
+build_command: npm run build # Команда сборки (опционально)
+start_command: npm start     # Запуск dev-сервера
+test_url: http://localhost:3000
+health_check: /health        # Endpoint для проверки готовности
+startup_timeout: 30          # Секунды на запуск сервера
+```
+
+Если файл отсутствует для web/api проекта — создаётся P0 задача для Opus.
 
 ## Beads интеграция
 

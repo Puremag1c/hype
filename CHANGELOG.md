@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.8.6] - 2026-02-05
+
+### Changed
+
+- **Configurable stale timeouts** - `WORKTREE_STALE_TIMEOUT` and `TASK_STALE_TIMEOUT` now configurable in `.hype/config.sh`. Defaults: 900s (worktrees), 600s (tasks).
+
+- **Cross-platform notifications** - `notify.sh` now supports Linux (notify-send) and WSL (PowerShell toast) in addition to macOS (osascript). Graceful fallback to echo.
+
+- **WSL date parsing** - Added python3 fallback for date parsing in `common.sh` when both macOS and Linux `date` commands fail.
+
+- **Updated architecture.md** - Added SMOKE_TEST/SMOKE_REVIEW phases, all 12 scripts, Testers agents section, testing.yaml documentation.
+
+### Removed
+
+- **Scope violation check** - Removed unused complexity from `run-senior-executor.sh`, `common.sh`, and `executor.md`. Code review already handles scope contextually. The check only worked for ~50% of tasks and caused infinite loops after escalation.
+
+---
+
 ## [1.8.5] - 2026-02-05
 
 ### Added

@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.8.5] - 2026-02-05
+
+### Added
+
+- **SMOKE_REVIEW phase** - Explicit phase for handling regression bugs. Prevents race condition between Architect and Executor - regressions are now processed before executors can grab them. Flow: `SMOKE_TEST → SMOKE_REVIEW → IMPLEMENTATION`.
+
+- **Deep analysis for large projects** - INIT phase now runs `deep-analyze.sh` for existing projects with >50 code files and no good README. Tech Writer gets enriched context about architecture before gathering requirements.
+
+### Changed
+
+- **Beads daemon recovery** - `check_beads()` now uses timeout (5s) to prevent hanging when daemon is frozen. Retries 3 times with `bd daemon restart .` before failing.
+
+### Removed
+
+- **Unused config options** - Removed `CI_ENABLED`, `CD_ENABLED`, `CLEANUP_ENABLED`, `CLEANUP_KEEP_DAYS`, `USER_INPUT_TIMEOUT` from config template and validation. These were never implemented.
+
+---
+
 ## [1.8.4] - 2026-02-05
 
 ### Fixed

@@ -332,6 +332,25 @@ start_dev_server() {
 
     log "ERROR" "Server failed to start within ${timeout}s"
     kill $DEV_SERVER_PID 2>/dev/null || true
+
+    # Create P0 bug for server failure
+    bd create --title="SMOKE: [Server] Dev server failed to start" \
+        --type=bug --priority=0 \
+        --description="## Start Command
+$start_cmd
+
+## Health Check
+URL: $health_url
+Timeout: ${timeout}s
+
+## Server Log
+\`\`\`
+$(tail -50 "$LOGS_DIR/dev-server.log" 2>/dev/null || echo "No log available")
+\`\`\`
+
+## Context
+Dev server failed to respond to health check within timeout.
+Check if the start command is correct and the server starts properly." >/dev/null 2>&1
     return 1
 }
 
@@ -415,8 +434,8 @@ main() {
 
     # Ensure testing config exists (for web/api projects)
     if ! ensure_testing_config "$project_type"; then
-        log "ERROR" "SMOKE_TEST aborted: missing testing configuration"
-        exit 1
+        log "WARN" "SMOKE_TEST: missing testing configuration - task created"
+        return 0  # Task created, hype.sh will route to IMPLEMENTATION
     fi
 
     # Read testing config
@@ -427,8 +446,8 @@ main() {
 
     # Run build first to ensure fresh artifacts
     if ! run_build; then
-        log "ERROR" "SMOKE_TEST aborted due to build failure"
-        exit 1
+        log "WARN" "SMOKE_TEST: build failed - task created"
+        return 0  # Task created, hype.sh will route to IMPLEMENTATION
     fi
 
     # Start dev server (single instance for all testers)
@@ -438,8 +457,8 @@ main() {
             server_started=true
             export SERVER_MANAGED=true  # Tell testers not to start their own
         else
-            log "ERROR" "SMOKE_TEST aborted: server failed to start"
-            exit 1
+            log "WARN" "SMOKE_TEST: server failed to start - task created"
+            return 0  # Task created, hype.sh will route to IMPLEMENTATION
         fi
     fi
 

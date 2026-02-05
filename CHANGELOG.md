@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.7.2] - 2026-02-05
+
+### Fixed
+
+- **SMOKE_TEST crash kills HYPE** - `exit 1` in run-testers.sh killed entire hype.sh due to `set -e`. Now uses `return 0` after creating P0 task — system continues to IMPLEMENTATION phase as expected.
+
+- **Server startup failure creates P0 task** - Previously, dev server failure just returned error without creating actionable task. Now creates P0 bug with server log for debugging.
+
+---
+
 ## [1.7.1] - 2026-02-05
 
 ### Fixed

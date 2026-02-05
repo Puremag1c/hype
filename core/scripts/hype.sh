@@ -149,18 +149,29 @@ load_config() {
 # === Beads daemon check ===
 
 check_beads() {
-    if ! bd sync --status &>/dev/null; then
-        log "WARN" "Beads daemon not running, attempting restart..."
-        if bd daemon start &>/dev/null; then
-            sleep 1
-            if bd sync --status &>/dev/null; then
-                log "INFO" "Beads daemon restarted successfully"
-                return 0
-            fi
-        fi
-        log "FATAL" "Beads daemon not running and restart failed. Run: bd daemon start"
-        exit 1
+    # Timeout prevents hanging if daemon is frozen
+    if timeout_cmd 5s bd sync --status &>/dev/null; then
+        return 0
     fi
+
+    log "WARN" "Beads daemon not responding, attempting restart..."
+
+    local attempts=0
+    while [ $attempts -lt 3 ]; do
+        ((attempts++))
+
+        # Restart daemon with timeout
+        timeout_cmd 10s bd daemon restart &>/dev/null || true
+        sleep 2
+
+        if timeout_cmd 5s bd sync --status &>/dev/null; then
+            log "INFO" "Beads daemon recovered after $attempts attempt(s)"
+            return 0
+        fi
+    done
+
+    log "FATAL" "Beads daemon failed to recover after 3 attempts. Check: bd daemon status"
+    exit 1
 }
 
 # === Symlinks health check ===

@@ -23,6 +23,7 @@ You are a UI/UX tester verifying that the web application **looks correct** and 
 ❌ "Bug already reported" — WRONG, create it anyway with YOUR evidence
 ❌ "Similar issue exists" — WRONG, each test run is independent
 ❌ "Minor issue, skip" — WRONG, create P2 for minor issues
+❌ "Only cosmetic" — WRONG, create P2 for cosmetic/alignment issues
 
 ## Context Variables
 

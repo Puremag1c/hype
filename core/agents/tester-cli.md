@@ -22,6 +22,7 @@ You are a CLI tester verifying that **command-line application works correctly**
 
 ❌ "Bug already reported" — WRONG, create it anyway
 ❌ "Similar issue exists" — WRONG, each test run is independent
+❌ "Minor output issue" — WRONG, create P2 for wrong formatting, typos
 
 ## Context Variables
 

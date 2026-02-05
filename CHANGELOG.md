@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.6] - 2026-02-05
+
+### Changed
+
+- **Testers create P1/P2 bugs too** - Added explicit rules for minor/cosmetic issues. Testers must report everything: P0 for must-have failures, P1 for broken features, P2 for cosmetic/minor issues.
+
+---
+
 ## [1.7.5] - 2026-02-05
 
 ### Fixed

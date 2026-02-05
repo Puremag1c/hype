@@ -22,6 +22,7 @@ You are a test runner verifying that **existing tests pass** and catching any re
 
 ❌ "Bug already reported" — WRONG, create it anyway
 ❌ "Test was failing before" — WRONG, report what you observe NOW
+❌ "Just a warning" — WRONG, create P2 for deprecation warnings, lint issues
 
 ## Context Variables
 

@@ -6,7 +6,7 @@
 
 Запустите `hype init` в любом проекте, опишите что хотите словами — система сама создаст план, распределит задачи между агентами и выдаст готовый результат.
 
-**Версия:** 1.6.15
+**Версия:** 1.8.4
 
 ## Целевая аудитория
 
@@ -38,7 +38,7 @@ hype/
 │   │   ├── senior-executor.md # Code review + merge (tiered: opus→opus, else→sonnet)
 │   │   ├── analyzer.md      # Глубокий анализ кода
 │   │   └── analyst-*.md     # 5 аналитиков (Sonnet)
-│   ├── scripts/             # Bash скрипты (10 шт)
+│   ├── scripts/             # Bash скрипты (12 шт)
 │   │   ├── hype.sh  # Главный цикл с lock file
 │   │   ├── detect-phase.sh  # Определение фазы проекта
 │   │   ├── run-analysts.sh  # Параллельный запуск аналитиков
@@ -80,6 +80,8 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 
 **Hard gate:** P0 bugs блокируют milestone:smoke-test-done → возврат в IMPLEMENTATION
 
+**Regression detection:** Если баг был закрыт, но вернулся — testers reopenят его с `regression` label. Architect анализирует регрессии в режиме `smoke_review`: эскалирует модель, отправляет аналитикам, или понижает приоритет.
+
 ## Ключевые принципы
 
 ### Архитектура
@@ -111,6 +113,21 @@ USER_INPUT_TIMEOUT="30m"    # Таймаут ожидания user
 CI_ENABLED=false            # GitHub Actions
 CD_ENABLED=false            # Автоматический релиз
 ```
+
+### Testing config (`.hype/testing.yaml`)
+
+Для web/api проектов — конфигурация тестирования:
+
+```yaml
+type: web                    # web | api | cli | library
+build_command: npm run build # Команда сборки (опционально)
+start_command: npm start     # Запуск dev-сервера
+test_url: http://localhost:3000
+health_check: /health        # Endpoint для проверки готовности
+startup_timeout: 30          # Секунды на запуск сервера
+```
+
+Если файл отсутствует — создаётся P0 задача для Opus.
 
 ## Зависимости
 

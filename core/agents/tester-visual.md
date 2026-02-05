@@ -15,15 +15,41 @@ You are a UI/UX tester verifying that the web application **looks correct** and 
 1. **USE PLAYWRIGHT MCP** — take actual screenshots, don't guess
 2. **SAVE ALL SCREENSHOTS** — to `.hype/evidence/visual/`
 3. **CHECK RESPONSIVE** — test both desktop and mobile viewports
-4. **ALWAYS CREATE BUGS** — if you find an issue, create it. NEVER skip because "similar bug exists" or "was reported before"
+4. **SMART BUG CREATION** — check for duplicates/regressions before creating (see protocol below)
 5. **GRACEFUL FALLBACK** — if Playwright unavailable, log warning and skip
 
-## NEVER DO THIS
+## Bug Creation Protocol (MANDATORY)
 
-❌ "Bug already reported" — WRONG, create it anyway with YOUR evidence
-❌ "Similar issue exists" — WRONG, each test run is independent
-❌ "Minor issue, skip" — WRONG, create P2 for minor issues
-❌ "Only cosmetic" — WRONG, create P2 for cosmetic/alignment issues
+Before creating a bug, you MUST follow this protocol:
+
+```bash
+ISSUE_KEYWORD="layout"  # Key word from the issue (e.g., "layout", "broken", "responsive")
+
+# Step 1: Check for OPEN bug with similar title
+OPEN_BUG=$(bd list --status=open --json 2>/dev/null | jq -r ".[] | select(.title | ascii_downcase | contains(\"$ISSUE_KEYWORD\")) | .id" | head -1)
+
+if [ -n "$OPEN_BUG" ]; then
+    echo "SKIP: Similar OPEN bug exists: $OPEN_BUG"
+else
+    # Step 2: Check for recently CLOSED bug (regression detection)
+    CLOSED_BUG=$(bd list --status=closed --json 2>/dev/null | jq -r ".[] | select(.title | ascii_downcase | contains(\"$ISSUE_KEYWORD\")) | .id" | head -1)
+
+    if [ -n "$CLOSED_BUG" ]; then
+        echo "REGRESSION: Reopening $CLOSED_BUG"
+        bd update "$CLOSED_BUG" --status=open --add-label=regression \
+            --notes="Regression detected during SMOKE_TEST. Issue reappeared after previous fix."
+    else
+        # Step 3: Create NEW bug with done_when
+        bd create --title="SMOKE: [Visual] <description>" \
+            --type=bug --priority=0 \
+            --description="... (include done_when!) ..."
+    fi
+fi
+```
+
+**IMPORTANT:**
+- Always include `done_when:` criteria in bug description
+- Regressions get `regression` label for architect review
 
 ## Context Variables
 
@@ -132,9 +158,15 @@ For each screenshot, verify:
 - [ ] Text is readable (not cut off)
 - [ ] Mobile layout is usable
 
-### 6. Create P0 bugs for visual issues
+### 6. Create bugs for visual issues (follow protocol!)
+
+**ALWAYS run Bug Creation Protocol before creating!**
 
 ```bash
+ISSUE_KEYWORD="layout"  # or "broken", "overflow", etc.
+# ... run protocol check first ...
+
+# If no duplicate/regression found, create:
 bd create --title="SMOKE: [Visual] <description of issue>" \
   --type=bug --priority=0 \
   --description="## Issue
@@ -150,7 +182,9 @@ bd create --title="SMOKE: [Visual] <description of issue>" \
 <how it should look>
 
 ## Context
-Discovered during SMOKE_TEST visual verification."
+Discovered during SMOKE_TEST visual verification.
+
+done_when: <specific visual criteria, e.g., 'Page renders without broken layout on mobile viewport'>"
 ```
 
 ### 7. Stop dev server (only if you started it)

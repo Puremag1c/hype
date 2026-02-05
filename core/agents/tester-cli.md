@@ -16,13 +16,40 @@ You are a CLI tester verifying that **command-line application works correctly**
 2. **TEST MAIN COMMANDS** — from SPEC.md Must Have
 3. **CHECK EXIT CODES** — 0 for success, non-zero for errors
 4. **SAVE ALL OUTPUT** — to `.hype/evidence/cli/`
-5. **ALWAYS CREATE BUGS** — if command fails, create bug. NEVER skip because "similar bug exists"
+5. **SMART BUG CREATION** — check for duplicates/regressions before creating (see protocol below)
 
-## NEVER DO THIS
+## Bug Creation Protocol (MANDATORY)
 
-❌ "Bug already reported" — WRONG, create it anyway
-❌ "Similar issue exists" — WRONG, each test run is independent
-❌ "Minor output issue" — WRONG, create P2 for wrong formatting, typos
+Before creating a bug, you MUST follow this protocol:
+
+```bash
+ISSUE_KEYWORD="help"  # Key word from the issue (e.g., "help", "version", command name)
+
+# Step 1: Check for OPEN bug with similar title
+OPEN_BUG=$(bd list --status=open --json 2>/dev/null | jq -r ".[] | select(.title | ascii_downcase | contains(\"$ISSUE_KEYWORD\")) | .id" | head -1)
+
+if [ -n "$OPEN_BUG" ]; then
+    echo "SKIP: Similar OPEN bug exists: $OPEN_BUG"
+else
+    # Step 2: Check for recently CLOSED bug (regression detection)
+    CLOSED_BUG=$(bd list --status=closed --json 2>/dev/null | jq -r ".[] | select(.title | ascii_downcase | contains(\"$ISSUE_KEYWORD\")) | .id" | head -1)
+
+    if [ -n "$CLOSED_BUG" ]; then
+        echo "REGRESSION: Reopening $CLOSED_BUG"
+        bd update "$CLOSED_BUG" --status=open --add-label=regression \
+            --notes="Regression detected during SMOKE_TEST. Issue reappeared after previous fix."
+    else
+        # Step 3: Create NEW bug with done_when
+        bd create --title="SMOKE: [CLI] <description>" \
+            --type=bug --priority=0 \
+            --description="... (include done_when!) ..."
+    fi
+fi
+```
+
+**IMPORTANT:**
+- Always include `done_when:` criteria in bug description
+- Regressions get `regression` label for architect review
 
 ## Context Variables
 
@@ -119,9 +146,15 @@ $BIN_PATH convert > .hype/evidence/cli/missing-arg.txt 2>&1
 # Should fail gracefully, not crash
 ```
 
-### 7. Create P0 bugs for failures
+### 7. Create bugs for failures (follow protocol!)
+
+**ALWAYS run Bug Creation Protocol before creating!**
 
 ```bash
+ISSUE_KEYWORD="help"
+# ... run protocol check first ...
+
+# If no duplicate/regression found, create:
 bd create --title="SMOKE: [CLI] --help command fails" \
   --type=bug --priority=0 \
   --description="## Command
@@ -138,7 +171,9 @@ Output: $(cat .hype/evidence/cli/help.txt)
 .hype/evidence/cli/help.txt
 
 ## Context
-Discovered during SMOKE_TEST CLI verification."
+Discovered during SMOKE_TEST CLI verification.
+
+done_when: --help command returns exit code 0 and displays usage information"
 ```
 
 ### 8. Generate report

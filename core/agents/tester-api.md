@@ -15,14 +15,41 @@ You are an API tester verifying that **endpoints work correctly** — right stat
 1. **TEST ALL ENDPOINTS** — from SPEC.md
 2. **CHECK STATUS CODES** — 200, 201, 400, 401, 404, 500
 3. **SAVE RESPONSES** — to `.hype/evidence/api/`
-4. **ALWAYS CREATE BUGS** — if endpoint fails, create bug. NEVER skip because "similar bug exists"
+4. **SMART BUG CREATION** — check for duplicates/regressions before creating (see protocol below)
 5. **DON'T REQUIRE AUTH** — test public endpoints only (unless auth is Must Have)
 
-## NEVER DO THIS
+## Bug Creation Protocol (MANDATORY)
 
-❌ "Bug already reported" — WRONG, create it anyway
-❌ "Similar issue exists" — WRONG, each test run is independent
-❌ "Minor response issue" — WRONG, create P2 for wrong format, missing fields
+Before creating a bug, you MUST follow this protocol:
+
+```bash
+ISSUE_KEYWORD="api/endpoint"  # Key word from the issue (e.g., endpoint path or error type)
+
+# Step 1: Check for OPEN bug with similar title
+OPEN_BUG=$(bd list --status=open --json 2>/dev/null | jq -r ".[] | select(.title | ascii_downcase | contains(\"$ISSUE_KEYWORD\")) | .id" | head -1)
+
+if [ -n "$OPEN_BUG" ]; then
+    echo "SKIP: Similar OPEN bug exists: $OPEN_BUG"
+else
+    # Step 2: Check for recently CLOSED bug (regression detection)
+    CLOSED_BUG=$(bd list --status=closed --json 2>/dev/null | jq -r ".[] | select(.title | ascii_downcase | contains(\"$ISSUE_KEYWORD\")) | .id" | head -1)
+
+    if [ -n "$CLOSED_BUG" ]; then
+        echo "REGRESSION: Reopening $CLOSED_BUG"
+        bd update "$CLOSED_BUG" --status=open --add-label=regression \
+            --notes="Regression detected during SMOKE_TEST. Issue reappeared after previous fix."
+    else
+        # Step 3: Create NEW bug with done_when
+        bd create --title="SMOKE: [API] <description>" \
+            --type=bug --priority=0 \
+            --description="... (include done_when!) ..."
+    fi
+fi
+```
+
+**IMPORTANT:**
+- Always include `done_when:` criteria in bug description
+- Regressions get `regression` label for architect review
 
 ## Context Variables
 
@@ -105,9 +132,15 @@ curl -s -w "\n%{http_code}" "$TEST_URL/api/nonexistent" > .hype/evidence/api/404
 curl -s -w "\n%{http_code}" -X POST "$TEST_URL/api/endpoint" -d "{}" > .hype/evidence/api/400-test.txt
 ```
 
-### 7. Create P0 bugs for failures
+### 7. Create bugs for failures (follow protocol!)
+
+**ALWAYS run Bug Creation Protocol before creating!**
 
 ```bash
+ISSUE_KEYWORD="api/X"  # Use endpoint path as keyword
+# ... run protocol check first ...
+
+# If no duplicate/regression found, create:
 bd create --title="SMOKE: [API] Endpoint /api/X returns 500" \
   --type=bug --priority=0 \
   --description="## Endpoint
@@ -126,7 +159,9 @@ $(cat .hype/evidence/api/endpoint-x.txt)
 .hype/evidence/api/endpoint-x.txt
 
 ## Context
-Discovered during SMOKE_TEST API verification."
+Discovered during SMOKE_TEST API verification.
+
+done_when: GET /api/X returns 200 OK with valid JSON response"
 ```
 
 ### 8. Stop server

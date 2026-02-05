@@ -747,10 +747,27 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
 
             # Check results - milestone created only if ALL tasks are closed (not just P0)
             # This prevents skipping SMOKE_TEST when P1+ bugs exist
-            local open_tasks
+            local open_tasks regression_count
             open_tasks=$(bd list --status=open --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
 
             if [ "$open_tasks" -gt 0 ]; then
+                # Check for regressions (bugs that were "fixed" but came back)
+                regression_count=$(bd list --status=open --json 2>/dev/null | jq '[.[] | select(.labels | index("regression"))] | length' 2>/dev/null || echo "0")
+
+                if [ "$regression_count" -gt 0 ]; then
+                    log "WARN" "SMOKE_TEST: $regression_count regression(s) found - routing to Architect for review"
+
+                    # Create trigger task for smoke_review
+                    if ! bd list --json 2>/dev/null | jq -e '.[] | select(.title == "run-smoke-review")' > /dev/null 2>&1; then
+                        bd create --title="run-smoke-review" --type=task --priority=0 >/dev/null 2>&1 || true
+                    fi
+
+                    # Run architect in smoke_review mode to analyze regressions
+                    local arch_model
+                    arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
+                    run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "smoke_review" "" "${SMOKE_REVIEW_TIMEOUT:-10m}"
+                fi
+
                 log "WARN" "SMOKE_TEST: $open_tasks open task(s) found - returning to IMPLEMENTATION"
                 # detect-phase.sh will route back to IMPLEMENTATION
             else

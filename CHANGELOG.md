@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.8.0] - 2026-02-05
+
+### Added
+
+- **Regression detection in SMOKE_TEST** - Testers now detect when a bug was previously "fixed" but returned. Instead of creating duplicate bugs, they reopen the original with `regression` label.
+
+- **Smoke review mode for Architect** - New `MODE: smoke_review` routes regression bugs to Architect for analysis. Options: update scope, escalate model (sonnet→opus), send to analysts, or downgrade to P2.
+
+- **Bug Creation Protocol for testers** - All 5 testers now follow a protocol: check for OPEN duplicates (skip), check for CLOSED similar bugs (reopen as regression), then create new with `done_when`.
+
+### Changed
+
+- **Testers add done_when to bugs** - All bug creation examples now include `done_when:` criteria so reviewers can verify fixes.
+
+### Fixed
+
+- **Infinite bug loop** - Previously testers created duplicate bugs every SMOKE_TEST cycle, causing infinite implementation loops. Now duplicates are detected and regressions are properly escalated.
+
+---
+
 ## [1.7.7] - 2026-02-05
 
 ### Fixed

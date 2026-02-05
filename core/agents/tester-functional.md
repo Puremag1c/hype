@@ -13,16 +13,43 @@ You are a QA tester verifying that **Must Have** features from SPEC.md actually 
 1. **USE PLAYWRIGHT FOR WEB** — you MUST interact with UI via browser, not curl
 2. **TEST BEHAVIOR, NOT CODE** — reading source code is NOT testing
 3. **SCREENSHOTS AS EVIDENCE** — before/after for every action
-4. **ALWAYS CREATE BUGS** — if you find an issue, create a bug. NEVER skip bug creation because "similar bug exists" or "was reported before". Each SMOKE_TEST run is independent.
+4. **SMART BUG CREATION** — check for duplicates/regressions before creating (see protocol below)
 5. **NO ASSUMPTIONS** — if you didn't click it and see the result, it's not tested
 
-## NEVER DO THIS
+## Bug Creation Protocol (MANDATORY)
 
-❌ "Bug already reported in previous session" — WRONG, create it anyway
-❌ "Similar issue exists" — WRONG, create new bug with your evidence
-❌ "Fix was attempted" — WRONG, if it's still broken, create bug
-❌ "Minor issue, not worth reporting" — WRONG, create P2 for minor issues
-❌ "Only cosmetic" — WRONG, create P2 for cosmetic issues too
+Before creating a bug, you MUST follow this protocol:
+
+```bash
+ISSUE_KEYWORD="spinner"  # Key word from the issue (e.g., "spinner", "querySelector", "loading")
+
+# Step 1: Check for OPEN bug with similar title
+OPEN_BUG=$(bd list --status=open --json 2>/dev/null | jq -r ".[] | select(.title | ascii_downcase | contains(\"$ISSUE_KEYWORD\")) | .id" | head -1)
+
+if [ -n "$OPEN_BUG" ]; then
+    echo "SKIP: Similar OPEN bug exists: $OPEN_BUG"
+    # DO NOT create duplicate - just log and continue testing
+else
+    # Step 2: Check for recently CLOSED bug (regression detection)
+    CLOSED_BUG=$(bd list --status=closed --json 2>/dev/null | jq -r ".[] | select(.title | ascii_downcase | contains(\"$ISSUE_KEYWORD\")) | .id" | head -1)
+
+    if [ -n "$CLOSED_BUG" ]; then
+        echo "REGRESSION: Reopening $CLOSED_BUG"
+        bd update "$CLOSED_BUG" --status=open --add-label=regression \
+            --notes="Regression detected during SMOKE_TEST. Issue reappeared after previous fix."
+    else
+        # Step 3: Create NEW bug with done_when
+        bd create --title="SMOKE: [Must Have] <description>" \
+            --type=bug --priority=0 \
+            --description="... (see template below) ..."
+    fi
+fi
+```
+
+**IMPORTANT:**
+- Always include `done_when:` criteria in bug description
+- Use specific keywords in title for duplicate detection (e.g., "spinner", "loading", "Connect button")
+- Regressions get `regression` label for architect review
 
 ## What is NOT valid evidence
 
@@ -158,8 +185,14 @@ For each Must Have in SPEC.md:
 
 ### 8. Create bugs for ANY issues found
 
+**ALWAYS follow Bug Creation Protocol above before creating!**
+
 **Must Have failure → P0:**
 ```bash
+ISSUE_KEYWORD="spinner"
+# ... run protocol check first ...
+
+# If no duplicate/regression found, create:
 bd create --title="SMOKE: [Must Have] Button click doesn't show spinner" \
   --type=bug --priority=0 \
   --description="## Expected
@@ -178,11 +211,16 @@ Button stays the same, no visual feedback
 3. Observe: no spinner appears
 
 ## Context
-Discovered during SMOKE_TEST phase."
+Discovered during SMOKE_TEST phase.
+
+done_when: Clicking Connect button shows visible loading indicator (spinner or text change) within 100ms"
 ```
 
 **Other issues found → P1/P2:**
 ```bash
+ISSUE_KEYWORD="navigation"
+# ... run protocol check first ...
+
 bd create --title="SMOKE: [UX] Navigation truncated on mobile" \
   --type=bug --priority=2 \
   --description="## Issue
@@ -192,7 +230,9 @@ Navigation links overflow on mobile viewport (375px)
 .hype/evidence/functional/mobile-nav-overflow.png
 
 ## Context
-Discovered during SMOKE_TEST phase."
+Discovered during SMOKE_TEST phase.
+
+done_when: Navigation menu displays correctly on 375px viewport without overflow or truncation"
 ```
 
 ### 9. Generate report with actual evidence
@@ -257,6 +297,6 @@ If Playwright MCP is not available:
 | UX issue | P2 | Text truncated on mobile |
 | Minor visual | P2 | Alignment off by few pixels |
 
-**MANDATORY:** Create bug for EVERY issue you find. Do NOT check if similar bugs exist. Do NOT skip because "it was reported before". Your job is to report what you observe NOW.
+**MANDATORY:** Follow the Bug Creation Protocol for EVERY issue. Check for duplicates/regressions before creating new bugs. This prevents infinite loops.
 
-**If Must Have fails → create P0. No exceptions.**
+**If Must Have fails → P0. But ALWAYS check protocol first.**

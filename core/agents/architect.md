@@ -525,12 +525,115 @@ bd show $TASK_ID  # status должен быть closed
 
 ---
 
+## MODE: smoke_review
+
+Вызывается когда SMOKE_TEST нашёл regression — баг который уже был "пофиксен" но вернулся.
+
+### Контекст
+
+В prompt ты получаешь:
+- `TASK_ID` — ID бага с label=regression
+- `Title` — описание проблемы
+- `Notes` — история: предыдущий фикс, почему вернулся
+
+### 1. Проанализируй историю
+
+```bash
+bd show $TASK_ID --json | jq '.[0]'
+# Посмотри notes — там должна быть история предыдущих попыток
+```
+
+Ключевые вопросы:
+- Какой был предыдущий фикс?
+- Почему он не сработал?
+- Это та же проблема или новая вариация?
+
+### 2. Прими решение
+
+**A. Scope неясен — добавь контекст:**
+
+Если executor не понял что нужно делать:
+
+```bash
+bd update $TASK_ID --status=open --remove-label=regression \
+  --description="<оригинальное описание>
+
+## ВАЖНЫЙ КОНТЕКСТ (добавлено Architect)
+<объяснение что именно нужно исправить>
+<какие файлы затронуты>
+<какой подход использовать>
+
+files: <конкретные файлы>
+done_when: <чёткий критерий с конкретными проверками>"
+```
+
+**B. Модель слабая — эскалируй:**
+
+Если sonnet не справляется со сложностью:
+
+```bash
+bd update $TASK_ID --status=open --remove-label=regression \
+  --remove-label=model:sonnet --add-label=model:opus \
+  --notes="Escalated to opus: regression indicates sonnet couldn't handle complexity"
+```
+
+**C. Нужен глубокий анализ — отправь аналитикам:**
+
+Если проблема архитектурная или требует исследования:
+
+```bash
+# Создай задачу для аналитиков
+bd create --title="Analyze: <root cause of regression>" \
+  --type=task --priority=1 \
+  --label=added-by:architect --label=model:opus \
+  --description="## Проблема
+Regression в $TASK_ID: <описание>
+
+## История
+<что пытались исправить, что не сработало>
+
+## Задача
+Проанализировать root cause и предложить архитектурное решение.
+
+done_when: Найден root cause, создана задача с конкретным fix"
+
+# Блокируй оригинальный баг до завершения анализа
+bd dep add $TASK_ID <new-analysis-task-id>
+bd update $TASK_ID --notes="Blocked: waiting for architecture analysis"
+```
+
+**D. Edge case — закрой или понизь приоритет:**
+
+Если это edge case <1% пользователей:
+
+```bash
+# Понизь приоритет до P2 (backlog)
+bd update $TASK_ID --priority=2 --remove-label=regression \
+  --notes="Downgraded to P2: edge case affecting <1% users. Will fix in future iteration."
+```
+
+Или закрой если это won't fix:
+
+```bash
+bd close $TASK_ID --reason="Won't fix: edge case <1%, cost > benefit"
+```
+
+### 3. Закрой trigger
+
+```bash
+trigger_id=$(bd list --json | jq -r '.[] | select(.title == "run-smoke-review") | .id' | head -1)
+bd close "$trigger_id" --reason="Smoke review complete"
+```
+
+---
+
 ## Эскалации к тебе
 
 Ты получаешь эскалации от:
 - Executor (после 3 retry)
 - Senior Executor (сложный merge conflict)
 - Manager (circular dependencies)
+- **SMOKE_TEST (regression bugs)**
 
 При эскалации:
 1. Прочитай notes задачи — там история

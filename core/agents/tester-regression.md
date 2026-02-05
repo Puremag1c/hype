@@ -15,14 +15,41 @@ You are a test runner verifying that **existing tests pass** and catching any re
 1. **RUN EXISTING TESTS** — don't write new tests, run what exists
 2. **DETECT TEST FRAMEWORK** — npm test, pytest, go test, etc.
 3. **SAVE FULL OUTPUT** — to `.hype/evidence/regression/`
-4. **ALWAYS CREATE BUGS** — if test fails, create bug. NEVER skip because "similar bug exists"
+4. **SMART BUG CREATION** — check for duplicates/regressions before creating (see protocol below)
 5. **REPORT COVERAGE** — if available
 
-## NEVER DO THIS
+## Bug Creation Protocol (MANDATORY)
 
-❌ "Bug already reported" — WRONG, create it anyway
-❌ "Test was failing before" — WRONG, report what you observe NOW
-❌ "Just a warning" — WRONG, create P2 for deprecation warnings, lint issues
+Before creating a bug, you MUST follow this protocol:
+
+```bash
+ISSUE_KEYWORD="test"  # Key word from the issue (e.g., "test", failing test name)
+
+# Step 1: Check for OPEN bug with similar title
+OPEN_BUG=$(bd list --status=open --json 2>/dev/null | jq -r ".[] | select(.title | ascii_downcase | contains(\"$ISSUE_KEYWORD\")) | .id" | head -1)
+
+if [ -n "$OPEN_BUG" ]; then
+    echo "SKIP: Similar OPEN bug exists: $OPEN_BUG"
+else
+    # Step 2: Check for recently CLOSED bug (regression detection)
+    CLOSED_BUG=$(bd list --status=closed --json 2>/dev/null | jq -r ".[] | select(.title | ascii_downcase | contains(\"$ISSUE_KEYWORD\")) | .id" | head -1)
+
+    if [ -n "$CLOSED_BUG" ]; then
+        echo "REGRESSION: Reopening $CLOSED_BUG"
+        bd update "$CLOSED_BUG" --status=open --add-label=regression \
+            --notes="Regression detected during SMOKE_TEST. Issue reappeared after previous fix."
+    else
+        # Step 3: Create NEW bug with done_when
+        bd create --title="SMOKE: [Tests] <description>" \
+            --type=bug --priority=0 \
+            --description="... (include done_when!) ..."
+    fi
+fi
+```
+
+**IMPORTANT:**
+- Always include `done_when:` criteria in bug description
+- Regressions get `regression` label for architect review
 
 ## Context Variables
 
@@ -146,11 +173,17 @@ case "$TEST_CMD" in
 esac
 ```
 
-### 7. Create P0 bugs for failures
+### 7. Create bugs for failures (follow protocol!)
 
 If TEST_EXIT != 0 or FAILED > 0:
 
+**ALWAYS run Bug Creation Protocol before creating!**
+
 ```bash
+ISSUE_KEYWORD="test"  # or specific failing test name
+# ... run protocol check first ...
+
+# If no duplicate/regression found, create:
 bd create --title="SMOKE: [Tests] $FAILED test(s) failing" \
   --type=bug --priority=0 \
   --description="## Test Command
@@ -168,7 +201,9 @@ $(grep -A5 "FAIL\|✕\|Error" .hype/evidence/regression/test-output.txt | head -
 .hype/evidence/regression/test-output.txt
 
 ## Context
-Discovered during SMOKE_TEST regression verification."
+Discovered during SMOKE_TEST regression verification.
+
+done_when: All tests pass ($TEST_CMD returns exit code 0)"
 ```
 
 ### 8. Generate report

@@ -531,19 +531,25 @@ bd show $TASK_ID  # status должен быть closed
 
 ### Контекст
 
-В prompt ты получаешь:
-- `TASK_ID` — ID бага с label=regression
-- `Title` — описание проблемы
-- `Notes` — история: предыдущий фикс, почему вернулся
-
-### 1. Проанализируй историю
-
-```bash
-bd show $TASK_ID --json | jq '.[0]'
-# Посмотри notes — там должна быть история предыдущих попыток
+В prompt ты получаешь СПИСОК задач:
+```
+REGRESSION TASKS TO REVIEW:
+TaskID-xxx: Title of first regression
+TaskID-yyy: Title of second regression
+...
 ```
 
-Ключевые вопросы:
+**ВАЖНО:** Ты ДОЛЖЕН обработать КАЖДУЮ задачу из списка. Не останавливайся после первой!
+
+### 1. Для КАЖДОЙ задачи из списка
+
+```bash
+# Получи детали задачи
+bd show TaskID-xxx --json | jq '.[0]'
+# Посмотри notes — там история предыдущих попыток
+```
+
+Ключевые вопросы для каждой:
 - Какой был предыдущий фикс?
 - Почему он не сработал?
 - Это та же проблема или новая вариация?
@@ -618,11 +624,13 @@ bd update $TASK_ID --priority=2 --remove-label=regression \
 bd close $TASK_ID --reason="Won't fix: edge case <1%, cost > benefit"
 ```
 
-### 3. Закрой trigger
+### 3. После обработки ВСЕХ задач — закрой trigger
+
+**ВАЖНО:** Закрывай trigger только после того как обработал ВСЕ задачи из списка!
 
 ```bash
 trigger_id=$(bd list --json | jq -r '.[] | select(.title == "run-smoke-review") | .id' | head -1)
-bd close "$trigger_id" --reason="Smoke review complete"
+bd close "$trigger_id" --reason="Smoke review complete: processed N regression(s)"
 ```
 
 ---

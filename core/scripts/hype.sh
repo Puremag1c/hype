@@ -754,7 +754,8 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
                 # Collect regression task IDs for Architect prompt
                 local regression_prompt regression_tasks
                 regression_tasks=$(bd list --status=open --json 2>/dev/null | jq -r '.[] | select(.labels | index("regression")) | "\(.id): \(.title)"' 2>/dev/null || echo "")
-                regression_prompt="REGRESSION TASKS TO REVIEW:
+                regression_prompt="
+REGRESSION TASKS TO REVIEW:
 $regression_tasks
 
 For each task: bd show <id> --json, then decide action and REMOVE regression label."
@@ -795,7 +796,8 @@ For each task: bd show <id> --json, then decide action and REMOVE regression lab
                     # Collect regression task IDs for Architect prompt
                     local regression_prompt regression_tasks
                     regression_tasks=$(bd list --status=open --json 2>/dev/null | jq -r '.[] | select(.labels | index("regression")) | "\(.id): \(.title)"' 2>/dev/null || echo "")
-                    regression_prompt="REGRESSION TASKS TO REVIEW:
+                    regression_prompt="
+REGRESSION TASKS TO REVIEW:
 $regression_tasks
 
 For each task: bd show <id> --json, then decide action and REMOVE regression label."

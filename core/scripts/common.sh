@@ -432,3 +432,60 @@ delete_all_milestones() {
     echo "$count"
 }
 export -f delete_all_milestones 2>/dev/null || true
+
+# =============================================================================
+# Cleanup Functions
+# =============================================================================
+
+# cleanup_iteration - полная очистка после завершения итерации
+# Использование: cleanup_iteration [LOGS_DIR] [PROJECT_DIR]
+# Делает:
+#   1. bd sync (backup в issues.jsonl)
+#   2. Удаляет логи
+#   3. Очищает beads tasks
+#   4. Удаляет milestones
+#   5. Очищает worktrees
+#   6. Архивирует SPEC.md
+cleanup_iteration() {
+    local logs_dir="${1:-logs}"
+    local project_dir="${2:-.}"
+
+    echo "Starting cleanup..."
+
+    # 1. Sync beads (backup to issues.jsonl)
+    echo "  → Syncing beads..."
+    bd sync 2>/dev/null || true
+
+    # 2. Delete logs
+    echo "  → Deleting logs..."
+    rm -f "$logs_dir"/*.log 2>/dev/null || true
+    rm -rf "$logs_dir"/archive 2>/dev/null || true
+
+    # 3. Clean beads tasks
+    echo "  → Cleaning beads tasks..."
+    bd admin cleanup --all --force 2>/dev/null || true
+
+    # 4. Delete all milestones (using function from this file)
+    echo "  → Deleting milestones..."
+    local deleted_count
+    deleted_count=$(delete_all_milestones)
+    [ "$deleted_count" -gt 0 ] && echo "    Deleted $deleted_count milestone(s)"
+
+    # 5. Clean git stash and worktrees
+    echo "  → Cleaning worktrees..."
+    git stash list 2>/dev/null | grep -i hype | cut -d: -f1 | xargs -I{} git stash drop {} 2>/dev/null || true
+    rm -rf "$project_dir/.hype-worktrees" 2>/dev/null || true
+    git worktree prune 2>/dev/null || true
+
+    # 6. Archive SPEC.md
+    if [ -f "$project_dir/SPEC.md" ]; then
+        echo "  → Archiving SPEC.md → SPEC.prev.md..."
+        mv "$project_dir/SPEC.md" "$project_dir/SPEC.prev.md"
+    fi
+
+    # 7. Create needs-spec marker for next iteration
+    touch "$project_dir/.hype/needs-spec" 2>/dev/null || true
+
+    echo "Cleanup complete!"
+}
+export -f cleanup_iteration 2>/dev/null || true

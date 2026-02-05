@@ -462,30 +462,20 @@ cmd_start() {
         success "beads daemon started"
     fi
 
-    # If DONE, start new iteration automatically
-    local current_phase
-    current_phase=$(./scripts/detect-phase.sh 2>/dev/null || echo "UNKNOWN")
+    # If DONE, inform user about cleanup
+    local current_phase phase_json
+    phase_json=$(./scripts/detect-phase.sh 2>/dev/null || echo '{"phase":"UNKNOWN"}')
+    current_phase=$(echo "$phase_json" | jq -r '.phase // "UNKNOWN"' 2>/dev/null || echo "UNKNOWN")
     if [[ "$current_phase" == "DONE" ]]; then
-        info "Previous iteration complete. Starting new iteration..."
-
-        # 1. Remove ALL milestones
-        delete_milestone "milestone:project-done"
-        delete_milestone "milestone:smoke-test-done"
-        delete_milestone "milestone:plan-reviewed"
-        delete_milestone "milestone:analysts-done"
-        delete_milestone "milestone:planning-done"
-
-        # 2. Archive old tasks (keeps history in beads, clears active list)
-        info "Archiving previous iteration tasks..."
-        bd admin cleanup --force 2>/dev/null || true
-
-        # 3. Archive SPEC.md → SPEC.prev.md (for reference)
-        if [[ -f "SPEC.md" ]]; then
-            mv SPEC.md "SPEC.prev.md"
-            info "Archived SPEC.md → SPEC.prev.md"
+        warn "Previous iteration complete. Run 'hype clear' before starting new iteration."
+        echo ""
+        echo "Or continue to review results (logs preserved)."
+        echo ""
+        read -p "Continue anyway? (y/N) " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            exit 0
         fi
-
-        # Now detect-phase will return INIT (no SPEC.md)
     fi
 
     info "Starting HYPE..."
@@ -1064,7 +1054,7 @@ cmd_reset_phase() {
         echo ""
         echo "Current phase:"
         if [[ -x "./scripts/detect-phase.sh" ]]; then
-            ./scripts/detect-phase.sh
+            ./scripts/detect-phase.sh | jq -r '.phase // "UNKNOWN"'
         else
             warn "Cannot detect phase (scripts symlink missing)"
         fi
@@ -1080,9 +1070,10 @@ cmd_reset_phase() {
         exit 1
     fi
 
-    local current_phase=""
+    local current_phase="" phase_json
     if [[ -x "./scripts/detect-phase.sh" ]]; then
-        current_phase=$(./scripts/detect-phase.sh 2>/dev/null || echo "UNKNOWN")
+        phase_json=$(./scripts/detect-phase.sh 2>/dev/null || echo '{"phase":"UNKNOWN"}')
+        current_phase=$(echo "$phase_json" | jq -r '.phase // "UNKNOWN"' 2>/dev/null || echo "UNKNOWN")
     fi
 
     info "Forcing phase: $current_phase → $target_phase"
@@ -1213,6 +1204,40 @@ cmd_stop() {
     success "All processes stopped"
 }
 
+# === Clear ===
+
+cmd_clear() {
+    if [[ ! -d ".hype" ]]; then
+        error "Not a hype project."
+        exit 1
+    fi
+
+    echo "This will clean up the project:"
+    echo ""
+    echo "  - Sync beads (backup to issues.jsonl)"
+    echo "  - Delete all logs"
+    echo "  - Clear beads tasks"
+    echo "  - Delete milestones"
+    echo "  - Clean worktrees"
+    echo "  - Archive SPEC.md → SPEC.prev.md"
+    echo ""
+
+    read -p "Continue? (y/N) " -n 1 -r
+    echo ""
+
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        info "Cancelled."
+        exit 0
+    fi
+
+    # Use cleanup_iteration from common.sh
+    cleanup_iteration "logs" "."
+
+    success "Cleanup complete! Ready for new iteration."
+    echo ""
+    info "Run 'hype start' to begin new iteration"
+}
+
 # === Help ===
 
 cmd_help() {
@@ -1225,6 +1250,7 @@ cmd_help() {
     echo "  start        Start HYPE (project must be initialized)"
     echo "  stop         Stop HYPE (executors continue running)"
     echo "  status       Show project and HYPE status"
+    echo "  clear        Clean up after iteration (logs, tasks, SPEC → SPEC.prev)"
     echo "  update       Update hype to latest version"
     echo "  upgrade      Upgrade current project to latest hype version"
     echo "               --all    Upgrade all discovered projects"
@@ -1243,6 +1269,7 @@ case "${1:-}" in
     start)  cmd_start ;;
     stop)   cmd_stop ;;
     status) cmd_status ;;
+    clear)  cmd_clear ;;
     update) cmd_update ;;
     upgrade) shift; cmd_upgrade "$@" ;;
     delete) cmd_delete ;;

@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.9.0] - 2026-02-05
+
+### Added
+
+- **`hype clear` command** - Manual cleanup of iteration data. Removes logs, stale worktrees, milestones, and archives SPEC.md. Use after DONE phase or when you want to start fresh.
+
+- **Interactive cleanup prompt** - After DONE phase, system now asks whether to run cleanup instead of automatic cleanup. User can decline and run `hype clear` manually later.
+
+### Changed
+
+- **Centralized bd data cache** - `detect-phase.sh` now outputs JSON with full metadata instead of plain phase string. Reduced bd list/show calls from 10-20+ per HYPE cycle to ≤5 calls.
+
+- **JSON output from detect-phase.sh** - New format includes: phase, stats (total/open/in_progress/closed), progress_pct, in_progress_ids, regression_count, p0_bugs.
+
+- **Optimized run-analysts.sh** - Caches `bd list --json` at start and passes to each analyst. No more individual bd calls per analyst.
+
+- **Optimized run-testers.sh** - Same caching pattern as analysts. Single bd list call shared across all testers.
+
+- **Optimized run-executors.sh** - `count_active_executors()` now accepts optional cache parameter.
+
+- **Optimized show_active_work()** - Uses in_progress_ids from phase JSON instead of `bd show` per task.
+
+---
+
 ## [1.8.6] - 2026-02-05
 
 ### Changed

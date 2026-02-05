@@ -100,9 +100,16 @@ log() {
 # Считаем active executors через beads (работает всегда, не зависит от gh)
 
 count_active_executors() {
-    # Считаем задачи в in_progress с label executor
-    bd list --status=in_progress --json 2>/dev/null | \
-        jq '[.[] | select(.labels[]? == "executor")] | length' 2>/dev/null || echo "0"
+    local cache=${1:-""}  # Optional cache from main() (v1.9.0+)
+
+    if [ -n "$cache" ]; then
+        # Use provided cache
+        echo "$cache" | jq '[.[] | select(.labels[]? == "executor")] | length' 2>/dev/null || echo "0"
+    else
+        # Fallback: fresh bd list
+        bd list --status=in_progress --json 2>/dev/null | \
+            jq '[.[] | select(.labels[]? == "executor")] | length' 2>/dev/null || echo "0"
+    fi
 }
 
 # === Get ready tasks for executors ===
@@ -315,9 +322,13 @@ main() {
     echo ""
     echo "" >> "$LOGS_DIR/hype.log"
 
-    # Check backpressure
+    # Cache in_progress tasks for backpressure check (v1.9.0 optimization)
+    local in_progress_cache
+    in_progress_cache=$(bd list --status=in_progress --json 2>/dev/null || echo "[]")
+
+    # Check backpressure (using cache)
     local active
-    active=$(count_active_executors)
+    active=$(count_active_executors "$in_progress_cache")
 
     if [ "$active" -ge "$MAX_PARALLEL" ]; then
         log "INFO" "Executor queue full ($active/$MAX_PARALLEL), waiting for slots"

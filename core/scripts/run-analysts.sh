@@ -50,14 +50,15 @@ ANALYSTS=("ux" "security" "ops" "reliability" "architecture")
 # Run single analyst
 run_analyst() {
     local analyst=$1
+    local bd_cache=$2  # Cached bd list --json (v1.9.0+)
     local trigger_task="run-analyst-$analyst"
     local agent_file=".claude/agents/analyst-$analyst.md"
 
     log "INFO" "Starting analyst-$analyst"
 
-    # Find trigger task
+    # Find trigger task from cache
     local task_id
-    task_id=$(bd list --json 2>/dev/null | jq -r ".[] | select(.title == \"$trigger_task\") | .id" | head -1)
+    task_id=$(echo "$bd_cache" | jq -r ".[] | select(.title == \"$trigger_task\") | .id" | head -1)
 
     if [ -z "$task_id" ]; then
         log "WARN" "No trigger task for analyst-$analyst"
@@ -126,10 +127,14 @@ main() {
     echo "" >> "$LOGS_DIR/hype.log"
     log "INFO" "ANALYZE: ${ANALYSTS[*]}"
 
-    # Check that all trigger tasks exist
+    # Cache bd list at start (v1.9.0 optimization)
+    local bd_cache
+    bd_cache=$(bd list --json 2>/dev/null || echo "[]")
+
+    # Check that all trigger tasks exist (using cache)
     local missing=0
     for analyst in "${ANALYSTS[@]}"; do
-        if ! bd list --json 2>/dev/null | jq -e ".[] | select(.title == \"run-analyst-$analyst\")" > /dev/null 2>&1; then
+        if ! echo "$bd_cache" | jq -e ".[] | select(.title == \"run-analyst-$analyst\")" > /dev/null 2>&1; then
             log "WARN" "Trigger task run-analyst-$analyst not found"
             ((missing++)) || true
         fi
@@ -140,9 +145,9 @@ main() {
         exit 1
     fi
 
-    # Run all analysts in parallel
+    # Run all analysts in parallel (pass cache)
     for analyst in "${ANALYSTS[@]}"; do
-        run_analyst "$analyst" &
+        run_analyst "$analyst" "$bd_cache" &
     done
 
     # Wait for all

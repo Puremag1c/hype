@@ -387,18 +387,8 @@ check_and_create_done_milestone() {
         log "INFO" "Final review passed, creating project-done milestone"
         ensure_milestone "milestone:project-done" "Project complete"
 
-        # Create marker for next iteration
-        # Tech Writer will see this and ask what to do next
-        touch "$PROJECT_DIR/.hype/needs-spec"
-        log "INFO" "Created needs-spec marker for next iteration"
-
-        # Cleanup after successful iteration
-        # --older-than 1 preserves tasks closed less than 1 day ago
-        # so the fresh milestone:project-done survives
-        log "INFO" "Running cleanup after successful iteration..."
-        bd admin cleanup --older-than 1 --force 2>/dev/null || true
-        bd doctor --fix 2>/dev/null || true
-        log "INFO" "Cleanup complete"
+        # Note: cleanup moved to interactive prompt at DONE phase (or 'hype clear' command)
+        # User chooses when to cleanup — preserves logs for review
     fi
 }
 
@@ -406,18 +396,22 @@ check_and_create_done_milestone() {
 # Manager is called ONLY for problem resolution, not for phase coordination
 
 check_problems_and_consult_manager() {
-    # Count blocked tasks
+    # Cache bd list once (v1.9.0 optimization - was 4 calls, now 1)
+    local bd_cache
+    bd_cache=$(bd list --json 2>/dev/null || echo "[]")
+
+    # Count blocked tasks (from cache)
     local blocked_count
-    blocked_count=$(bd list --json 2>/dev/null | jq '[.[] | select(.labels[]? | startswith("blocked:"))] | length' 2>/dev/null || echo "0")
+    blocked_count=$(echo "$bd_cache" | jq '[.[] | select(.labels[]? | startswith("blocked:"))] | length' 2>/dev/null || echo "0")
 
-    # Count tasks at retry limit
+    # Count tasks at retry limit (from cache)
     local retry_limit_count
-    retry_limit_count=$(bd list --json 2>/dev/null | jq "[.[] | select(.labels[]? | test(\"^retry:[$RETRY_LIMIT-9]\"))] | length" 2>/dev/null || echo "0")
+    retry_limit_count=$(echo "$bd_cache" | jq "[.[] | select(.labels[]? | test(\"^retry:[$RETRY_LIMIT-9]\"))] | length" 2>/dev/null || echo "0")
 
-    # If problems exist, consult Manager
+    # If problems exist, consult Manager (pass cache)
     if [ "$blocked_count" -gt 0 ] || [ "$retry_limit_count" -gt 0 ]; then
         log "WARN" "Problems detected: blocked=$blocked_count, retry_limit=$retry_limit_count"
-        call_manager_for_problems "$blocked_count" "$retry_limit_count"
+        call_manager_for_problems "$blocked_count" "$retry_limit_count" "$bd_cache"
     fi
 }
 
@@ -426,6 +420,7 @@ check_problems_and_consult_manager() {
 call_manager_for_problems() {
     local blocked=$1
     local retry_limit=$2
+    local bd_cache=${3:-"[]"}  # Cached bd list (v1.9.0+)
 
     local manager_file=".claude/agents/manager.md"
     if [ ! -f "$manager_file" ]; then
@@ -438,12 +433,12 @@ call_manager_for_problems() {
     local manager_prompt
     manager_prompt=$(cat "$manager_file")
 
-    # Get problem details
+    # Get problem details from cache (no extra bd calls)
     local blocked_tasks
-    blocked_tasks=$(bd list --json 2>/dev/null | jq -r '.[] | select(.labels[]? | startswith("blocked:")) | "\(.id): \(.title)"' 2>/dev/null || echo "none")
+    blocked_tasks=$(echo "$bd_cache" | jq -r '.[] | select(.labels[]? | startswith("blocked:")) | "\(.id): \(.title)"' 2>/dev/null || echo "none")
 
     local retry_tasks
-    retry_tasks=$(bd list --json 2>/dev/null | jq -r ".[] | select(.labels[]? | test(\"^retry:[$RETRY_LIMIT-9]\")) | \"\(.id): \(.title)\"" 2>/dev/null || echo "none")
+    retry_tasks=$(echo "$bd_cache" | jq -r ".[] | select(.labels[]? | test(\"^retry:[$RETRY_LIMIT-9]\")) | \"\(.id): \(.title)\"" 2>/dev/null || echo "none")
 
     local output_file="$LOGS_DIR/manager-problems-$(date +%s).log"
 
@@ -645,6 +640,7 @@ EOF
 
 dispatch_phase() {
     local phase=$1
+    local phase_json=${2:-"{}"}  # JSON с метаданными (v1.9.0+)
 
     # Reset blocked cycles counter if we're not in BLOCKED_CYCLES
     if [ "$phase" != "BLOCKED_CYCLES" ]; then
@@ -925,19 +921,29 @@ $cycles_output"
 # Shows which agents are actively working (log files growing)
 
 show_active_work() {
+    local phase_json=${1:-"{}"}
     local now active_items=""
     now=$(date +%s)
     local stale_threshold=60  # seconds without activity = stale
 
+    # Extract in_progress_ids from phase_json (v1.9.0 optimization - no bd show calls)
+    local in_progress_ids
+    in_progress_ids=$(echo "$phase_json" | jq -c '.in_progress_ids // []' 2>/dev/null || echo "[]")
+
+    # Helper: check if task_id is in in_progress_ids
+    is_in_progress() {
+        local tid="$1"
+        echo "$in_progress_ids" | jq -e "index(\"$tid\")" >/dev/null 2>&1
+    }
+
     # Check executor logs (WORK)
     for log_file in "$LOGS_DIR"/executor-*.log; do
         [ -f "$log_file" ] || continue
-        local task_id size mtime age status task_status
+        local task_id size mtime age status
         task_id=$(basename "$log_file" .log | sed 's/executor-//')
 
-        # Skip if task is not in_progress
-        task_status=$(bd show "$task_id" --json 2>/dev/null | jq -r 'if type == "array" then .[0].status else .status end' 2>/dev/null || echo "unknown")
-        [ "$task_status" != "in_progress" ] && continue
+        # Skip if task is not in_progress (using cached list, no bd show)
+        is_in_progress "$task_id" || continue
 
         size=$(stat -f%z "$log_file" 2>/dev/null || stat -c%s "$log_file" 2>/dev/null || echo "0")
         mtime=$(stat -f%m "$log_file" 2>/dev/null || stat -c%Y "$log_file" 2>/dev/null || echo "0")
@@ -958,12 +964,11 @@ show_active_work() {
     # Check senior-executor logs (CHECK)
     for log_file in "$LOGS_DIR"/senior-executor-*.log; do
         [ -f "$log_file" ] || continue
-        local task_id size mtime age status task_status
+        local task_id size mtime age status
         task_id=$(basename "$log_file" .log | sed 's/senior-executor-//')
 
-        # Skip if task is not in_progress (review done)
-        task_status=$(bd show "$task_id" --json 2>/dev/null | jq -r 'if type == "array" then .[0].status else .status end' 2>/dev/null || echo "unknown")
-        [ "$task_status" != "in_progress" ] && continue
+        # Skip if task is not in_progress (using cached list, no bd show)
+        is_in_progress "$task_id" || continue
 
         size=$(stat -f%z "$log_file" 2>/dev/null || stat -c%s "$log_file" 2>/dev/null || echo "0")
         mtime=$(stat -f%m "$log_file" 2>/dev/null || stat -c%Y "$log_file" 2>/dev/null || echo "0")
@@ -1067,25 +1072,20 @@ main() {
         # 2. Load config (allows hot reload)
         load_config
 
-        # 3. Detect current phase
-        local phase
-        phase=$(detect_phase)
+        # 3. Detect current phase (returns JSON with all metadata)
+        local phase_json phase
+        phase_json=$(detect_phase)
+        phase=$(echo "$phase_json" | jq -r '.phase' 2>/dev/null || echo "UNKNOWN")
 
         # Visual separation between cycles (terminal + file)
         echo ""
         echo "" >> "$LOGS_DIR/hype.log"
 
-        # Calculate progress (tasks only, exclude epics)
-        # Note: bd list without --status returns only open+in_progress, need to count separately
-        local open_tasks closed_tasks total_tasks progress_pct
-        open_tasks=$(bd list --json 2>/dev/null | jq '[.[] | select(.issue_type == "task" or .issue_type == "bug" or .issue_type == "feature")] | length' 2>/dev/null || echo "0")
-        closed_tasks=$(bd list --status=closed --json 2>/dev/null | jq '[.[] | select(.issue_type == "task" or .issue_type == "bug" or .issue_type == "feature")] | length' 2>/dev/null || echo "0")
-        total_tasks=$((open_tasks + closed_tasks))
-        if [ "$total_tasks" -gt 0 ]; then
-            progress_pct=$((closed_tasks * 100 / total_tasks))
-        else
-            progress_pct=0
-        fi
+        # Progress from phase_json (no extra bd calls needed)
+        local closed_tasks total_tasks progress_pct
+        closed_tasks=$(echo "$phase_json" | jq -r '.stats.closed // 0' 2>/dev/null || echo "0")
+        total_tasks=$(echo "$phase_json" | jq -r '.stats.total // 0' 2>/dev/null || echo "0")
+        progress_pct=$(echo "$phase_json" | jq -r '.progress_pct // 0' 2>/dev/null || echo "0")
 
         # Build progress bar (20 chars wide)
         local bar_width=20
@@ -1098,10 +1098,10 @@ main() {
         log "INFO" "--- Cycle $cycle | Phase: $phase | [$bar] $closed_tasks/$total_tasks ($progress_pct%) ---"
 
         # Show active work (agents with growing log files)
-        show_active_work
+        show_active_work "$phase_json"
 
         # 4. Dispatch phase-specific actions
-        dispatch_phase "$phase"
+        dispatch_phase "$phase" "$phase_json"
 
         # 5. Check for completion
         if [ "$phase" = "DONE" ]; then
@@ -1126,11 +1126,29 @@ main() {
             timestamp=$(date +%Y%m%d-%H%M%S)
             generate_iteration_stats "$timestamp" "$version"
 
-            # Archive logs
+            # Archive hype.log only (other logs kept for user review)
             mkdir -p "$LOGS_DIR/archive"
             mv "$LOGS_DIR/hype.log" "$LOGS_DIR/archive/iteration-$timestamp.log" 2>/dev/null || true
 
             ./scripts/notify.sh "Project complete" "All tasks done" 2>/dev/null || true
+
+            # Ask user about cleanup (interactive only)
+            echo ""
+            echo "Run cleanup? This will:"
+            echo "  - Delete all logs"
+            echo "  - Clear beads tasks (backup in issues.jsonl)"
+            echo "  - Archive SPEC.md → SPEC.prev.md"
+            echo ""
+            read -p "Cleanup now? (y/N) " -n 1 -r
+            echo ""
+
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                cleanup_iteration "$LOGS_DIR" "$PROJECT_DIR"
+                log "SUCCESS" "Cleanup complete"
+            else
+                log "INFO" "Skipped cleanup. Run 'hype clear' later if needed."
+            fi
+
             rm -f "$LOCK_FILE"
             exit 0
         fi

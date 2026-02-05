@@ -111,7 +111,7 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 | Скрипт | Назначение |
 |--------|------------|
 | `hype.sh` | Главный цикл с lock file |
-| `detect-phase.sh` | Определение текущей фазы |
+| `detect-phase.sh` | Определение текущей фазы (JSON output с кэшированными данными) |
 | `run-analysts.sh` | Параллельный запуск 5 Analysts |
 | `run-executors.sh` | Параллельный запуск Executors с backpressure |
 | `run-senior-executor.sh` | Code review и merge |

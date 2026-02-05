@@ -102,14 +102,15 @@ check_playwright_mcp() {
 run_tester() {
     local tester=$1
     local project_type=$2
+    local bd_cache=$3  # Cached bd list --json (v1.9.0+)
     local trigger_task="run-tester-$tester"
     local agent_file=".claude/agents/tester-$tester.md"
 
     log "INFO" "Starting tester-$tester"
 
-    # Find trigger task
+    # Find trigger task from cache
     local task_id
-    task_id=$(bd list --json 2>/dev/null | jq -r ".[] | select(.title == \"$trigger_task\") | .id" | head -1)
+    task_id=$(echo "$bd_cache" | jq -r ".[] | select(.title == \"$trigger_task\") | .id" | head -1)
 
     if [ -z "$task_id" ]; then
         log "WARN" "No trigger task for tester-$tester"
@@ -215,10 +216,11 @@ $spec_content"
 # Create tester trigger tasks if they don't exist
 create_tester_triggers() {
     local testers=$1
+    local bd_cache=$2  # Cached bd list --json (v1.9.0+)
 
     for tester in $testers; do
         local trigger_title="run-tester-$tester"
-        if ! bd list --json 2>/dev/null | jq -e ".[] | select(.title == \"$trigger_title\")" > /dev/null 2>&1; then
+        if ! echo "$bd_cache" | jq -e ".[] | select(.title == \"$trigger_title\")" > /dev/null 2>&1; then
             bd create --title="$trigger_title" --type=task --priority=0 >/dev/null 2>&1
             log "INFO" "Created trigger: $trigger_title"
         fi
@@ -494,22 +496,29 @@ main() {
     testers=$(get_testers_for_type "$project_type")
     log "INFO" "SMOKE TEST: $testers"
 
-    # Create trigger tasks
-    create_tester_triggers "$testers"
+    # Cache bd list at start (v1.9.0 optimization)
+    local bd_cache
+    bd_cache=$(bd list --json 2>/dev/null || echo "[]")
 
-    # Check that triggers exist
+    # Create trigger tasks (pass cache)
+    create_tester_triggers "$testers" "$bd_cache"
+
+    # Refresh cache after creating triggers
+    bd_cache=$(bd list --json 2>/dev/null || echo "[]")
+
+    # Check that triggers exist (using cache)
     local missing=0
     for tester in $testers; do
-        if ! bd list --json 2>/dev/null | jq -e ".[] | select(.title == \"run-tester-$tester\")" > /dev/null 2>&1; then
+        if ! echo "$bd_cache" | jq -e ".[] | select(.title == \"run-tester-$tester\")" > /dev/null 2>&1; then
             log "WARN" "Trigger task run-tester-$tester not found"
             ((missing++)) || true
         fi
     done
 
-    # Run all testers in parallel, collect PIDs
+    # Run all testers in parallel, collect PIDs (pass cache)
     local tester_pids=""
     for tester in $testers; do
-        run_tester "$tester" "$project_type" &
+        run_tester "$tester" "$project_type" "$bd_cache" &
         tester_pids="$tester_pids $!"
     done
 
@@ -523,9 +532,13 @@ main() {
         stop_dev_server
     fi
 
+    # Refresh cache for post-test checks (single bd call instead of 3)
+    local post_cache
+    post_cache=$(bd list --status=open --json 2>/dev/null || echo "[]")
+
     # Check completion
     local open_triggers
-    open_triggers=$(bd list --status=open --json 2>/dev/null | jq '[.[] | select(.title | startswith("run-tester-"))] | length' 2>/dev/null || echo "0")
+    open_triggers=$(echo "$post_cache" | jq '[.[] | select(.title | startswith("run-tester-"))] | length' 2>/dev/null || echo "0")
 
     if [ "$open_triggers" -eq 0 ]; then
         log "INFO" "All testers completed"
@@ -534,8 +547,9 @@ main() {
     fi
 
     # Check for P0 bugs created by testers
-    local p0_bugs
-    p0_bugs=$(bd list --status=open --json 2>/dev/null | jq '[.[] | select(.priority == 0)] | length' 2>/dev/null || echo "0")
+    local p0_bugs p0_titles
+    p0_bugs=$(echo "$post_cache" | jq '[.[] | select(.priority == 0)] | length' 2>/dev/null || echo "0")
+    p0_titles=$(echo "$post_cache" | jq -r '.[] | select(.priority == 0) | "- \(.title)"' 2>/dev/null || echo "None")
 
     if [ "$p0_bugs" -gt 0 ]; then
         log "WARN" "SMOKE TEST FAILED: $p0_bugs P0 bug(s) found"
@@ -544,7 +558,7 @@ main() {
         log "INFO" "SMOKE TEST PASSED: No P0 bugs found"
     fi
 
-    # Generate summary report
+    # Generate summary report (using cached data)
     cat > "$PROJECT_DIR/.hype/evidence/smoke-test-report.md" << EOF
 # Smoke Test Report
 Generated: $(date)
@@ -557,7 +571,7 @@ $(echo "$testers" | tr ' ' '\n' | sed 's/^/- /')
 $(ls -d "$PROJECT_DIR/.hype/evidence"/*/ 2>/dev/null | sed 's/^/- /' || echo "None")
 
 ## P0 Bugs Found
-$(bd list --status=open --json 2>/dev/null | jq -r '.[] | select(.priority == 0) | "- \(.title)"' 2>/dev/null || echo "None")
+${p0_titles:-None}
 
 ## Result
 $([ "$p0_bugs" -eq 0 ] && echo "**PASSED**" || echo "**FAILED** - $p0_bugs P0 bug(s) require fixing")

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.5] - 2026-02-05
+
+### Fixed
+
+- **Testers skip bug creation if "similar exists"** - Testers were not creating P0 bugs when they found issues, claiming "bug already reported in previous session". Added explicit rules to ALL 5 testers: always create bugs, never skip because similar exists. Each test run is independent.
+
+---
+
 ## [1.7.4] - 2026-02-05
 
 ### Fixed

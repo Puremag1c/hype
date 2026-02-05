@@ -39,6 +39,9 @@ acquire_lock() {
             fi
         fi
     fi
+
+    # Ensure lock is released on ANY exit (not just SIGINT/SIGTERM)
+    trap "rm -f '$LOCK_FILE'" EXIT
 }
 
 # === Logging ===
@@ -100,6 +103,7 @@ validate_config() {
     validate_int "MAX_PARALLEL_EXECUTORS" "$MAX_PARALLEL_EXECUTORS"
     validate_int "RETRY_LIMIT" "$RETRY_LIMIT"
     validate_int "ITERATION_DELAY" "$ITERATION_DELAY"
+    validate_int "TASK_STALE_TIMEOUT" "${TASK_STALE_TIMEOUT:-600}"
 
     validate_bool "LOG_TOKENS" "$LOG_TOKENS"
     validate_bool "DEBUG" "${DEBUG:-false}"
@@ -258,9 +262,13 @@ detect_phase() {
         return
     fi
 
+    # Use fixed file in .hype/ instead of mktemp (prevents temp file leak on crash/SIGKILL)
+    # File is overwritten each call, useful for debugging, cleaned up by hype clear
+    stderr_output="$CLAUDEV_DIR/detect-phase-stderr.tmp"
+    : > "$stderr_output"
+
     # Capture both stdout and stderr
     # Pass DEBUG flag to detect-phase.sh via environment
-    stderr_output=$(mktemp)
     phase=$(CLAUDEV_DEBUG="${DEBUG:-false}" ./scripts/detect-phase.sh 2>"$stderr_output") || phase='{"phase":"UNKNOWN","stats":{},"progress_pct":0,"in_progress_ids":[],"regression_count":0,"p0_bugs":0,"error":"detect-phase.sh failed"}'
 
     # Log stderr to file only (NOT to stdout!) to avoid polluting $phase
@@ -269,7 +277,6 @@ detect_phase() {
             echo "$(date '+%Y-%m-%d %H:%M:%S') [HYPE] DEBUG: [detect-phase] $line" >> "$LOGS_DIR/hype.log"
         done < "$stderr_output"
     fi
-    rm -f "$stderr_output"
 
     echo "$phase"
 }
@@ -472,7 +479,8 @@ $retry_tasks
 
 check_stale_tasks() {
     local reset_count
-    reset_count=$(reset_stale_tasks 600 "stale in_progress")
+    # Use TASK_STALE_TIMEOUT from config (default 600s = 10 minutes)
+    reset_count=$(reset_stale_tasks "${TASK_STALE_TIMEOUT:-600}" "stale in_progress")
     if [ "$reset_count" -gt 0 ]; then
         log "INFO" "Reset $reset_count stale task(s)"
     fi

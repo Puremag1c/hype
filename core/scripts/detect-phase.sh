@@ -43,11 +43,29 @@ if ! command -v bd &> /dev/null; then
     exit 1
 fi
 
+# Проверяем jq
+if ! command -v jq &> /dev/null; then
+    echo '{"phase":"ERROR","stats":{},"progress_pct":0,"in_progress_ids":[],"regression_count":0,"p0_bugs":0,"error":"jq not installed"}'
+    >&2 echo "jq не установлен"
+    exit 1
+fi
+
 # Собираем статистику из beads (batched - 2 запроса вместо 11)
 # Кэшируем JSON для всех фильтров через jq
 # ВАЖНО: --limit 0 для unlimited (по умолчанию 50, что ломает milestone detection)
-ALL_TASKS_JSON=$(bd list --json --limit 0 2>/dev/null || echo "[]")
-CLOSED_TASKS_JSON=$(bd list --status=closed --json --limit 0 2>/dev/null || echo "[]")
+ALL_TASKS_JSON=$(bd list --json --limit 0 2>/dev/null)
+if [ $? -ne 0 ] || ! echo "$ALL_TASKS_JSON" | jq -e 'type == "array"' >/dev/null 2>&1; then
+    echo '{"phase":"ERROR","stats":{},"progress_pct":0,"in_progress_ids":[],"regression_count":0,"p0_bugs":0,"error":"bd list failed or returned invalid JSON"}'
+    >&2 echo "bd list вернул невалидный JSON или ошибку"
+    exit 1
+fi
+
+CLOSED_TASKS_JSON=$(bd list --status=closed --json --limit 0 2>/dev/null)
+if [ $? -ne 0 ] || ! echo "$CLOSED_TASKS_JSON" | jq -e 'type == "array"' >/dev/null 2>&1; then
+    echo '{"phase":"ERROR","stats":{},"progress_pct":0,"in_progress_ids":[],"regression_count":0,"p0_bugs":0,"error":"bd list --status=closed failed"}'
+    >&2 echo "bd list --status=closed вернул невалидный JSON или ошибку"
+    exit 1
+fi
 
 # Статистика из кэшированных данных
 TOTAL=$(echo "$ALL_TASKS_JSON" | jq 'length' 2>/dev/null || echo "0")
@@ -55,12 +73,13 @@ OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open")] | length' 
 IN_PROGRESS=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "in_progress")] | length' 2>/dev/null || echo "0")
 CLOSED=$(echo "$CLOSED_TASKS_JSON" | jq 'length' 2>/dev/null || echo "0")
 
-# Milestones (из closed tasks)
-HAS_PLANNING_DONE=$(echo "$CLOSED_TASKS_JSON" | jq '[.[] | select(.labels[]? == "milestone:planning-done")] | length' 2>/dev/null || echo "0")
-HAS_ANALYSTS_DONE=$(echo "$CLOSED_TASKS_JSON" | jq '[.[] | select(.labels[]? == "milestone:analysts-done")] | length' 2>/dev/null || echo "0")
-HAS_PLAN_REVIEWED=$(echo "$CLOSED_TASKS_JSON" | jq '[.[] | select(.labels[]? == "milestone:plan-reviewed")] | length' 2>/dev/null || echo "0")
-HAS_PROJECT_DONE=$(echo "$CLOSED_TASKS_JSON" | jq '[.[] | select(.labels[]? == "milestone:project-done")] | length' 2>/dev/null || echo "0")
-HAS_SMOKE_TEST_DONE=$(echo "$CLOSED_TASKS_JSON" | jq '[.[] | select(.labels[]? == "milestone:smoke-test-done")] | length' 2>/dev/null || echo "0")
+# Milestones (из ALL tasks — если milestone существует, фаза завершена, статус open/closed неважен)
+# Это предотвращает race condition когда bd close падает и milestone застревает в open
+HAS_PLANNING_DONE=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.labels[]? == "milestone:planning-done")] | length' 2>/dev/null || echo "0")
+HAS_ANALYSTS_DONE=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.labels[]? == "milestone:analysts-done")] | length' 2>/dev/null || echo "0")
+HAS_PLAN_REVIEWED=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.labels[]? == "milestone:plan-reviewed")] | length' 2>/dev/null || echo "0")
+HAS_PROJECT_DONE=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.labels[]? == "milestone:project-done")] | length' 2>/dev/null || echo "0")
+HAS_SMOKE_TEST_DONE=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.labels[]? == "milestone:smoke-test-done")] | length' 2>/dev/null || echo "0")
 
 # P0 bugs (block SMOKE_TEST milestone)
 P0_BUGS_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open") | select(.priority == 0)] | length' 2>/dev/null || echo "0")

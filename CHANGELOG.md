@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.9.2] - 2026-02-05
+
+### Fixed
+
+- **JSON validation in detect-phase.sh** - Added jq availability check and validation that `bd list` returns valid JSON arrays. Previously, malformed JSON caused all counters to silently become 0, leading to wrong phase detection.
+
+- **Lock file not released on exit** - Added `trap EXIT` to `acquire_lock()`. Previously, lock file was only removed on SIGINT/SIGTERM. Any `exit 1` (config validation, beads check failure) left the lock file, blocking subsequent runs.
+
+- **Temp file leak in detect_phase()** - Replaced `mktemp` with fixed file `$CLAUDEV_DIR/detect-phase-stderr.tmp`. Previously, temp files accumulated in /tmp on crash/SIGKILL. Now single file is reused and cleaned with `hype clear`.
+
+- **Milestone detection race condition** - Milestones are now searched in ALL tasks, not just closed. If `bd close` fails, milestone was stuck in open status and phase detection broke. Principle: "milestone exists = phase complete" regardless of task status.
+
+### Changed
+
+- **TASK_STALE_TIMEOUT from config** - `check_stale_tasks()` now uses `$TASK_STALE_TIMEOUT` from config instead of hardcoded 600s. Added validation for this parameter. Power users can tune stale detection threshold.
+
+---
+
 ## [1.9.1] - 2026-02-05
 
 ### Fixed

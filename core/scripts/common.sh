@@ -411,10 +411,11 @@ export -f is_audit_task 2>/dev/null || true
 # has_milestone - проверяет существование milestone
 # Использование: has_milestone "milestone:planning-done"
 # Возвращает: 0 (true) если milestone существует, 1 (false) если нет
+# NOTE: Ищет во ВСЕХ задачах (не только closed) — milestone существует = фаза завершена
 has_milestone() {
     local label="$1"
     local found
-    found=$(bd list --status=closed --json --limit 0 2>/dev/null | \
+    found=$(bd list --json --limit 0 2>/dev/null | \
         jq -r ".[] | select(.labels[]? == \"$label\") | .id" 2>/dev/null | head -1)
     [ -n "$found" ]
 }
@@ -444,10 +445,11 @@ export -f ensure_milestone 2>/dev/null || true
 # delete_milestone - удаляет milestone task полностью
 # Использование: delete_milestone "milestone:planning-done"
 # Удаляет ВСЕ tasks с данным label (на случай дубликатов).
+# NOTE: Ищет во ВСЕХ задачах (не только closed) — milestone может застрять в open при ошибке bd close
 delete_milestone() {
     local label="$1"
     local task_ids
-    task_ids=$(bd list --status=closed --json --limit 0 2>/dev/null | \
+    task_ids=$(bd list --json --limit 0 2>/dev/null | \
         jq -r ".[] | select(.labels[]? == \"$label\") | .id" 2>/dev/null || true)
 
     if [ -n "$task_ids" ]; then
@@ -461,9 +463,10 @@ export -f delete_milestone 2>/dev/null || true
 # delete_all_milestones - удаляет все milestone tasks
 # Использование: delete_all_milestones
 # Используется при начале новой итерации (INIT phase).
+# NOTE: Ищет во ВСЕХ задачах (не только closed) — milestones могут застрять в open
 delete_all_milestones() {
     local task_ids
-    task_ids=$(bd list --status=closed --json --limit 0 2>/dev/null | \
+    task_ids=$(bd list --json --limit 0 2>/dev/null | \
         jq -r '.[] | select(.labels[]? | test("^milestone:")) | .id' 2>/dev/null || true)
 
     local count=0

@@ -69,14 +69,6 @@ MODEL_TESTER_FUNCTIONAL="sonnet"    # Must Have verification
 MODEL_TESTER_VISUAL="opus"          # UI testing (needs vision)
 MODEL_TESTER_REGRESSION="sonnet"    # Test suite runner
 
-# === CI/CD ===
-
-# Включить интеграцию с GitHub CI
-CI_ENABLED=false
-
-# Включить автоматический релиз (CD)
-CD_ENABLED=false
-
 # === Логирование ===
 
 # Режим отладки — показывает детальную диагностику
@@ -86,10 +78,3 @@ DEBUG=false
 # Логировать оценку токенов (для анализа расхода)
 LOG_TOKENS=false
 
-# === Cleanup ===
-
-# Автоматически удалять старые логи
-CLEANUP_ENABLED=false
-
-# Хранить логи N дней (если CLEANUP_ENABLED=true)
-CLEANUP_KEEP_DAYS=30

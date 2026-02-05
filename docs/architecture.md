@@ -111,9 +111,6 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → FINAL_REVIE
 MAX_PARALLEL_EXECUTORS=3    # Лимит параллельных Executors
 RETRY_LIMIT=3               # Retry до эскалации к Architect
 TASK_TIMEOUT="10m"          # Таймаут на задачу
-USER_INPUT_TIMEOUT="30m"    # Таймаут ожидания user
-CI_ENABLED=false            # GitHub CI интеграция
-CD_ENABLED=false            # Автоматический релиз
 ```
 
 ## Beads интеграция

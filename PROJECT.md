@@ -112,9 +112,6 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 MAX_PARALLEL_EXECUTORS=3    # Лимит параллельных задач
 RETRY_LIMIT=3               # Retry до эскалации
 TASK_TIMEOUT="10m"          # Таймаут на задачу
-USER_INPUT_TIMEOUT="30m"    # Таймаут ожидания user
-CI_ENABLED=false            # GitHub Actions
-CD_ENABLED=false            # Автоматический релиз
 ```
 
 ### Testing config (`.hype/testing.yaml`)

@@ -100,12 +100,8 @@ validate_config() {
     validate_int "MAX_PARALLEL_EXECUTORS" "$MAX_PARALLEL_EXECUTORS"
     validate_int "RETRY_LIMIT" "$RETRY_LIMIT"
     validate_int "ITERATION_DELAY" "$ITERATION_DELAY"
-    validate_int "CLEANUP_KEEP_DAYS" "$CLEANUP_KEEP_DAYS"
 
-    validate_bool "CI_ENABLED" "$CI_ENABLED"
-    validate_bool "CD_ENABLED" "$CD_ENABLED"
     validate_bool "LOG_TOKENS" "$LOG_TOKENS"
-    validate_bool "CLEANUP_ENABLED" "$CLEANUP_ENABLED"
     validate_bool "DEBUG" "${DEBUG:-false}"
 
     validate_timeout "TASK_TIMEOUT" "$TASK_TIMEOUT"

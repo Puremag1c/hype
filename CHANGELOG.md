@@ -1,10 +1,18 @@
 # Changelog
 
-## [1.8.2] - 2026-02-05
+## [1.8.3] - 2026-02-05
 
 ### Fixed
 
-- **Regression check misses in_progress tasks** - Regression detection used `bd list --status=open` which missed tasks already grabbed by executors (status=in_progress). Now checks all non-closed tasks.
+- **Revert v1.8.2: Don't check in_progress for regressions** - Checking in_progress tasks caused Architect and Executor to work on the same task simultaneously. Now only checks `open` tasks. If executor already grabbed a regression task, let it finish - next SMOKE_TEST will catch if still broken.
+
+---
+
+## [1.8.2] - 2026-02-05 (REVERTED)
+
+### Fixed (broken)
+
+- ~~Regression check misses in_progress tasks~~ - This caused parallel conflicts between Architect and Executor.
 
 ---
 

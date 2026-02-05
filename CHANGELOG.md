@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.2] - 2026-02-05
+
+### Fixed
+
+- **Regression check misses in_progress tasks** - Regression detection used `bd list --status=open` which missed tasks already grabbed by executors (status=in_progress). Now checks all non-closed tasks.
+
+---
+
 ## [1.8.1] - 2026-02-05
 
 ### Fixed

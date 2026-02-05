@@ -738,8 +738,9 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             log "INFO" "IMPLEMENTATION: Streaming cycle..."
 
             # Check for regressions first - route to Architect before executors
+            # Note: check ALL statuses because tasks may be open OR in_progress
             local regression_count
-            regression_count=$(bd list --status=open --json 2>/dev/null | jq '[.[] | select(.labels | index("regression"))] | length' 2>/dev/null || echo "0")
+            regression_count=$(bd list --json --limit 0 2>/dev/null | jq '[.[] | select(.status != "closed") | select(.labels | index("regression"))] | length' 2>/dev/null || echo "0")
 
             if [ "$regression_count" -gt 0 ]; then
                 log "WARN" "IMPLEMENTATION: $regression_count regression(s) found - routing to Architect"
@@ -771,7 +772,8 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
 
             if [ "$open_tasks" -gt 0 ]; then
                 # Check for regressions (bugs that were "fixed" but came back)
-                regression_count=$(bd list --status=open --json 2>/dev/null | jq '[.[] | select(.labels | index("regression"))] | length' 2>/dev/null || echo "0")
+                # Note: check ALL non-closed tasks (may be open OR in_progress)
+                regression_count=$(bd list --json --limit 0 2>/dev/null | jq '[.[] | select(.status != "closed") | select(.labels | index("regression"))] | length' 2>/dev/null || echo "0")
 
                 if [ "$regression_count" -gt 0 ]; then
                     log "WARN" "SMOKE_TEST: $regression_count regression(s) found - routing to Architect for review"

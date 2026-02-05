@@ -305,25 +305,28 @@ git status --porcelain | grep '^??'
 
 **НЕ оставляй untracked файлы в рабочей директории!**
 
-### 5. Если есть проблемы — создай задачи и выйди
+### 5. Версионирование (ОБЯЗАТЕЛЬНО при любых изменениях)
+
+**Каждый набор изменений = новая версия.** Версионируй ПЕРЕД созданием P0 задач.
+
+#### 5.1 Проверь есть ли изменения для версионирования
 
 ```bash
-bd create --title="Fix: <описание проблемы>" --type=task --priority=0
-echo "FINAL_REVIEW: NEEDS_FIXES"
-# НЕ продолжай к версионированию!
+# Есть ли закрытые задачи в этой итерации?
+CLOSED_COUNT=$(bd list --status=closed --json | jq 'length')
+if [ "$CLOSED_COUNT" -eq 0 ]; then
+    echo "No changes to version"
+    # Пропусти версионирование, перейди к шагу 6
+fi
 ```
 
-### 6. Если всё ок — версионирование
-
-**ОБЯЗАТЕЛЬНО:** Перед завершением итерации ты должен повысить версию и обновить changelog.
-
-#### 6.1 Прочитай текущую версию
+#### 5.2 Прочитай текущую версию
 
 ```bash
 cat VERSION 2>/dev/null || echo "0.0.0"
 ```
 
-#### 6.2 Определи тип изменений
+#### 5.3 Определи тип изменений
 
 Проанализируй closed задачи этой итерации:
 
@@ -331,24 +334,21 @@ cat VERSION 2>/dev/null || echo "0.0.0"
 bd list --status=closed --json | jq -r '.[] | "\(.type) \(.title)"'
 ```
 
-Правила SemVer:
-- **MAJOR** (X.0.0): есть breaking changes (label `breaking:` или явное нарушение обратной совместимости)
-- **MINOR** (0.X.0): есть новые features (type=feature)
-- **PATCH** (0.0.X): только bugfixes и tasks (type=bug, type=task)
+Правила версионирования:
+- **MAJOR** (X.0.0): **ТОЛЬКО по явному запросу пользователя** (никогда автоматически!)
+- **MINOR** (+0.1.0): новый функционал, видимый пользователю (новая кнопка, endpoint, команда CLI)
+- **PATCH** (+0.0.1): bugfix, tweak, рефакторинг, обновление зависимостей (пользователь не заметит)
 
-#### 6.3 Обнови VERSION
+#### 5.4 Обнови VERSION
 
 ```bash
 # Пример: была 0.2.0, добавили features → 0.3.0
 echo "0.3.0" > VERSION
 ```
 
-#### 6.4 Сгенерируй CHANGELOG.md
-
-Формат:
+#### 5.5 Сгенерируй CHANGELOG.md
 
 ```bash
-# Вычисляем дату и версию заранее (heredoc не expandит внутри 'EOF')
 TODAY=$(date +%Y-%m-%d)
 NEW_VERSION=$(cat VERSION)
 
@@ -368,19 +368,30 @@ cat > CHANGELOG_NEW.md << EOF
 
 EOF
 
-# Добавь старый changelog (без "# Changelog" и пустой строки)
 tail -n +3 CHANGELOG.md >> CHANGELOG_NEW.md 2>/dev/null || true
 mv CHANGELOG_NEW.md CHANGELOG.md
 ```
 
-#### 6.5 Закоммить версию
+#### 5.6 Закоммить версию
 
 ```bash
 git add VERSION CHANGELOG.md
 git commit -m "Release v$(cat VERSION)"
 ```
 
-#### 6.6 Подтверди завершение
+### 6. Результат review
+
+#### Если найдены проблемы:
+
+```bash
+bd create --title="Fix: <описание проблемы>" --type=bug --priority=0
+echo "FINAL_REVIEW: NEEDS_FIXES"
+echo "VERSION: $(cat VERSION)"  # Текущая версия УЖЕ закоммичена
+```
+
+Система вернётся в IMPLEMENTATION для исправления. После исправления — снова версия (+0.0.1).
+
+#### Если всё ок:
 
 ```bash
 echo "FINAL_REVIEW: PASSED"

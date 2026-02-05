@@ -37,6 +37,7 @@ You are a QA tester verifying that **Must Have** features from SPEC.md actually 
 - `PROJECT_TYPE` — web|api|cli|library
 - `START_CMD` — command to start the dev server
 - `TEST_URL` — URL for testing
+- `SERVER_MANAGED` — if "true", server is already running (don't start your own)
 
 ## Algorithm
 
@@ -53,47 +54,35 @@ Extract:
 - User Stories (how features should work)
 - Specific actions mentioned (Connect, Submit, etc.)
 
-### 3. Kill existing process and rebuild
+### 3. Check server availability
 
-**CRITICAL:** You must test FRESH code, not stale artifacts!
+**Check SERVER_MANAGED variable:**
+- If `SERVER_MANAGED=true` → server is already running, skip to step 4
+- If `SERVER_MANAGED=false` → you need to start the server yourself
+
+#### If SERVER_MANAGED=false (you manage the server):
 
 ```bash
-# Extract port from TEST_URL
+# Kill any existing process on that port
 PORT=$(echo "$TEST_URL" | grep -oE ':[0-9]+' | tr -d ':')
 PORT=${PORT:-8000}
-
-# Kill any existing process on that port
 lsof -ti:$PORT | xargs kill -9 2>/dev/null || true
 
-# If there's a build command, run it
-BUILD_CMD=$(grep -A1 "Build command" SPEC.md 2>/dev/null | tail -1 | sed 's/^[- ]*//')
-if [ -n "$BUILD_CMD" ] && [[ ! "$BUILD_CMD" == *"["* ]]; then
-    echo "Building: $BUILD_CMD"
-    eval "$BUILD_CMD"
-fi
-
-# For Python projects without explicit build: reinstall in dev mode
-if [ -f "pyproject.toml" ] && [ -z "$BUILD_CMD" ]; then
-    pip install -e . --quiet 2>/dev/null || true
-fi
-```
-
-### 4. Start YOUR OWN server
-
-```bash
 # Start fresh server
 $START_CMD &
 DEV_PID=$!
 sleep 5
+```
 
-# Verify it's running
+#### Verify server is running (always do this):
+
+```bash
 if ! curl -s "$TEST_URL" > /dev/null 2>&1; then
-    echo "ERROR: Server failed to start!"
-    bd create --title="SMOKE: [Startup] Server failed to start" \
+    echo "ERROR: Server not available at $TEST_URL"
+    bd create --title="SMOKE: [Startup] Server not available" \
       --type=bug --priority=0 \
-      --description="START_CMD: $START_CMD
-TEST_URL: $TEST_URL
-Server did not respond after 5 seconds."
+      --description="TEST_URL: $TEST_URL
+Server did not respond. Check if server started correctly."
     exit 1
 fi
 ```
@@ -224,14 +213,16 @@ $(bd list --status=open --json | jq -r '.[] | select(.title | startswith("SMOKE:
 EOF
 ```
 
-### 10. Close browser and server
+### 10. Close browser (and server if you started it)
 
 ```bash
 # Close Playwright browser
 mcp__playwright__browser_close
 
-# Stop dev server
-kill $DEV_PID 2>/dev/null || true
+# Stop dev server ONLY if you started it (SERVER_MANAGED=false)
+if [ "$SERVER_MANAGED" = "false" ] && [ -n "$DEV_PID" ]; then
+    kill $DEV_PID 2>/dev/null || true
+fi
 ```
 
 ### 11. Close trigger task

@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.7.0] - 2026-02-05
+
+### Added
+
+- **Testing configuration file** (`.hype/testing.yaml`) - Separate config for testing, SPEC.md no longer modified by system:
+  - Contains: type, build_command, start_command, test_url, health_check, startup_timeout
+  - If missing for web/api projects → P0 task created for Opus to fill it
+  - Library projects don't require testing config
+
+- **Centralized server management** - run-testers.sh now:
+  - Starts single dev server before all testers
+  - Passes `SERVER_MANAGED=true` flag to testers
+  - Testers use existing server instead of starting their own
+  - Stops server after all testers complete
+  - Eliminates port conflicts when running testers in parallel
+
+### Changed
+
+- **Versioning rules updated**:
+  - PATCH (+0.0.1): bugfix, tweak, refactoring (user won't notice)
+  - MINOR (+0.1.0): new user-visible functionality
+  - MAJOR (X.0.0): only on explicit user request (never automatic)
+
+- **Version on every change** - Architect now versions BEFORE creating P0 bugs, not only on success. Each set of changes = new version.
+
+- **Testers respect SERVER_MANAGED flag** - tester-functional.md and tester-visual.md now check if server is already running before attempting to start their own
+
+---
+
 ## [1.6.20] - 2026-02-05
 
 ### Fixed

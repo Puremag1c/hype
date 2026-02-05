@@ -25,9 +25,10 @@ You are a UI/UX tester verifying that the web application **looks correct** and 
 - `PROJECT_TYPE` — should be "web" for this tester
 - `BUILD_CMD` — build command (already executed before you start)
 - `START_CMD` — command to start the dev server
-- `TEST_URL` — URL to test (from SPEC.md)
+- `TEST_URL` — URL to test (from .hype/testing.yaml)
+- `SERVER_MANAGED` — if "true", server is already running (don't start your own)
 
-**NOTE:** The project was freshly built by run-testers.sh before you started.
+**NOTE:** If SERVER_MANAGED=true, the project was built and server started by run-testers.sh.
 
 ## CRITICAL: Browser Isolation
 
@@ -60,19 +61,30 @@ fi
 mkdir -p .hype/evidence/visual
 ```
 
-### 2. Read test configuration
+### 2. Check server availability
 
-```bash
-START_CMD=$(grep -A1 "Start command" SPEC.md | tail -1 | sed 's/^[- ]*//')
-TEST_URL=$(grep -A1 "Test URL" SPEC.md | tail -1 | sed 's/^[- ]*//')
-```
+**Check SERVER_MANAGED variable:**
+- If `SERVER_MANAGED=true` → server is already running, skip to step 3
+- If `SERVER_MANAGED=false` → you need to start the server yourself
 
-### 3. Start dev server
+#### If SERVER_MANAGED=false:
 
 ```bash
 $START_CMD &
 DEV_PID=$!
 sleep 5
+```
+
+#### Verify server is running (always):
+
+```bash
+if ! curl -s "$TEST_URL" > /dev/null 2>&1; then
+    echo "ERROR: Server not available at $TEST_URL"
+    bd create --title="SMOKE: [Visual] Server not available" \
+      --type=bug --priority=0 --description="Server not responding at $TEST_URL"
+    bd close $TRIGGER_TASK --reason="Server not available"
+    exit 1
+fi
 ```
 
 ### 4. Visual checks with Playwright MCP
@@ -134,10 +146,13 @@ bd create --title="SMOKE: [Visual] <description of issue>" \
 Discovered during SMOKE_TEST visual verification."
 ```
 
-### 7. Stop dev server
+### 7. Stop dev server (only if you started it)
 
 ```bash
-kill $DEV_PID 2>/dev/null || true
+# Only kill if SERVER_MANAGED=false and we started the server
+if [ "$SERVER_MANAGED" = "false" ] && [ -n "$DEV_PID" ]; then
+    kill $DEV_PID 2>/dev/null || true
+fi
 ```
 
 ### 8. Generate report

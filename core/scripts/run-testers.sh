@@ -143,11 +143,12 @@ run_tester() {
     local spec_content
     spec_content=$(cat "$PROJECT_DIR/SPEC.md" 2>/dev/null || echo "SPEC.md not found")
 
-    # Extract testing params from SPEC.md
-    local build_cmd start_cmd test_url
-    build_cmd=$(grep -A1 "Build command" "$PROJECT_DIR/SPEC.md" 2>/dev/null | tail -1 | sed 's/^[- ]*//' || echo "")
-    start_cmd=$(grep -A1 "Start command" "$PROJECT_DIR/SPEC.md" 2>/dev/null | tail -1 | sed 's/^[- ]*//' || echo "")
-    test_url=$(grep -A1 "Test URL" "$PROJECT_DIR/SPEC.md" 2>/dev/null | tail -1 | sed 's/^[- ]*//' || echo "http://localhost:3000")
+    # Use testing.yaml values (set by read_testing_config), fallback to SPEC.md
+    local build_cmd start_cmd test_url server_managed
+    build_cmd="${TESTING_BUILD_CMD:-}"
+    start_cmd="${TESTING_START_CMD:-}"
+    test_url="${TESTING_URL:-http://localhost:3000}"
+    server_managed="${SERVER_MANAGED:-false}"
 
     local full_prompt="$tester_prompt
 
@@ -159,6 +160,11 @@ PROJECT_TYPE: $project_type
 BUILD_CMD: $build_cmd
 START_CMD: $start_cmd
 TEST_URL: $test_url
+SERVER_MANAGED: $server_managed
+
+## Important
+If SERVER_MANAGED=true, the dev server is ALREADY RUNNING at TEST_URL.
+Do NOT start your own server. Just run tests against the existing server.
 
 ## SPEC.md:
 $spec_content"
@@ -213,10 +219,157 @@ create_tester_triggers() {
     done
 }
 
+# Ensure testing config exists (.hype/testing.yaml)
+# If not, create P0 task for Opus to fill it
+ensure_testing_config() {
+    local config_file="$PROJECT_DIR/.hype/testing.yaml"
+    local project_type=$1
+
+    # For library/cli - testing config is optional
+    if [ "$project_type" = "library" ]; then
+        log "INFO" "Library project - testing config optional"
+        return 0
+    fi
+
+    # Check if testing.yaml exists
+    if [ ! -f "$config_file" ]; then
+        log "ERROR" "Missing .hype/testing.yaml"
+        bd create --title="Create testing configuration" \
+            --type=bug --priority=0 \
+            --label=model:opus \
+            --description="Analyze the project and create .hype/testing.yaml
+
+## Task
+1. Examine project files (package.json, pyproject.toml, go.mod, mix.exs, etc.)
+2. Determine the correct commands for this project
+3. Create .hype/testing.yaml with this structure:
+
+\`\`\`yaml
+# .hype/testing.yaml - Testing configuration (auto-generated)
+type: web  # web|api|cli|library
+build_command: npm run build  # or empty if not needed
+start_command: npm run dev
+test_url: http://localhost:3000
+health_check: /  # endpoint to verify server is ready
+startup_timeout: 30  # seconds to wait for server
+\`\`\`
+
+## Important
+- Use ACTUAL commands for this project (don't guess)
+- Test that commands work before saving
+- For Python: check for uvicorn, flask, django commands
+- For Node: check package.json scripts
+- For Go: check for main.go or Makefile
+
+done_when: .hype/testing.yaml exists with valid, tested commands" >/dev/null 2>&1
+
+        echo "SMOKE_TEST: NEEDS_CONFIG"
+        return 1
+    fi
+
+    # Validate required fields
+    local start_cmd
+    start_cmd=$(grep "^start_command:" "$config_file" 2>/dev/null | cut -d: -f2- | sed 's/^[ ]*//')
+
+    if [ -z "$start_cmd" ]; then
+        log "ERROR" "testing.yaml missing start_command"
+        return 1
+    fi
+
+    log "INFO" "Testing config valid: $config_file"
+    return 0
+}
+
+# Read testing config
+read_testing_config() {
+    local config_file="$PROJECT_DIR/.hype/testing.yaml"
+
+    # Export config values for use in other functions
+    TESTING_TYPE=$(grep "^type:" "$config_file" 2>/dev/null | cut -d: -f2- | sed 's/^[ ]*//' || echo "web")
+    TESTING_BUILD_CMD=$(grep "^build_command:" "$config_file" 2>/dev/null | cut -d: -f2- | sed 's/^[ ]*//' || echo "")
+    TESTING_START_CMD=$(grep "^start_command:" "$config_file" 2>/dev/null | cut -d: -f2- | sed 's/^[ ]*//')
+    TESTING_URL=$(grep "^test_url:" "$config_file" 2>/dev/null | cut -d: -f2- | sed 's/^[ ]*//' || echo "http://localhost:3000")
+    TESTING_HEALTH=$(grep "^health_check:" "$config_file" 2>/dev/null | cut -d: -f2- | sed 's/^[ ]*//' || echo "/")
+    TESTING_TIMEOUT=$(grep "^startup_timeout:" "$config_file" 2>/dev/null | cut -d: -f2- | sed 's/^[ ]*//' || echo "30")
+
+    export TESTING_TYPE TESTING_BUILD_CMD TESTING_START_CMD TESTING_URL TESTING_HEALTH TESTING_TIMEOUT
+}
+
+# Start dev server (single instance for all testers)
+start_dev_server() {
+    local start_cmd="$TESTING_START_CMD"
+    local test_url="$TESTING_URL"
+    local health_path="$TESTING_HEALTH"
+    local timeout="$TESTING_TIMEOUT"
+
+    if [ -z "$start_cmd" ]; then
+        log "WARN" "No start_command, testers will manage their own servers"
+        return 0
+    fi
+
+    log "INFO" "Starting dev server: $start_cmd"
+
+    # Start server in background
+    eval "$start_cmd" > "$LOGS_DIR/dev-server.log" 2>&1 &
+    DEV_SERVER_PID=$!
+    echo "$DEV_SERVER_PID" > "$PROJECT_DIR/.hype/server.pid"
+
+    # Wait for server to be ready
+    local health_url="${test_url}${health_path}"
+    local waited=0
+
+    log "INFO" "Waiting for server at $health_url (timeout: ${timeout}s)"
+
+    while [ $waited -lt "$timeout" ]; do
+        if curl -s -o /dev/null -w "%{http_code}" "$health_url" 2>/dev/null | grep -qE "^[23]"; then
+            log "INFO" "Server ready (PID: $DEV_SERVER_PID)"
+            export DEV_SERVER_PID
+            return 0
+        fi
+        sleep 1
+        ((waited++))
+    done
+
+    log "ERROR" "Server failed to start within ${timeout}s"
+    kill $DEV_SERVER_PID 2>/dev/null || true
+    return 1
+}
+
+# Stop dev server
+stop_dev_server() {
+    local pid_file="$PROJECT_DIR/.hype/server.pid"
+
+    if [ -f "$pid_file" ]; then
+        local pid
+        pid=$(cat "$pid_file")
+        if kill -0 "$pid" 2>/dev/null; then
+            log "INFO" "Stopping dev server (PID: $pid)"
+            kill "$pid" 2>/dev/null || true
+            sleep 1
+            # Force kill if still running
+            kill -9 "$pid" 2>/dev/null || true
+        fi
+        rm -f "$pid_file"
+    fi
+
+    # Also kill by port as fallback
+    local test_port
+    test_port=$(echo "$TESTING_URL" | grep -oE ':[0-9]+' | tr -d ':')
+    test_port=${test_port:-3000}
+
+    if lsof -ti:"$test_port" >/dev/null 2>&1; then
+        lsof -ti:"$test_port" | xargs kill -9 2>/dev/null || true
+    fi
+}
+
 # Run build command before testing
 run_build() {
     local build_cmd
-    build_cmd=$(grep -A1 "Build command" "$PROJECT_DIR/SPEC.md" 2>/dev/null | tail -1 | sed 's/^[- ]*//' || echo "")
+    # First try testing.yaml, fallback to SPEC.md
+    build_cmd="${TESTING_BUILD_CMD:-}"
+    if [ -z "$build_cmd" ]; then
+        build_cmd=$(grep -A1 "Build command" "$PROJECT_DIR/SPEC.md" 2>/dev/null | tail -1 | sed 's/^[- ]*//' || echo "")
+    fi
 
     # Skip if no build command or placeholder
     if [ -z "$build_cmd" ] || [[ "$build_cmd" == *"["* ]]; then
@@ -255,28 +408,40 @@ main() {
     echo ""
     echo "" >> "$LOGS_DIR/hype.log"
 
+    # Get project type first
+    local project_type
+    project_type=$(get_project_type)
+    log "INFO" "Project type: $project_type"
+
+    # Ensure testing config exists (for web/api projects)
+    if ! ensure_testing_config "$project_type"; then
+        log "ERROR" "SMOKE_TEST aborted: missing testing configuration"
+        exit 1
+    fi
+
+    # Read testing config
+    read_testing_config
+
+    # Kill any existing process on test port
+    stop_dev_server
+
     # Run build first to ensure fresh artifacts
     if ! run_build; then
         log "ERROR" "SMOKE_TEST aborted due to build failure"
         exit 1
     fi
 
-    # Kill any existing process on test port to ensure fresh server
-    local test_url test_port
-    test_url=$(grep -A1 "Test URL" "$PROJECT_DIR/SPEC.md" 2>/dev/null | tail -1 | sed 's/^[- ]*//' || echo "http://localhost:3000")
-    test_port=$(echo "$test_url" | grep -oE ':[0-9]+' | tr -d ':')
-    test_port=${test_port:-3000}
-
-    if lsof -ti:"$test_port" >/dev/null 2>&1; then
-        log "WARN" "Killing existing process on port $test_port"
-        lsof -ti:"$test_port" | xargs kill -9 2>/dev/null || true
-        sleep 1
+    # Start dev server (single instance for all testers)
+    local server_started=false
+    if [ -n "$TESTING_START_CMD" ]; then
+        if start_dev_server; then
+            server_started=true
+            export SERVER_MANAGED=true  # Tell testers not to start their own
+        else
+            log "ERROR" "SMOKE_TEST aborted: server failed to start"
+            exit 1
+        fi
     fi
-
-    # Get project type
-    local project_type
-    project_type=$(get_project_type)
-    log "INFO" "Project type: $project_type"
 
     # Get testers for this type
     local testers
@@ -302,6 +467,11 @@ main() {
 
     # Wait for all
     wait
+
+    # Stop dev server
+    if [ "$server_started" = true ]; then
+        stop_dev_server
+    fi
 
     # Check completion
     local open_triggers

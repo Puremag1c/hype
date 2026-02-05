@@ -17,6 +17,50 @@ strip_ansi() {
 }
 export -f strip_ansi 2>/dev/null || true
 
+# retry_command - выполняет команду с retry
+# Использование: retry_command RETRIES COMMAND [ARGS...]
+# Возвращает: exit code последней попытки
+retry_command() {
+    local retries="$1"
+    shift
+    local attempt=1
+
+    while [ $attempt -le $retries ]; do
+        if "$@"; then
+            return 0
+        fi
+        echo "  Attempt $attempt/$retries failed, retrying..." >&2
+        attempt=$((attempt + 1))
+        sleep 1
+    done
+
+    return 1
+}
+export -f retry_command 2>/dev/null || true
+
+# create_minimal_project_context - fallback когда analyze-project.sh fails
+# Создаёт минимальный PROJECT_CONTEXT.md с directory listing
+create_minimal_project_context() {
+    local project_root="${1:-.}"
+    local output_file="$project_root/PROJECT_CONTEXT.md"
+
+    cat > "$output_file" << 'EOF'
+# Project Context
+
+> Auto-generated fallback (analysis failed)
+> Tech Writer will gather context from user
+
+## Directory Structure
+
+```
+EOF
+    ls -la "$project_root" 2>/dev/null | head -30 >> "$output_file"
+    echo '```' >> "$output_file"
+    echo "" >> "$output_file"
+    echo "_Note: Full analysis was not available. Tech Writer will need to explore the project._" >> "$output_file"
+}
+export -f create_minimal_project_context 2>/dev/null || true
+
 # timeout_cmd - кроссплатформенный timeout (macOS + Linux)
 # Использование: timeout_cmd DURATION COMMAND [ARGS...]
 # Пример: timeout_cmd 5m claude -p "prompt"
@@ -450,6 +494,65 @@ cleanup_iteration() {
     local logs_dir="${1:-logs}"
     local project_dir="${2:-.}"
 
+    # Check for in_progress tasks
+    local in_progress_count
+    local in_progress_tasks
+    in_progress_tasks=$(bd list --status=in_progress --json 2>/dev/null || echo "[]")
+    in_progress_count=$(echo "$in_progress_tasks" | jq 'length')
+
+    if [[ "$in_progress_count" -gt 0 ]]; then
+        echo ""
+        echo "⚠️  WARNING: Found $in_progress_count task(s) in progress:"
+        echo "$in_progress_tasks" | jq -r '.[] | "   - \(.id): \(.title)"'
+        echo ""
+        read -p "Are you sure you want to cleanup? (y/N): " confirm1
+        if [[ "$confirm1" != "y" && "$confirm1" != "Y" ]]; then
+            echo "Cleanup aborted."
+            return 1
+        fi
+        read -p "This will destroy active work. Continue? (y/N): " confirm2
+        if [[ "$confirm2" != "y" && "$confirm2" != "Y" ]]; then
+            echo "Cleanup aborted."
+            return 1
+        fi
+    fi
+
+    # Preview what will be deleted
+    echo ""
+    echo "The following will be cleaned up:"
+
+    # Logs
+    local log_count
+    log_count=$(find "$logs_dir" -name "*.log" 2>/dev/null | wc -l | tr -d ' ')
+    [ "$log_count" -gt 0 ] && echo "  • $log_count log file(s) in $logs_dir/"
+
+    # Beads tasks
+    local task_count
+    task_count=$(bd list --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo 0)
+    [ "$task_count" -gt 0 ] && echo "  • $task_count beads task(s)"
+
+    # Milestones
+    local milestone_count
+    milestone_count=$(bd list --status=closed --json --limit 0 2>/dev/null | jq '[.[] | select(.labels[]? | test("^milestone:"))] | length' 2>/dev/null || echo 0)
+    [ "$milestone_count" -gt 0 ] && echo "  • $milestone_count milestone(s)"
+
+    # Worktrees
+    if [ -d "$project_dir/.hype-worktrees" ]; then
+        local worktree_count
+        worktree_count=$(find "$project_dir/.hype-worktrees" -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+        worktree_count=$((worktree_count - 1))  # exclude parent dir
+        [ "$worktree_count" -gt 0 ] && echo "  • $worktree_count worktree(s) in .hype-worktrees/"
+    fi
+
+    # Stashes
+    local stash_count
+    stash_count=$(git stash list 2>/dev/null | grep -ci hype || echo 0)
+    [ "$stash_count" -gt 0 ] && echo "  • $stash_count hype-related git stash(es)"
+
+    # SPEC.md
+    [ -f "$project_dir/SPEC.md" ] && echo "  • SPEC.md → SPEC.prev.md (archived)"
+
+    echo ""
     echo "Starting cleanup..."
 
     # 1. Sync beads (backup to issues.jsonl)
@@ -463,7 +566,7 @@ cleanup_iteration() {
 
     # 3. Clean beads tasks
     echo "  → Cleaning beads tasks..."
-    bd admin cleanup --all --force 2>/dev/null || true
+    bd admin cleanup 2>/dev/null || true
 
     # 4. Delete all milestones (using function from this file)
     echo "  → Deleting milestones..."

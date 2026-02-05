@@ -254,14 +254,14 @@ detect_phase() {
     if [[ ! -x "./scripts/detect-phase.sh" ]]; then
         # Log to stderr to avoid polluting phase output
         >&2 echo "ERROR: detect-phase.sh not found or not executable at ./scripts/detect-phase.sh"
-        echo "UNKNOWN"
+        echo '{"phase":"UNKNOWN","stats":{},"progress_pct":0,"in_progress_ids":[],"regression_count":0,"p0_bugs":0,"error":"detect-phase.sh not found"}'
         return
     fi
 
     # Capture both stdout and stderr
     # Pass DEBUG flag to detect-phase.sh via environment
     stderr_output=$(mktemp)
-    phase=$(CLAUDEV_DEBUG="${DEBUG:-false}" ./scripts/detect-phase.sh 2>"$stderr_output") || phase="UNKNOWN"
+    phase=$(CLAUDEV_DEBUG="${DEBUG:-false}" ./scripts/detect-phase.sh 2>"$stderr_output") || phase='{"phase":"UNKNOWN","stats":{},"progress_pct":0,"in_progress_ids":[],"regression_count":0,"p0_bugs":0,"error":"detect-phase.sh failed"}'
 
     # Log stderr to file only (NOT to stdout!) to avoid polluting $phase
     if [[ -s "$stderr_output" ]]; then

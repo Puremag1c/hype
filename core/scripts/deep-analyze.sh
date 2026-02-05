@@ -27,12 +27,19 @@ fi
 # === Check if deep analysis needed ===
 
 needs_deep_analysis() {
-    # Count code files
+    # Count code files (excluding generated/dependency directories)
     local code_files=$(find "$PROJECT_ROOT" -type f \( \
         -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" \
         -o -name "*.py" -o -name "*.ex" -o -name "*.exs" \
         -o -name "*.go" -o -name "*.rs" \
-    \) 2>/dev/null | wc -l | tr -d ' ')
+    \) \
+        -not -path '*/node_modules/*' \
+        -not -path '*/dist/*' \
+        -not -path '*/build/*' \
+        -not -path '*/.git/*' \
+        -not -path '*/vendor/*' \
+        -not -path '*/__pycache__/*' \
+    2>/dev/null | wc -l | tr -d ' ')
 
     # Check README quality
     local has_good_readme=false
@@ -69,7 +76,10 @@ main() {
     # Check PROJECT_CONTEXT.md exists (should be created by analyze-project.sh first)
     if [[ ! -f "$PROJECT_ROOT/PROJECT_CONTEXT.md" ]]; then
         echo "Running basic analysis first..."
-        "$HYPE_HOME/core/scripts/analyze-project.sh"
+        if ! retry_command 3 "$HYPE_HOME/core/scripts/analyze-project.sh"; then
+            echo "Analysis failed, creating minimal context..."
+            create_minimal_project_context "$PROJECT_ROOT"
+        fi
     fi
 
     echo "Running deep analysis with Claude..."
@@ -77,7 +87,7 @@ main() {
     # Run analyzer agent
     local analyzer_model
     analyzer_model=$(map_model "${MODEL_ANALYZER:-opus}")
-    timeout_cmd 5m claude --model "$analyzer_model" --print < "$HYPE_HOME/core/agents/analyzer.md" << EOF
+    timeout_cmd 5m claude --model "$analyzer_model" --print --permission-mode bypassPermissions < "$HYPE_HOME/core/agents/analyzer.md" << EOF
 
 ---
 PROJECT_ROOT: $PROJECT_ROOT

@@ -418,8 +418,13 @@ EOF
             ;;
         existing)
             info "Detected existing project, analyzing..."
-            "$HYPE_HOME/core/scripts/analyze-project.sh"
-            success "Created PROJECT_CONTEXT.md"
+            if retry_command 3 "$HYPE_HOME/core/scripts/analyze-project.sh"; then
+                success "Created PROJECT_CONTEXT.md"
+            else
+                warn "Analysis failed, creating minimal context..."
+                create_minimal_project_context "$(pwd)"
+                success "Created minimal PROJECT_CONTEXT.md (fallback)"
+            fi
             ;;
         empty)
             info "Empty project - Tech Writer will gather requirements"

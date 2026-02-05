@@ -38,7 +38,7 @@ PROJECT_ROOT=$(find_project_root)
 
 # Проверяем beads
 if ! command -v bd &> /dev/null; then
-    echo "ERROR"
+    echo '{"phase":"ERROR","stats":{},"progress_pct":0,"in_progress_ids":[],"regression_count":0,"p0_bugs":0,"error":"bd not installed"}'
     >&2 echo "Beads (bd) не установлен"
     exit 1
 fi

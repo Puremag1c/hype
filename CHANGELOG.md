@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.9.1] - 2026-02-05
+
+### Fixed
+
+- **deep-analyze.sh permission-mode** - Added `--permission-mode bypassPermissions` to Claude call. Analysis no longer fails in non-interactive mode.
+
+- **deep-analyze.sh file count** - Excluded `node_modules`, `dist`, `build`, `.git`, `vendor`, `__pycache__` from file count. Projects with 30 real files no longer show 500+ due to dependencies.
+
+- **detect_phase() JSON consistency** - Error cases now return JSON format (`{"phase":"UNKNOWN",...}`) instead of plain strings. Consistent contract for all callers.
+
+- **bd admin cleanup flags** - Removed invalid `--all --force` flags that caused silent failures.
+
+### Added
+
+- **Cleanup in_progress warning** - `cleanup_iteration()` now warns when tasks are in progress. Requires double confirmation before destroying active work.
+
+- **Cleanup preview** - Shows complete list of what will be deleted: logs, tasks, milestones, worktrees, stashes, SPEC.md.
+
+- **analyze-project.sh retry/fallback** - Added `retry_command()` wrapper (3 attempts) and `create_minimal_project_context()` fallback. INIT phase no longer blocks on transient failures.
+
+---
+
 ## [1.9.0] - 2026-02-05
 
 ### Added

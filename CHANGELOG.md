@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.7.3] - 2026-02-05
+
+### Fixed
+
+- **YAML parsing breaks on inline comments** - `build_command: ""  # comment` was parsed as non-empty string, causing `bash: : command not found`. Added `parse_yaml_value()` function that strips comments, quotes, and whitespace. All 6 testing.yaml fields now parsed correctly.
+
+- **Instruction template provoked inline comments** - Example in task description showed `build_command: npm run build  # or empty` which led executors to copy the style. Template now uses separate comment block above values.
+
+---
+
 ## [1.7.2] - 2026-02-05
 
 ### Fixed

@@ -49,6 +49,12 @@ log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') [HYPE SMOKE] $level: $msg" >> "$LOGS_DIR/hype.log"
 }
 
+# Parse YAML value: strip comments, quotes, whitespace
+# Handles: '""  # comment' -> '', 'value  # comment' -> 'value', '"quoted"' -> 'quoted'
+parse_yaml_value() {
+    echo "$1" | sed -e 's/#.*//' -e 's/"//g' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
+}
+
 # Get project type from SPEC.md
 get_project_type() {
     if [ ! -f "$PROJECT_DIR/SPEC.md" ]; then
@@ -245,19 +251,24 @@ ensure_testing_config() {
 3. Create .hype/testing.yaml with this structure:
 
 \`\`\`yaml
-# .hype/testing.yaml - Testing configuration (auto-generated)
-type: web  # web|api|cli|library
-build_command: npm run build  # or empty if not needed
+# .hype/testing.yaml - Testing configuration
+# type: web|api|cli|library
+# build_command: leave empty if no build needed (e.g. Python)
+# start_command: command to start the dev server
+# health_check: endpoint to verify server is ready
+type: web
+build_command: npm run build
 start_command: npm run dev
 test_url: http://localhost:3000
-health_check: /  # endpoint to verify server is ready
-startup_timeout: 30  # seconds to wait for server
+health_check: /
+startup_timeout: 30
 \`\`\`
 
 ## Important
 - Use ACTUAL commands for this project (don't guess)
 - Test that commands work before saving
-- For Python: check for uvicorn, flask, django commands
+- If no build needed (Python, etc.), leave build_command empty or omit it
+- For Python: use uvicorn, flask run, django runserver, etc.
 - For Node: check package.json scripts
 - For Go: check for main.go or Makefile
 
@@ -283,14 +294,30 @@ done_when: .hype/testing.yaml exists with valid, tested commands" >/dev/null 2>&
 # Read testing config
 read_testing_config() {
     local config_file="$PROJECT_DIR/.hype/testing.yaml"
+    local raw_val
 
-    # Export config values for use in other functions
-    TESTING_TYPE=$(grep "^type:" "$config_file" 2>/dev/null | cut -d: -f2- | sed 's/^[ ]*//' || echo "web")
-    TESTING_BUILD_CMD=$(grep "^build_command:" "$config_file" 2>/dev/null | cut -d: -f2- | sed 's/^[ ]*//' || echo "")
-    TESTING_START_CMD=$(grep "^start_command:" "$config_file" 2>/dev/null | cut -d: -f2- | sed 's/^[ ]*//')
-    TESTING_URL=$(grep "^test_url:" "$config_file" 2>/dev/null | cut -d: -f2- | sed 's/^[ ]*//' || echo "http://localhost:3000")
-    TESTING_HEALTH=$(grep "^health_check:" "$config_file" 2>/dev/null | cut -d: -f2- | sed 's/^[ ]*//' || echo "/")
-    TESTING_TIMEOUT=$(grep "^startup_timeout:" "$config_file" 2>/dev/null | cut -d: -f2- | sed 's/^[ ]*//' || echo "30")
+    # Export config values for use in other functions (parsed to handle comments/quotes)
+    raw_val=$(grep "^type:" "$config_file" 2>/dev/null | cut -d: -f2- || echo "web")
+    TESTING_TYPE=$(parse_yaml_value "$raw_val")
+    [ -z "$TESTING_TYPE" ] && TESTING_TYPE="web"
+
+    raw_val=$(grep "^build_command:" "$config_file" 2>/dev/null | cut -d: -f2- || echo "")
+    TESTING_BUILD_CMD=$(parse_yaml_value "$raw_val")
+
+    raw_val=$(grep "^start_command:" "$config_file" 2>/dev/null | cut -d: -f2- || echo "")
+    TESTING_START_CMD=$(parse_yaml_value "$raw_val")
+
+    raw_val=$(grep "^test_url:" "$config_file" 2>/dev/null | cut -d: -f2- || echo "http://localhost:3000")
+    TESTING_URL=$(parse_yaml_value "$raw_val")
+    [ -z "$TESTING_URL" ] && TESTING_URL="http://localhost:3000"
+
+    raw_val=$(grep "^health_check:" "$config_file" 2>/dev/null | cut -d: -f2- || echo "/")
+    TESTING_HEALTH=$(parse_yaml_value "$raw_val")
+    [ -z "$TESTING_HEALTH" ] && TESTING_HEALTH="/"
+
+    raw_val=$(grep "^startup_timeout:" "$config_file" 2>/dev/null | cut -d: -f2- || echo "30")
+    TESTING_TIMEOUT=$(parse_yaml_value "$raw_val")
+    [ -z "$TESTING_TIMEOUT" ] && TESTING_TIMEOUT="30"
 
     export TESTING_TYPE TESTING_BUILD_CMD TESTING_START_CMD TESTING_URL TESTING_HEALTH TESTING_TIMEOUT
 }

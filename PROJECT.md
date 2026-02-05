@@ -61,7 +61,7 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 
 | Фаза | Агент | Что происходит |
 |------|-------|----------------|
-| INIT | Tech Writer | Собирает требования, создаёт SPEC.md |
+| INIT | Tech Writer | Собирает требования, создаёт SPEC.md (+ deep analysis для больших проектов) |
 | PLANNING | Architect | Создаёт задачи в beads, расставляет deps |
 | HELPERS | Analysts ×5 | Параллельный аудит плана |
 | PLAN_REVIEW | Architect | Ревью добавлений от Analysts |
@@ -84,6 +84,10 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 **Hard gate:** P0 bugs блокируют milestone:smoke-test-done → возврат в IMPLEMENTATION
 
 **Regression detection:** Если баг был закрыт, но вернулся — testers reopenят его с `regression` label. Architect анализирует регрессии в режиме `smoke_review`: эскалирует модель, отправляет аналитикам, или понижает приоритет.
+
+### Deep Analysis (INIT)
+
+Для существующих проектов с >50 файлами кода и без хорошего README — автоматически запускается глубокий анализ через Claude (Opus). Tech Writer получает обогащённый контекст об архитектуре проекта.
 
 ## Ключевые принципы
 

@@ -881,8 +881,13 @@ show_active_work() {
     # Check executor logs (WORK)
     for log_file in "$LOGS_DIR"/executor-*.log; do
         [ -f "$log_file" ] || continue
-        local task_id size mtime age status
+        local task_id size mtime age status task_status
         task_id=$(basename "$log_file" .log | sed 's/executor-//')
+
+        # Skip if task is not in_progress
+        task_status=$(bd show "$task_id" --json 2>/dev/null | jq -r 'if type == "array" then .[0].status else .status end' 2>/dev/null || echo "unknown")
+        [ "$task_status" != "in_progress" ] && continue
+
         size=$(stat -f%z "$log_file" 2>/dev/null || stat -c%s "$log_file" 2>/dev/null || echo "0")
         mtime=$(stat -f%m "$log_file" 2>/dev/null || stat -c%Y "$log_file" 2>/dev/null || echo "0")
         age=$((now - mtime))
@@ -902,8 +907,13 @@ show_active_work() {
     # Check senior-executor logs (CHECK)
     for log_file in "$LOGS_DIR"/senior-executor-*.log; do
         [ -f "$log_file" ] || continue
-        local task_id size mtime age status
+        local task_id size mtime age status task_status
         task_id=$(basename "$log_file" .log | sed 's/senior-executor-//')
+
+        # Skip if task is not in_progress (review done)
+        task_status=$(bd show "$task_id" --json 2>/dev/null | jq -r 'if type == "array" then .[0].status else .status end' 2>/dev/null || echo "unknown")
+        [ "$task_status" != "in_progress" ] && continue
+
         size=$(stat -f%z "$log_file" 2>/dev/null || stat -c%s "$log_file" 2>/dev/null || echo "0")
         mtime=$(stat -f%m "$log_file" 2>/dev/null || stat -c%Y "$log_file" 2>/dev/null || echo "0")
         age=$((now - mtime))

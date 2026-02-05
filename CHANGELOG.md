@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.7] - 2026-02-05
+
+### Fixed
+
+- **Active log shows stale tasks** - `show_active_work()` showed tasks from old log files even if task was already closed. Now checks task status in beads - only shows tasks that are actually `in_progress`.
+
+---
+
 ## [1.7.6] - 2026-02-05
 
 ### Changed

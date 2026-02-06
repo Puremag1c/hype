@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.0.1] - 2026-02-06
+
+### Changed
+
+- **CI: parallel test execution** - Integration and e2e tests now run with `bats --jobs 4` for faster CI
+- **Test helpers** - Added `skip_if_ci` and `skip_if_flaky` helpers for timing-dependent tests
+
+---
+
 ## [2.0.0] - 2026-02-06
 
 ### Added

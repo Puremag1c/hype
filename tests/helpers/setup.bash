@@ -100,3 +100,19 @@ run_script() {
     shift
     bash "$SCRIPTS_DIR/$script" "$@"
 }
+
+# Helper: skip slow tests in CI
+# Usage: skip_if_ci "reason"
+skip_if_ci() {
+    if [[ -n "${CI:-}" ]]; then
+        skip "$1 (CI)"
+    fi
+}
+
+# Helper: skip tests that need daemon sync timing
+# These are flaky in CI due to timing issues
+skip_if_flaky() {
+    if [[ -n "${CI:-}" ]]; then
+        skip "Flaky in CI - timing dependent"
+    fi
+}

@@ -112,7 +112,13 @@ run_test_suite() {
     log_info "Running $suite tests ($test_files file(s))..."
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-    bats --tap "$test_dir"
+    # Use parallel execution: 4 jobs for integration/e2e, sequential for unit
+    local jobs_flag=""
+    if [[ "$suite" != "unit" ]]; then
+        jobs_flag="--jobs 4"
+    fi
+
+    bats --tap $jobs_flag "$test_dir"
 }
 
 main() {

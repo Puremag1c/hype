@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.0.5] - 2026-02-06
+
+### Fixed
+
+- **Symlink bug in doctor_test.bats** - `mkdir` created scripts/ directory before `ln -sf`, causing symlink to be placed inside as `scripts/scripts` instead of replacing it. Test "Doctor: can detect current phase" now passes.
+
+---
+
+## [2.0.4] - 2026-02-06
+
+### Changed
+
+- **Removed unnecessary skip_if_ci** - Reverted skip added in 2.0.4 since root cause was symlink bug, not CI timing.
+
+---
+
 ## [2.0.3] - 2026-02-06
 
 ### Fixed

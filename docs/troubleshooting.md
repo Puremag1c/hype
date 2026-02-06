@@ -522,6 +522,78 @@ bd delete <milestone-id>
 
 ---
 
+## SMOKE_TEST проблемы
+
+### PROBLEM: Testers see OLD code (stale code loop)
+
+**Симптомы:**
+- SMOKE_TEST → bug → IMPLEMENTATION → fix → SMOKE_TEST → тот же bug
+- Executor видит что фикс уже есть в исходниках
+- Бесконечный цикл fix → test → same bug
+
+**Причина:**
+Python package без editable install или system python вместо venv.
+Сервер запущен с установленным пакетом (site-packages), не с исходным кодом.
+
+**Диагностика:**
+```bash
+# Проверить testing.yaml
+cat .hype/testing.yaml
+
+# Проверить какой python используется сервером
+lsof -p $(cat .hype/server.pid 2>/dev/null) 2>/dev/null | grep python
+
+# Сравнить mtime исходника vs установленного
+stat -f %m src/module.py
+stat -f %m $(python3 -c "import module; print(module.__file__)")
+```
+
+**Решение:**
+HYPE v2.0.11+ автоматически создаёт P0 task через `validate_testing_config()`.
+
+**Manual fix (testing.yaml):**
+```yaml
+# ДО (неправильно):
+build_command: ""
+start_command: python3 -m chatfilter.main
+
+# ПОСЛЕ (правильно):
+build_command: .venv/bin/pip install -e .
+start_command: .venv/bin/python -m chatfilter.main
+```
+
+**Почему это важно:**
+- `python3` = system python → читает `/Library/Frameworks/.../site-packages/`
+- `.venv/bin/python` = venv python → читает проект
+- `pip install -e .` = editable install → изменения видны сразу
+
+---
+
+### PROBLEM: SMOKE_TEST config issues detected
+
+**Симптомы:**
+- В логах: "Testing config issues detected"
+- P0 task "SMOKE: Fix testing.yaml configuration" создан
+- SMOKE_TEST не запускается
+
+**Причина:**
+`validate_testing_config()` обнаружила проблемы конфигурации.
+
+**Диагностика:**
+```bash
+bd list --status=open --json | jq '.[] | select(.title | contains("testing.yaml"))'
+cat .hype/testing.yaml
+```
+
+**Решение:**
+Это нормальное поведение — система создала P0 task для самоисцеления.
+Opus исправит testing.yaml в следующей IMPLEMENTATION итерации.
+
+**Manual fix:**
+Исправить testing.yaml согласно инструкциям в P0 task.
+
+---
+
 ## Формат doctor-log
 
 ```markdown

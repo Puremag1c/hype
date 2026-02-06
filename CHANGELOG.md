@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.0.11] - 2026-02-06
+
+### Fixed
+
+- **Self-healing for SMOKE_TEST config issues** - Instead of warnings (which nobody reads), `validate_testing_config()` now creates P0 task and blocks SMOKE_TEST:
+  - **Python package without build_command** → P0 task created, routes to IMPLEMENTATION
+  - **venv exists but system python used** → P0 task created, routes to IMPLEMENTATION
+  - Opus fixes testing.yaml automatically in next iteration
+  - Prevents infinite loop: fix → test old code → same bug → fix
+
+- **Updated troubleshooting docs** - Added SMOKE_TEST problems section for Doctor agent
+
+### Changed
+
+- Removed redundant warnings from `run_build()` and `start_dev_server()` - validation happens earlier now
+
+---
+
 ## [2.0.10] - 2026-02-06
 
 ### Fixed

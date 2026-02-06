@@ -7,57 +7,71 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  unit:
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
         os: [macos-latest, ubuntu-latest]
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.21'
-
-      - name: Install beads (bd)
-        run: |
-          git clone --depth 1 https://github.com/steveyegge/beads.git /tmp/beads
-          cd /tmp/beads/cmd/bd
-          go build -o $HOME/go/bin/bd .
-          echo "$HOME/go/bin" >> $GITHUB_PATH
-
+      - uses: actions/checkout@v4
       - name: Install bats (macOS)
         if: runner.os == 'macOS'
         run: brew install bats-core
-
       - name: Install bats (Linux)
         if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y bats
+        run: sudo apt-get update && sudo apt-get install -y bats
+      - run: ./tests/run_tests.sh unit
 
-      - name: Install jq
+  integration:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      - name: Install beads
+        run: |
+          git clone --depth 1 https://github.com/steveyegge/beads.git /tmp/beads
+          cd /tmp/beads/cmd/bd && go build -o $HOME/go/bin/bd .
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+      - name: Install bats (macOS)
+        if: runner.os == 'macOS'
+        run: brew install bats-core
+      - name: Install bats (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get install -y jq
-
-      - name: Verify dependencies
-        run: |
-          bats --version
-          bd --version || echo "bd installed"
-          jq --version
-
-      - name: Run unit tests
-        run: ./tests/run_tests.sh unit
-
-      - name: Run integration tests
-        run: timeout 300 ./tests/run_tests.sh integration || echo "Integration tests timed out or failed"
+        run: sudo apt-get update && sudo apt-get install -y bats jq
+      - run: ./tests/run_tests.sh integration
         continue-on-error: true
 
-      - name: Run e2e tests
-        run: timeout 300 ./tests/run_tests.sh e2e || echo "E2E tests timed out or failed"
+  e2e:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      - name: Install beads
+        run: |
+          git clone --depth 1 https://github.com/steveyegge/beads.git /tmp/beads
+          cd /tmp/beads/cmd/bd && go build -o $HOME/go/bin/bd .
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+      - name: Install bats (macOS)
+        if: runner.os == 'macOS'
+        run: brew install bats-core
+      - name: Install bats (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y bats jq
+      - run: ./tests/run_tests.sh e2e
         continue-on-error: true

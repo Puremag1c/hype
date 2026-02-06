@@ -82,7 +82,14 @@ HAS_PROJECT_DONE=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.labels[]? == "mil
 HAS_SMOKE_TEST_DONE=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.labels[]? == "milestone:smoke-test-done")] | length' 2>/dev/null || echo "0")
 
 # P0 bugs (block SMOKE_TEST milestone)
-P0_BUGS_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open") | select(.priority == 0)] | length' 2>/dev/null || echo "0")
+# ВАЖНО: исключаем trigger tasks (run-tester-*, run-analyst-*, run-plan-review)
+# Они имеют priority 0 для приоритизации исполнения, но это не баги
+P0_BUGS_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] |
+  select(.status == "open") |
+  select(.priority == 0) |
+  select(.title | test("^run-(tester|analyst)-") | not) |
+  select(.title == "run-plan-review" | not)
+] | length' 2>/dev/null || echo "0")
 
 # Regression tasks (from SMOKE_TEST, need Architect review)
 REGRESSION_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open") | select(.labels[]? == "regression")] | length' 2>/dev/null || echo "0")
@@ -98,8 +105,9 @@ else
     PROGRESS_PCT=0
 fi
 
-# Trigger tasks для analysts (из open tasks)
+# Trigger tasks (из open tasks)
 ANALYST_TRIGGERS_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open") | select(.title | test("^run-analyst-"))] | length' 2>/dev/null || echo "0")
+TESTER_TRIGGERS_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open") | select(.title | test("^run-tester-"))] | length' 2>/dev/null || echo "0")
 PLAN_REVIEW_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open") | select(.title == "run-plan-review")] | length' 2>/dev/null || echo "0")
 
 # === Debug output ===
@@ -109,7 +117,7 @@ if [ "${CLAUDEV_DEBUG:-false}" = "true" ]; then
     >&2 echo "SPEC.md exists: $([ -f "$PROJECT_ROOT/SPEC.md" ] && echo "yes" || echo "no")"
     >&2 echo "Tasks: total=$TOTAL, open=$OPEN, in_progress=$IN_PROGRESS, closed=$CLOSED"
     >&2 echo "Milestones: planning=$HAS_PLANNING_DONE, analysts=$HAS_ANALYSTS_DONE, reviewed=$HAS_PLAN_REVIEWED, smoke=$HAS_SMOKE_TEST_DONE, done=$HAS_PROJECT_DONE"
-    >&2 echo "Triggers: analyst_open=$ANALYST_TRIGGERS_OPEN, plan_review=$PLAN_REVIEW_OPEN"
+    >&2 echo "Triggers: analyst_open=$ANALYST_TRIGGERS_OPEN, tester_open=$TESTER_TRIGGERS_OPEN, plan_review=$PLAN_REVIEW_OPEN"
     >&2 echo "P0 bugs open: $P0_BUGS_OPEN, regressions: $REGRESSION_OPEN"
     >&2 echo "==========================="
 fi
@@ -219,6 +227,22 @@ fi
 if [ "$REGRESSION_OPEN" -gt 0 ]; then
     output_json "SMOKE_REVIEW"
     exit 0
+fi
+
+# SMOKE_TEST via triggers: все реальные задачи закрыты, есть только tester trigger tasks
+# Это позволяет run-testers.sh подхватить trigger и запустить tester agent
+if [ "$TESTER_TRIGGERS_OPEN" -gt 0 ] && [ "$IN_PROGRESS" -eq 0 ]; then
+    # Проверяем что ВСЕ open задачи - это trigger tasks (не реальная работа)
+    NON_TRIGGER_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] |
+      select(.status == "open") |
+      select(.title | test("^run-(tester|analyst)-") | not) |
+      select(.title == "run-plan-review" | not)
+    ] | length' 2>/dev/null || echo "0")
+
+    if [ "$NON_TRIGGER_OPEN" -eq 0 ] && [ "$HAS_SMOKE_TEST_DONE" -eq 0 ]; then
+        output_json "SMOKE_TEST"
+        exit 0
+    fi
 fi
 
 # IMPLEMENTATION: есть открытые или in_progress задачи

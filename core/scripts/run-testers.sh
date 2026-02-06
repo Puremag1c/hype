@@ -245,7 +245,7 @@ create_tester_triggers() {
     for tester in $testers; do
         local trigger_title="run-tester-$tester"
         if ! echo "$bd_cache" | jq -e ".[] | select(.title == \"$trigger_title\")" > /dev/null 2>&1; then
-            bd create --title="$trigger_title" --type=task --priority=0 >/dev/null 2>&1
+            bd create --title="$trigger_title" --type=task --priority=0 --label=trigger >/dev/null 2>&1
             log "INFO" "Created trigger: $trigger_title"
         fi
     done

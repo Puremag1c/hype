@@ -143,7 +143,7 @@ create_milestone() {
 
     # Create pending analyst trigger
     cd "$INT_TMPDIR"
-    bd create --title="run-analyst-ux" --type=task --priority=2
+    bd create --title="run-analyst-ux" --type=task --priority=2 --label=trigger
 
     run get_phase
     [[ "$status" -eq 0 ]]

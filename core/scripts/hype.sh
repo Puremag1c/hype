@@ -379,7 +379,7 @@ create_analyst_triggers() {
     for analyst in "${analysts[@]}"; do
         local trigger_title="run-analyst-$analyst"
         if ! bd list --json 2>/dev/null | jq -e ".[] | select(.title == \"$trigger_title\")" > /dev/null 2>&1; then
-            bd create --title="$trigger_title" --type=task --priority=1 >/dev/null 2>&1 || true
+            bd create --title="$trigger_title" --type=task --priority=1 --label=trigger >/dev/null 2>&1 || true
             log "INFO" "Created trigger: $trigger_title"
         fi
     done
@@ -761,7 +761,7 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
             # Create trigger task if not exists
             if ! bd list --json 2>/dev/null | jq -e '.[] | select(.title == "run-plan-review")' > /dev/null 2>&1; then
-                bd create --title="run-plan-review" --type=task --priority=0 >/dev/null 2>&1 || true
+                bd create --title="run-plan-review" --type=task --priority=0 --label=trigger >/dev/null 2>&1 || true
             fi
             run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "plan_review" "" "${PLAN_REVIEW_TIMEOUT:-10m}"
             ;;
@@ -776,7 +776,7 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
 
             # Create trigger task if not exists
             if ! bd list --json 2>/dev/null | jq -e '.[] | select(.title == "run-smoke-review")' > /dev/null 2>&1; then
-                bd create --title="run-smoke-review" --type=task --priority=0 >/dev/null 2>&1 || true
+                bd create --title="run-smoke-review" --type=task --priority=0 --label=trigger >/dev/null 2>&1 || true
             fi
 
             # Collect regression task IDs for Architect prompt
@@ -865,7 +865,7 @@ For each task: bd show <id> --json, then decide action and REMOVE regression lab
 
                 # Create trigger task for versioner
                 local versioner_trigger
-                versioner_trigger=$(bd create --title="run-versioning" --type=task --priority=0 2>&1 | grep -oE '[A-Za-z]+-[a-z0-9]+' | head -1)
+                versioner_trigger=$(bd create --title="run-versioning" --type=task --priority=0 --label=trigger 2>&1 | grep -oE '[A-Za-z]+-[a-z0-9]+' | head -1)
 
                 if [ -n "$versioner_trigger" ]; then
                     local versioner_model

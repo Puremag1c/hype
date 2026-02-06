@@ -273,37 +273,62 @@ run_claude_with_progress() {
     local workdir="${7:-$(pwd)}"
 
     local raw_output="$output_file.stream"
+    local running_marker="$raw_output.running"
+    local tail_pid_file="$raw_output.tail.pid"
     local progress_pid=""
 
-    # Cleanup function for trap
+    # Cleanup function for trap - kills all related processes
     _cleanup_progress() {
+        # Signal progress reader to stop gracefully
+        rm -f "$running_marker" 2>/dev/null || true
+
         if [ -n "$progress_pid" ]; then
-            # Kill children first (tail, jq), then parent subshell
-            # pkill -P is more reliable than kill -- -$pid for subshells
+            # Kill progress subshell and its children
             pkill -P "$progress_pid" 2>/dev/null || true
             kill "$progress_pid" 2>/dev/null || true
+
+            # Kill tail by saved PID (more reliable than pkill -f)
+            if [ -f "$tail_pid_file" ]; then
+                local tail_pid
+                tail_pid=$(cat "$tail_pid_file" 2>/dev/null)
+                if [ -n "$tail_pid" ]; then
+                    kill "$tail_pid" 2>/dev/null || true
+                fi
+                rm -f "$tail_pid_file" 2>/dev/null || true
+            fi
+
             wait "$progress_pid" 2>/dev/null || true
-            # Fallback: kill any orphaned tail watching our stream file
-            pkill -f "tail -F $raw_output" 2>/dev/null || true
         fi
-        # Clean up stream file
-        rm -f "$raw_output" 2>/dev/null || true
+
+        # Clean up stream file and markers
+        rm -f "$raw_output" "$running_marker" "$tail_pid_file" 2>/dev/null || true
     }
 
     # Set trap for cleanup on exit/interrupt
     trap _cleanup_progress EXIT INT TERM
 
-    # Create raw output file before starting tail
+    # Create raw output file and running marker before starting tail
     : > "$raw_output"
+    touch "$running_marker"
 
-    # Start progress extractor in background (shows tool calls in real-time)
-    # tail -F retries if file is replaced, jq --unbuffered for immediate output
-    # Use set -m to enable job control for process group kill
+    # Start progress extractor in background
+    # Uses running_marker to detect when to stop (avoids infinite tail -F)
+    # Architecture: subshell -> tail -> jq -> while loop
+    # tail PID saved for explicit cleanup since it doesn't exit on pipe close
     (
+        trap 'exit 0' TERM INT
         sleep 0.2
-        tail -F "$raw_output" 2>/dev/null | \
+        # Pipeline: tail watches file, jq extracts tool names, while loop prints
+        # Save tail PID to file for cleanup (tail -F never exits on its own)
+        {
+            tail -F "$raw_output" 2>/dev/null &
+            echo $! > "$tail_pid_file"
+            wait $!
+        } | \
         jq -r --unbuffered 'select(.type == "tool_use") | .name' 2>/dev/null | \
         while IFS= read -r tool_name; do
+            # Exit if marker file removed (graceful shutdown signal)
+            [ -f "$running_marker" ] || break
             printf '\033[90m%s\033[0m [%s] → \033[36m%s\033[0m\n' "$(date '+%H:%M:%S')" "$label" "$tool_name"
             printf '%s [%s] → %s\n' "$(date '+%H:%M:%S')" "$label" "$tool_name" >> "$logs_dir/hype.log"
         done
@@ -319,11 +344,24 @@ run_claude_with_progress() {
         tee "$raw_output" >/dev/null
     local exit_code=${PIPESTATUS[1]}
 
+    # Signal progress reader to stop
+    rm -f "$running_marker" 2>/dev/null || true
+
     # Cleanup progress extractor (explicit, trap handles abnormal exit)
     pkill -P "$progress_pid" 2>/dev/null || true
     kill "$progress_pid" 2>/dev/null || true
+
+    # Kill tail by saved PID
+    if [ -f "$tail_pid_file" ]; then
+        local tail_pid
+        tail_pid=$(cat "$tail_pid_file" 2>/dev/null)
+        if [ -n "$tail_pid" ]; then
+            kill "$tail_pid" 2>/dev/null || true
+        fi
+        rm -f "$tail_pid_file" 2>/dev/null || true
+    fi
+
     wait "$progress_pid" 2>/dev/null || true
-    pkill -f "tail -F $raw_output" 2>/dev/null || true
 
     # Convert stream-json to readable log (extract assistant text messages)
     jq -r 'select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text' "$raw_output" 2>/dev/null > "$output_file" || cp "$raw_output" "$output_file"

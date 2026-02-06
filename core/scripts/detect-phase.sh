@@ -82,13 +82,14 @@ HAS_PROJECT_DONE=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.labels[]? == "mil
 HAS_SMOKE_TEST_DONE=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.labels[]? == "milestone:smoke-test-done")] | length' 2>/dev/null || echo "0")
 
 # P0 bugs (block SMOKE_TEST milestone)
-# ВАЖНО: исключаем trigger tasks (run-tester-*, run-analyst-*, run-plan-review)
-# Они имеют priority 0 для приоритизации исполнения, но это не баги
+# Trigger tasks have label "trigger" - exclude them from P0 bug count
+# Fallback: also exclude by title pattern for backward compatibility (pre-label triggers)
 P0_BUGS_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] |
   select(.status == "open") |
   select(.priority == 0) |
-  select(.title | test("^run-(tester|analyst)-") | not) |
-  select(.title == "run-plan-review" | not)
+  select((.labels // []) | index("trigger") | not) |
+  select(.title | test("^run-(tester|analyst|smoke|plan)-") | not) |
+  select(.title | test("^run-versioning$") | not)
 ] | length' 2>/dev/null || echo "0")
 
 # Regression tasks (from SMOKE_TEST, need Architect review)
@@ -106,6 +107,18 @@ else
 fi
 
 # Trigger tasks (из open tasks)
+# Primary: detect by label (new triggers)
+# Fallback: detect by title pattern (legacy triggers without label)
+TRIGGERS_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] |
+  select(.status == "open") |
+  select(
+    ((.labels // []) | index("trigger")) or
+    (.title | test("^run-(tester|analyst|smoke|plan)-")) or
+    (.title == "run-versioning")
+  )
+] | length' 2>/dev/null || echo "0")
+
+# Specific trigger counts (for phase logic)
 ANALYST_TRIGGERS_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open") | select(.title | test("^run-analyst-"))] | length' 2>/dev/null || echo "0")
 TESTER_TRIGGERS_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open") | select(.title | test("^run-tester-"))] | length' 2>/dev/null || echo "0")
 PLAN_REVIEW_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open") | select(.title == "run-plan-review")] | length' 2>/dev/null || echo "0")
@@ -117,7 +130,7 @@ if [ "${CLAUDEV_DEBUG:-false}" = "true" ]; then
     >&2 echo "SPEC.md exists: $([ -f "$PROJECT_ROOT/SPEC.md" ] && echo "yes" || echo "no")"
     >&2 echo "Tasks: total=$TOTAL, open=$OPEN, in_progress=$IN_PROGRESS, closed=$CLOSED"
     >&2 echo "Milestones: planning=$HAS_PLANNING_DONE, analysts=$HAS_ANALYSTS_DONE, reviewed=$HAS_PLAN_REVIEWED, smoke=$HAS_SMOKE_TEST_DONE, done=$HAS_PROJECT_DONE"
-    >&2 echo "Triggers: analyst_open=$ANALYST_TRIGGERS_OPEN, tester_open=$TESTER_TRIGGERS_OPEN, plan_review=$PLAN_REVIEW_OPEN"
+    >&2 echo "Triggers: total=$TRIGGERS_OPEN (analyst=$ANALYST_TRIGGERS_OPEN, tester=$TESTER_TRIGGERS_OPEN, plan_review=$PLAN_REVIEW_OPEN)"
     >&2 echo "P0 bugs open: $P0_BUGS_OPEN, regressions: $REGRESSION_OPEN"
     >&2 echo "==========================="
 fi
@@ -233,10 +246,14 @@ fi
 # Это позволяет run-testers.sh подхватить trigger и запустить tester agent
 if [ "$TESTER_TRIGGERS_OPEN" -gt 0 ] && [ "$IN_PROGRESS" -eq 0 ]; then
     # Проверяем что ВСЕ open задачи - это trigger tasks (не реальная работа)
+    # Use label-based detection with fallback to title patterns
     NON_TRIGGER_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] |
       select(.status == "open") |
-      select(.title | test("^run-(tester|analyst)-") | not) |
-      select(.title == "run-plan-review" | not)
+      select(
+        ((.labels // []) | index("trigger") | not) and
+        (.title | test("^run-(tester|analyst|smoke|plan)-") | not) and
+        (.title != "run-versioning")
+      )
     ] | length' 2>/dev/null || echo "0")
 
     if [ "$NON_TRIGGER_OPEN" -eq 0 ] && [ "$HAS_SMOKE_TEST_DONE" -eq 0 ]; then

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.14] - 2026-02-06
+
+### Fixed
+
+- **Model escalation ignored** - When escalating to opus, old model labels (`model:haiku`, `model:sonnet`) were not removed. This caused `head -1` to return the old label. Fixed in all 3 escalation points: review retry, audit retry (executor), audit retry (senior-executor).
+
+---
+
 ## [1.9.13] - 2026-02-06
 
 ### Changed

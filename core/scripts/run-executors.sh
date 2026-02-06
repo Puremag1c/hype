@@ -358,6 +358,7 @@ Audit task $task_id failed after 3 attempts (timeout/error).
             # 1st failure - escalate to opus
             log "INFO" "Escalating $task_id to opus for retry"
             bd update "$task_id" --status=open --remove-label=executor \
+                --remove-label=model:haiku --remove-label=model:sonnet \
                 --add-label=model:opus --add-label=audit-retry:1 \
                 --notes="Retry 2: escalated to opus after sonnet failure." >/dev/null 2>&1 || true
         fi

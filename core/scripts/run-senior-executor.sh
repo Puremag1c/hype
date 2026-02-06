@@ -349,7 +349,8 @@ $task_notes
                 # Second retry - escalate to opus
                 log "INFO" "RETRY: $task_id - escalating to opus (attempt 2)"
                 bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
-                    --remove-label=audit-retry:1 --add-label=audit-retry:2 --add-label=model:opus \
+                    --remove-label=audit-retry:1 --remove-label=model:haiku --remove-label=model:sonnet \
+                    --add-label=audit-retry:2 --add-label=model:opus \
                     --notes="Retry 2: escalated to opus. Findings required (min 50 chars)."
             else
                 # First retry
@@ -480,7 +481,11 @@ $review_context
 
         if [ "$review_retry" -ge 3 ]; then
             log "WARN" "REVIEW ESCALATE: $task_id - 3 attempts without action, escalating to opus"
-            bd update "$task_id" --remove-label="review-retry:$((review_retry-1))" --add-label="model:opus" \
+            bd update "$task_id" \
+                --remove-label="review-retry:$((review_retry-1))" \
+                --remove-label="model:haiku" \
+                --remove-label="model:sonnet" \
+                --add-label="model:opus" \
                 --notes="Review escalated to opus after 3 failed attempts."
         else
             log "WARN" "REVIEW RETRY: $task_id - no action taken (attempt $review_retry/3)"

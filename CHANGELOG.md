@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.3] - 2026-02-06
+
+### Fixed
+
+- **SPEC.prev.md in target project gitignore** - Added `SPEC.prev.md` to gitignore template for target projects. File is generated during `cleanup_iteration()` and should not be tracked. Added to `hype init` and `hype update` paths.
+
+---
+
 ## [1.9.2] - 2026-02-05
 
 ### Fixed

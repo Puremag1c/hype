@@ -70,3 +70,18 @@ bd close $TRIGGER_TASK --reason="Reliability analysis complete, added N tasks"
 - `[Reliability] Add circuit breaker for external service`
 - `[Reliability] Limit batch size to prevent OOM`
 - `[Reliability] Add graceful shutdown handler`
+
+## Code vs Audit задачи
+
+**По умолчанию все задачи — code tasks** (Executor пишет код).
+
+**Для audit задачи** (только анализ, без изменения кода) добавь label `audit`:
+
+```bash
+bd create --title="[Reliability] Audit error handling paths" --type=task --priority=2 \
+  --label=added-by:analyst-reliability --label=model:sonnet --label=audit \
+  --description="AUDIT SCOPE: src/services/
+done_when: findings documented in notes"
+```
+
+**Правило:** Если знаешь что нужен fix → создавай code task. Audit только когда нужен анализ без немедленного исправления.

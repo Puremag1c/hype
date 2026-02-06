@@ -71,3 +71,18 @@ bd close $TRIGGER_TASK --reason="OPS analysis complete, added N tasks"
 - `[OPS] Add integration tests for API`
 - `[OPS] Create deployment documentation`
 - `[OPS] Add error tracking (Sentry)`
+
+## Code vs Audit задачи
+
+**По умолчанию все задачи — code tasks** (Executor пишет код).
+
+**Для audit задачи** (только анализ, без изменения кода) добавь label `audit`:
+
+```bash
+bd create --title="[OPS] Audit deployment pipeline" --type=task --priority=2 \
+  --label=added-by:analyst-ops --label=model:sonnet --label=audit \
+  --description="AUDIT SCOPE: .github/workflows/
+done_when: findings documented in notes"
+```
+
+**Правило:** Если знаешь что нужен fix → создавай code task. Audit только когда нужен анализ без немедленного исправления.

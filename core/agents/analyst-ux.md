@@ -69,3 +69,18 @@ bd close $TRIGGER_TASK --reason="UX analysis complete, added N tasks"
 - `[UX] Show error message on API failure`
 - `[UX] Add confirmation dialog for delete action`
 - `[UX] Improve mobile navigation`
+
+## Code vs Audit задачи
+
+**По умолчанию все задачи — code tasks** (Executor пишет код).
+
+**Для audit задачи** (только анализ, без изменения кода) добавь label `audit`:
+
+```bash
+bd create --title="[UX] Audit mobile responsiveness" --type=task --priority=2 \
+  --label=added-by:analyst-ux --label=model:sonnet --label=audit \
+  --description="AUDIT SCOPE: src/components/
+done_when: findings documented in notes"
+```
+
+**Правило:** Если знаешь что нужен fix → создавай code task. Audit только когда нужен анализ без немедленного исправления.

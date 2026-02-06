@@ -102,3 +102,18 @@ bd close $TRIGGER_TASK --reason="Architecture analysis complete, added N tasks"
 - `[Architecture] Move shared types to common module`
 - `[Architecture] Fix circular dependency between A and B`
 - `[Architecture] Rename files to follow convention`
+
+## Code vs Audit задачи
+
+**По умолчанию все задачи — code tasks** (Executor пишет код).
+
+**Для audit задачи** (только анализ, без изменения кода) добавь label `audit`:
+
+```bash
+bd create --title="[Architecture] Audit module dependencies" --type=task --priority=2 \
+  --label=added-by:analyst-architecture --label=model:sonnet --label=audit \
+  --description="AUDIT SCOPE: src/
+done_when: findings documented in notes"
+```
+
+**Правило:** Если знаешь что нужен fix → создавай code task. Audit только когда нужен анализ без немедленного исправления.

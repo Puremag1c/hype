@@ -73,3 +73,18 @@ bd close $TRIGGER_TASK --reason="Security analysis complete, added N tasks"
 - `[Security] Remove hardcoded API keys`
 - `[Security] Add input sanitization for user-generated content`
 - `[Security] Enable HTTPS redirect`
+
+## Code vs Audit задачи
+
+**По умолчанию все задачи — code tasks** (Executor пишет код).
+
+**Для audit задачи** (только анализ, без изменения кода) добавь label `audit`:
+
+```bash
+bd create --title="[Security] Audit authentication flow" --type=task --priority=1 \
+  --label=added-by:analyst-security --label=model:sonnet --label=audit \
+  --description="AUDIT SCOPE: src/auth/
+done_when: findings documented in notes"
+```
+
+**Правило:** Если знаешь что нужен fix → создавай code task. Audit только когда нужен анализ без немедленного исправления.

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.18] - 2026-02-06
+
+### Fixed
+
+- **Audit task detection was too aggressive** - Keywords in title (Verify/Audit/Check/Validate) and done_when heuristics caused false positives. Tasks like "Add email verification" were incorrectly routed to Auditor, which produced findings instead of code, causing senior-executor to get stuck (no commits). Now uses explicit opt-in only: label `audit` or "AUDIT SCOPE" in description. Default = code task (safer fallback).
+
+---
+
 ## [1.9.17] - 2026-02-06
 
 ### Added

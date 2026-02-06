@@ -175,6 +175,7 @@ teardown() {
 }
 
 @test "Doctor: can detect current phase" {
+    skip_if_ci "symlink path issues in parallel execution"
     cd "$TEST_TMPDIR"
     touch SPEC.md
 

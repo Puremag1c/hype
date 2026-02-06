@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.0.6] - 2026-02-06
+
+### Fixed
+
+- **Local tests work without GNU parallel** - `bats --jobs 4` now only used if `parallel` command is available. Local environments without parallel installed now run tests sequentially.
+
+---
+
 ## [2.0.5] - 2026-02-06
 
 ### Fixed

@@ -18,6 +18,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Install beads (bd)
+        run: |
+          go install github.com/steveyegge/beads/cmd/bd@latest
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+
       - name: Install bats (macOS)
         if: runner.os == 'macOS'
         run: brew install bats-core
@@ -32,13 +42,17 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get install -y jq
 
+      - name: Verify dependencies
+        run: |
+          bats --version
+          bd --version || echo "bd installed"
+          jq --version
+
       - name: Run unit tests
         run: ./tests/run_tests.sh unit
 
       - name: Run integration tests
         run: ./tests/run_tests.sh integration
-        continue-on-error: true  # Integration tests may need bd
 
       - name: Run e2e tests
         run: ./tests/run_tests.sh e2e
-        continue-on-error: true  # E2E tests need full environment

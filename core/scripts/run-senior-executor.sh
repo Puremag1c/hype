@@ -36,6 +36,8 @@ log() {
     local level=$1
     local msg=$2
     local color="" reset="\033[0m" gray="\033[90m"
+    # HYPE brand colors (fire gradient)
+    local hype_colored="\033[38;2;255;68;68mH\033[38;2;255;140;0mY\033[38;2;255;221;0mP\033[38;2;204;255;0mE\033[0m"
 
     case "$level" in
         INFO|SUCCESS)  color="\033[32m" ;;
@@ -44,7 +46,7 @@ log() {
         TASK_START)    color="\033[36m" ;;
     esac
 
-    printf "${gray}%s${reset} [HYPE CHECK] ${color}%s${reset}: %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$msg"
+    printf "${gray}%s${reset} [${hype_colored} CHECK] ${color}%s${reset}: %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$msg"
     echo "$(date '+%Y-%m-%d %H:%M:%S') [HYPE CHECK] $level: $msg" >> "$LOGS_DIR/hype.log"
 }
 

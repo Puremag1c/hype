@@ -36,8 +36,9 @@ mkdir -p "$PROJECT_DIR/.hype/evidence"
 log() {
     local level=$1
     local msg=$2
-    local color=""
-    local reset="\033[0m"
+    local color="" reset="\033[0m" gray="\033[90m"
+    # HYPE brand colors (fire gradient)
+    local hype_colored="\033[38;2;255;68;68mH\033[38;2;255;140;0mY\033[38;2;255;221;0mP\033[38;2;204;255;0mE\033[0m"
 
     case "$level" in
         INFO)  color="\033[32m" ;;  # green
@@ -45,7 +46,7 @@ log() {
         ERROR) color="\033[31m" ;;  # red
     esac
 
-    printf "${color}%s [HYPE SMOKE] %s: %s${reset}\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$msg"
+    printf "${gray}%s${reset} [${hype_colored} SMOKE] ${color}%s${reset}: %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$msg"
     echo "$(date '+%Y-%m-%d %H:%M:%S') [HYPE SMOKE] $level: $msg" >> "$LOGS_DIR/hype.log"
 }
 

@@ -273,12 +273,28 @@ run_claude_with_progress() {
     local workdir="${7:-$(pwd)}"
 
     local raw_output="$output_file.stream"
+    local progress_pid=""
+
+    # Cleanup function for trap
+    _cleanup_progress() {
+        if [ -n "$progress_pid" ]; then
+            # Kill entire process group (subshell + tail + jq)
+            kill -- -"$progress_pid" 2>/dev/null || kill "$progress_pid" 2>/dev/null || true
+            wait "$progress_pid" 2>/dev/null || true
+        fi
+        # Clean up stream file
+        rm -f "$raw_output" 2>/dev/null || true
+    }
+
+    # Set trap for cleanup on exit/interrupt
+    trap _cleanup_progress EXIT INT TERM
 
     # Create raw output file before starting tail
     : > "$raw_output"
 
     # Start progress extractor in background (shows tool calls in real-time)
     # tail -F retries if file is replaced, jq --unbuffered for immediate output
+    # Use set -m to enable job control for process group kill
     (
         sleep 0.2
         tail -F "$raw_output" 2>/dev/null | \
@@ -288,7 +304,7 @@ run_claude_with_progress() {
             printf '%s [%s] → %s\n' "$(date '+%H:%M:%S')" "$label" "$tool_name" >> "$logs_dir/hype.log"
         done
     ) &
-    local progress_pid=$!
+    progress_pid=$!
 
     # Run claude with stream-json output (in specified workdir)
     # Use env vars to safely pass workdir/model (avoids quote escaping issues)
@@ -299,13 +315,16 @@ run_claude_with_progress() {
         tee "$raw_output" >/dev/null
     local exit_code=${PIPESTATUS[1]}
 
-    # Cleanup progress extractor
-    kill $progress_pid 2>/dev/null || true
-    wait $progress_pid 2>/dev/null || true
+    # Cleanup progress extractor (explicit, trap handles abnormal exit)
+    kill -- -"$progress_pid" 2>/dev/null || kill "$progress_pid" 2>/dev/null || true
+    wait "$progress_pid" 2>/dev/null || true
 
     # Convert stream-json to readable log (extract assistant text messages)
     jq -r 'select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text' "$raw_output" 2>/dev/null > "$output_file" || cp "$raw_output" "$output_file"
     rm -f "$raw_output"
+
+    # Clear trap before returning
+    trap - EXIT INT TERM
 
     return $exit_code
 }

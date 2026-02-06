@@ -107,11 +107,23 @@ run_tester() {
     local bd_cache=$3  # Cached bd list --json (v1.9.0+)
     local trigger_task="run-tester-$tester"
     local agent_file=".claude/agents/tester-$tester.md"
+    local task_id=""
+
+    # Cleanup function - ensures task is closed on any exit
+    _tester_cleanup() {
+        if [ -n "$task_id" ]; then
+            local status
+            status=$(bd show "$task_id" --json 2>/dev/null | jq -r 'if type == "array" then .[0].status else .status end' 2>/dev/null || echo "unknown")
+            if [ "$status" != "closed" ]; then
+                log "WARN" "Cleanup: closing tester-$tester task $task_id"
+                bd close "$task_id" --reason="Tester cleanup (abnormal exit)" >/dev/null 2>&1 || true
+            fi
+        fi
+    }
 
     log "INFO" "Starting tester-$tester"
 
     # Find trigger task from cache
-    local task_id
     task_id=$(echo "$bd_cache" | jq -r ".[] | select(.title == \"$trigger_task\") | .id" | head -1)
 
     if [ -z "$task_id" ]; then
@@ -119,9 +131,14 @@ run_tester() {
         return 0
     fi
 
+    # Set trap for cleanup (after task_id is set)
+    trap _tester_cleanup EXIT INT TERM
+
     # Claim trigger task
     if ! bd update "$task_id" --status=in_progress >/dev/null 2>&1; then
         log "INFO" "Trigger $trigger_task already claimed"
+        trap - EXIT INT TERM  # Clear trap - not our task
+        task_id=""  # Prevent cleanup
         return 0
     fi
 
@@ -212,6 +229,10 @@ $spec_content"
         log "WARN" "Tester $tester didn't close trigger, closing now"
         bd close "$task_id" --reason="Tester completed (auto-closed)" >/dev/null 2>&1
     fi
+
+    # Clear trap and task_id to prevent double-close on normal exit
+    trap - EXIT INT TERM
+    task_id=""
 
     log "INFO" "Tester $tester completed"
 }

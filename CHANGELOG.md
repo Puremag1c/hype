@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.0.8] - 2026-02-06
+
+### Fixed
+
+- **`hype upgrade` now always recreates symlinks** - Previously upgrade only updated symlinks if they already existed (`-L` check). Now upgrade handles missing, broken, or directory cases - always recreates `.claude/agents`, `.claude/commands`, and `scripts/` symlinks to point to global installation. Fixes "Agent file not found" errors after symlinks are deleted or corrupted.
+
+---
+
 ## [2.0.7] - 2026-02-06
 
 ### Fixed

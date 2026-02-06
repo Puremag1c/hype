@@ -668,24 +668,35 @@ upgrade_project() {
     # Run migrations if available
     run_migrations "$project_version" "$VERSION"
 
-    # Update symlinks
-    if [[ -L ".claude/agents" ]]; then
-        rm -f .claude/agents
-        ln -sf "$HYPE_HOME/core/agents" .claude/agents
-        success "Updated .claude/agents symlink"
-    fi
+    # Update symlinks (always recreate - handles missing, broken, or directory cases)
+    mkdir -p .claude
 
-    if [[ -L ".claude/commands" ]]; then
-        rm -f .claude/commands
-        ln -sf "$HYPE_HOME/core/commands" .claude/commands
-        success "Updated .claude/commands symlink"
+    # .claude/agents
+    if [[ -d ".claude/agents" && ! -L ".claude/agents" ]]; then
+        warn ".claude/agents is a directory, renaming to .claude/agents.backup"
+        mv .claude/agents ".claude/agents.backup.$(date +%s)"
     fi
+    rm -f .claude/agents 2>/dev/null || true
+    ln -sf "$HYPE_HOME/core/agents" .claude/agents
+    success "Updated .claude/agents symlink"
 
-    if [[ -L "scripts" ]]; then
-        rm -f scripts
-        ln -sf "$HYPE_HOME/core/scripts" scripts
-        success "Updated scripts/ symlink"
+    # .claude/commands
+    if [[ -d ".claude/commands" && ! -L ".claude/commands" ]]; then
+        warn ".claude/commands is a directory, renaming to .claude/commands.backup"
+        mv .claude/commands ".claude/commands.backup.$(date +%s)"
     fi
+    rm -f .claude/commands 2>/dev/null || true
+    ln -sf "$HYPE_HOME/core/commands" .claude/commands
+    success "Updated .claude/commands symlink"
+
+    # scripts/
+    if [[ -d "scripts" && ! -L "scripts" ]]; then
+        warn "scripts/ is a directory, renaming to project-scripts/"
+        mv scripts "project-scripts"
+    fi
+    rm -f scripts 2>/dev/null || true
+    ln -sf "$HYPE_HOME/core/scripts" scripts
+    success "Updated scripts/ symlink"
 
     # Update config.sh (merge strategy: add new variables, keep user values)
     if [[ -f ".hype/config.sh" ]]; then

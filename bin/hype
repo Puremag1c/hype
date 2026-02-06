@@ -722,6 +722,21 @@ update_gitignore() {
 
     if [[ ${#added[@]} -gt 0 ]]; then
         success "Added to .gitignore: ${added[*]}"
+
+        # Auto-commit and push if git repo with remote
+        if git rev-parse --is-inside-work-tree &>/dev/null; then
+            git add .gitignore
+            if git commit -m "chore: Update hype entries in .gitignore" --no-verify -q 2>/dev/null; then
+                success "Committed .gitignore"
+
+                # Push if remote exists
+                if git remote get-url origin &>/dev/null; then
+                    if git push -q 2>/dev/null; then
+                        success "Pushed .gitignore"
+                    fi
+                fi
+            fi
+        fi
     fi
 }
 

@@ -6,6 +6,10 @@
 
 - **SPEC.prev.md in target project gitignore** - Added `SPEC.prev.md` to gitignore template for target projects. File is generated during `cleanup_iteration()` and should not be tracked. Added to `hype init` and `hype update` paths.
 
+### Changed
+
+- **Auto-commit/push gitignore on update** - `hype update` now auto-commits and pushes `.gitignore` changes if remote exists. Keeps target project repos clean without manual intervention.
+
 ---
 
 ## [1.9.2] - 2026-02-05

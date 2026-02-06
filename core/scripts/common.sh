@@ -423,7 +423,8 @@ export -f has_milestone 2>/dev/null || true
 
 # ensure_milestone - создаёт milestone если не существует (идемпотентно)
 # Использование: ensure_milestone "milestone:planning-done" "Planning complete"
-# Создаёт task с label и сразу закрывает его.
+# Создаёт task с label, закрывает, синхронизирует и проверяет visibility.
+# v1.9.6: Added sync + verify to prevent phase detection race condition.
 ensure_milestone() {
     local label="$1"
     local title="$2"
@@ -439,6 +440,25 @@ ensure_milestone() {
     if [ -n "$new_id" ]; then
         bd close "$new_id" --reason="Phase milestone" >/dev/null 2>&1 || true
     fi
+
+    # Sync to flush writes to disk (prevents stale daemon cache)
+    bd sync >/dev/null 2>&1 || true
+
+    # Verify milestone is visible (retry up to 5 times)
+    # Prevents race condition where next cycle's bd list doesn't see the milestone
+    local attempts=0
+    while [ $attempts -lt 5 ]; do
+        if has_milestone "$label"; then
+            return 0
+        fi
+        ((attempts++))
+        sleep 1
+    done
+
+    # Milestone not visible after retries — log warning but don't fail
+    # Next cycle will retry ensure_milestone anyway
+    >&2 echo "WARN: Milestone $label created but not visible after 5s"
+    return 1
 }
 export -f ensure_milestone 2>/dev/null || true
 

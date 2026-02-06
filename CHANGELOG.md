@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.6] - 2026-02-06
+
+### Fixed
+
+- **Phase transition race condition** - `ensure_milestone()` now includes `bd sync` + verify loop after creating milestone. Previously, bd daemon cache could be stale, causing `detect-phase.sh` to not see the milestone and repeat the same phase (e.g., two PLANNING cycles in a row). Root cause: SQLite write not visible to subsequent `bd list` due to daemon cache inconsistency.
+
+---
+
 ## [1.9.5] - 2026-02-06
 
 ### Fixed

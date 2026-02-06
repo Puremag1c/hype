@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.9.19] - 2026-02-06
+
+### Changed
+
+- **Decomposed architect.md into 4 specialized agents** - Single 600-line architect.md split into focused agents for better LLM comprehension:
+  - `architect-planner.md` — creates plan from SPEC.md (opus)
+  - `architect-reviewer.md` — reviews analyst additions and audit results (opus)
+  - `architect-qa.md` — final review and smoke test regression handling (opus)
+  - `architect-ops.md` — resolves conflicts and dependency cycles (sonnet)
+- **architect-ops uses sonnet** - Mechanical operations (git conflicts, cycle fixes) don't need opus-level reasoning, reducing cost.
+
+---
+
 ## [1.9.18] - 2026-02-06
 
 ### Fixed

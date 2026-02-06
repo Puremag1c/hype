@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.0.0] - 2026-02-06
+
+### Added
+
+- **Testing Infrastructure** - Complete bats test suite with 133 tests covering all HYPE components:
+  - `tests/unit/common_test.bats` — 42 unit tests for common.sh functions
+  - `tests/integration/detect_phase_test.bats` — 21 tests for phase detection
+  - `tests/integration/hype_test.bats` — 24 tests for hype.sh/bin/hype
+  - `tests/integration/executors_test.bats` — 19 tests for run-executors.sh
+  - `tests/integration/doctor_test.bats` — 15 tests for Doctor diagnostics
+  - `tests/e2e/phase_flow_test.bats` — 12 tests for complete phase transitions (INIT → DONE)
+- **Test helpers** - Reusable test infrastructure:
+  - `tests/helpers/setup.bash` — common setup/teardown with isolated temp directories
+  - `tests/helpers/mock_bd.bash` — mock beads for unit test isolation
+  - `tests/fixtures/` — task JSONs and config files for testing
+  - `tests/run_tests.sh` — test runner with auto bats install
+- **CI/CD workflow** - GitHub Actions for automated testing:
+  - `.github/workflows/test.yml` — parallel jobs for unit/integration/e2e
+  - Runs on both macOS and Ubuntu
+  - Unit tests required, integration/e2e optional (continue-on-error)
+
+---
+
 ## [1.9.20] - 2026-02-06
 
 ### Added

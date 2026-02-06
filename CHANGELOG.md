@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.15] - 2026-02-06
+
+### Changed
+
+- **Gradual model escalation** - Instead of jumping directly to opus on failure, models now escalate one level at a time: `haiku → sonnet → opus`. Applies to audit retries (executor, senior-executor) and review retries.
+
+---
+
 ## [1.9.14] - 2026-02-06
 
 ### Fixed

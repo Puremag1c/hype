@@ -279,16 +279,15 @@ run_auditor() {
 
     log "INFO" "Starting auditor for $task_id: $task_title"
 
-    # Check if task has model:opus label (escalated from previous timeout)
-    local has_opus
-    has_opus=$(echo "$task_json" | jq -r '.[0].labels[]? | select(. == "model:opus")' 2>/dev/null | head -1)
+    # Determine model from task labels (default: sonnet for auditor)
+    local task_model
+    task_model=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("model:")) | split(":")[1]' 2>/dev/null | head -1)
+    task_model=${task_model:-sonnet}
 
     local model
-    if [ -n "$has_opus" ]; then
-        model=$(map_model "opus")
-        log "INFO" "Using opus for $task_id (escalated)"
-    else
-        model=$(map_model "sonnet")
+    model=$(map_model "$task_model")
+    if [ "$task_model" != "sonnet" ]; then
+        log "INFO" "Using $task_model for $task_id"
     fi
 
     # Build prompt
@@ -348,19 +347,35 @@ Audit task $task_id failed after 3 attempts (timeout/error).
             bd update "$task_id" --status=open --remove-label=executor \
                 --add-label=blocked:escalated \
                 --notes="Escalated to Architect: auditor failed 3 times (timeout/error)." >/dev/null 2>&1 || true
-        elif [ "$audit_retry" -eq 1 ]; then
-            # 2nd failure (already opus) - increment retry
-            log "INFO" "RETRY: $task_id - opus failed, attempt 3 next"
-            bd update "$task_id" --status=open --remove-label=executor \
-                --remove-label=audit-retry:1 --add-label=audit-retry:2 \
-                --notes="Retry 3: opus failed, will try once more." >/dev/null 2>&1 || true
         else
-            # 1st failure - escalate to opus
-            log "INFO" "Escalating $task_id to opus for retry"
-            bd update "$task_id" --status=open --remove-label=executor \
-                --remove-label=model:haiku --remove-label=model:sonnet \
-                --add-label=model:opus --add-label=audit-retry:1 \
-                --notes="Retry 2: escalated to opus after sonnet failure." >/dev/null 2>&1 || true
+            # Determine current model and escalate one level up
+            local current_model
+            current_model=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("model:")) | split(":")[1]' 2>/dev/null | head -1)
+            current_model=${current_model:-sonnet}
+
+            local next_retry=$((audit_retry + 1))
+
+            if [ "$current_model" = "haiku" ]; then
+                # haiku → sonnet
+                log "INFO" "Escalating $task_id: haiku → sonnet (retry $next_retry)"
+                bd update "$task_id" --status=open --remove-label=executor \
+                    --remove-label="audit-retry:$audit_retry" --remove-label=model:haiku \
+                    --add-label=model:sonnet --add-label="audit-retry:$next_retry" \
+                    --notes="Retry $next_retry: escalated haiku → sonnet." >/dev/null 2>&1 || true
+            elif [ "$current_model" = "sonnet" ]; then
+                # sonnet → opus
+                log "INFO" "Escalating $task_id: sonnet → opus (retry $next_retry)"
+                bd update "$task_id" --status=open --remove-label=executor \
+                    --remove-label="audit-retry:$audit_retry" --remove-label=model:sonnet \
+                    --add-label=model:opus --add-label="audit-retry:$next_retry" \
+                    --notes="Retry $next_retry: escalated sonnet → opus." >/dev/null 2>&1 || true
+            else
+                # opus → stay opus, just increment retry
+                log "INFO" "RETRY: $task_id - opus retry $next_retry"
+                bd update "$task_id" --status=open --remove-label=executor \
+                    --remove-label="audit-retry:$audit_retry" --add-label="audit-retry:$next_retry" \
+                    --notes="Retry $next_retry: opus retry." >/dev/null 2>&1 || true
+            fi
         fi
         return 0
     fi

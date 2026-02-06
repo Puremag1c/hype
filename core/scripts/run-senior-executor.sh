@@ -345,19 +345,35 @@ $task_notes
                 bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
                     --add-label=blocked:escalated \
                     --notes="Escalated to Architect: auditor couldn't produce findings after 3 attempts."
-            elif [ "$audit_retry" -eq 1 ]; then
-                # Second retry - escalate to opus
-                log "INFO" "RETRY: $task_id - escalating to opus (attempt 2)"
-                bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
-                    --remove-label=audit-retry:1 --remove-label=model:haiku --remove-label=model:sonnet \
-                    --add-label=audit-retry:2 --add-label=model:opus \
-                    --notes="Retry 2: escalated to opus. Findings required (min 50 chars)."
             else
-                # First retry
-                log "INFO" "RETRY: $task_id - first retry (attempt 1)"
-                bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
-                    --add-label=audit-retry:1 \
-                    --notes="Retry 1: findings required in notes field (min 50 chars)."
+                # Determine current model and escalate one level up
+                local current_model
+                current_model=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("model:")) | split(":")[1]' 2>/dev/null | head -1)
+                current_model=${current_model:-sonnet}
+
+                local next_retry=$((audit_retry + 1))
+
+                if [ "$current_model" = "haiku" ]; then
+                    # haiku → sonnet
+                    log "INFO" "RETRY: $task_id - haiku → sonnet (attempt $next_retry)"
+                    bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
+                        --remove-label="audit-retry:$audit_retry" --remove-label=model:haiku \
+                        --add-label=model:sonnet --add-label="audit-retry:$next_retry" \
+                        --notes="Retry $next_retry: escalated haiku → sonnet. Findings required (min 50 chars)."
+                elif [ "$current_model" = "sonnet" ]; then
+                    # sonnet → opus
+                    log "INFO" "RETRY: $task_id - sonnet → opus (attempt $next_retry)"
+                    bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
+                        --remove-label="audit-retry:$audit_retry" --remove-label=model:sonnet \
+                        --add-label=model:opus --add-label="audit-retry:$next_retry" \
+                        --notes="Retry $next_retry: escalated sonnet → opus. Findings required (min 50 chars)."
+                else
+                    # opus → stay opus, just increment retry
+                    log "INFO" "RETRY: $task_id - opus retry $next_retry"
+                    bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
+                        --remove-label="audit-retry:$audit_retry" --add-label="audit-retry:$next_retry" \
+                        --notes="Retry $next_retry: opus retry. Findings required (min 50 chars)."
+                fi
             fi
             return 0
             ;;
@@ -480,13 +496,32 @@ $review_context
         ((review_retry++))
 
         if [ "$review_retry" -ge 3 ]; then
-            log "WARN" "REVIEW ESCALATE: $task_id - 3 attempts without action, escalating to opus"
-            bd update "$task_id" \
-                --remove-label="review-retry:$((review_retry-1))" \
-                --remove-label="model:haiku" \
-                --remove-label="model:sonnet" \
-                --add-label="model:opus" \
-                --notes="Review escalated to opus after 3 failed attempts."
+            # Escalate model one level up after 3 failed attempts
+            local current_model
+            current_model=$(echo "$updated_json" | jq -r '.[0].labels[]? | select(startswith("model:")) | split(":")[1]' 2>/dev/null | head -1)
+            current_model=${current_model:-sonnet}
+
+            if [ "$current_model" = "haiku" ]; then
+                log "WARN" "REVIEW ESCALATE: $task_id - haiku → sonnet after 3 attempts"
+                bd update "$task_id" \
+                    --remove-label="review-retry:$((review_retry-1))" \
+                    --remove-label="model:haiku" \
+                    --add-label="model:sonnet" \
+                    --notes="Review escalated haiku → sonnet after 3 failed attempts."
+            elif [ "$current_model" = "sonnet" ]; then
+                log "WARN" "REVIEW ESCALATE: $task_id - sonnet → opus after 3 attempts"
+                bd update "$task_id" \
+                    --remove-label="review-retry:$((review_retry-1))" \
+                    --remove-label="model:sonnet" \
+                    --add-label="model:opus" \
+                    --notes="Review escalated sonnet → opus after 3 failed attempts."
+            else
+                # Already opus - just reset retry counter
+                log "WARN" "REVIEW RETRY: $task_id - opus, resetting retry counter"
+                bd update "$task_id" \
+                    --remove-label="review-retry:$((review_retry-1))" \
+                    --notes="Review retry reset (already opus)."
+            fi
         else
             log "WARN" "REVIEW RETRY: $task_id - no action taken (attempt $review_retry/3)"
             bd update "$task_id" --remove-label="review-retry:$((review_retry-1))" --add-label="review-retry:$review_retry" >/dev/null 2>&1 || \

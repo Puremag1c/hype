@@ -84,8 +84,8 @@ log() {
     local level=$1
     local msg=$2
     local color="" reset="\033[0m" gray="\033[90m"
-    # HYPE brand colors (fire gradient)
-    local hype_colored="\033[38;2;255;68;68mH\033[38;2;255;140;0mY\033[38;2;255;221;0mP\033[38;2;204;255;0mE\033[0m"
+    # HYPE brand colors (neon pink gradient)
+    local hype_colored="\033[38;2;255;0;102mH\033[38;2;255;51;153mY\033[38;2;255;102;204mP\033[38;2;204;255;0mE\033[0m"
 
     case "$level" in
         INFO|SUCCESS)  color="\033[32m" ;;

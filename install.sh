@@ -154,11 +154,19 @@ install_with_apt() {
 install_beads_macos() {
     if ! command -v bd &>/dev/null; then
         info "Installing beads..."
-        brew tap steveyegge/beads
-        brew install bd
+        brew install beads
         success "beads installed"
     else
-        success "beads already installed"
+        # Check if using outdated tap version
+        if brew list bd &>/dev/null 2>&1; then
+            info "Migrating from tap to homebrew-core..."
+            brew uninstall bd 2>/dev/null || true
+            brew untap steveyegge/beads 2>/dev/null || true
+            brew install beads
+            success "beads migrated to homebrew-core"
+        else
+            success "beads already installed"
+        fi
     fi
 }
 
@@ -166,8 +174,7 @@ install_beads_linux() {
     if ! command -v bd &>/dev/null; then
         if command -v brew &>/dev/null; then
             info "Installing beads via brew..."
-            brew tap steveyegge/beads
-            brew install bd
+            brew install beads
             success "beads installed"
         elif command -v go &>/dev/null; then
             info "Installing beads via go..."
@@ -178,7 +185,16 @@ install_beads_linux() {
             echo "  See: https://github.com/steveyegge/beads"
         fi
     else
-        success "beads already installed"
+        # Check if using outdated tap version
+        if command -v brew &>/dev/null && brew list bd &>/dev/null 2>&1; then
+            info "Migrating from tap to homebrew-core..."
+            brew uninstall bd 2>/dev/null || true
+            brew untap steveyegge/beads 2>/dev/null || true
+            brew install beads
+            success "beads migrated to homebrew-core"
+        else
+            success "beads already installed"
+        fi
     fi
 }
 

@@ -42,10 +42,10 @@ COLOR_RED="\033[31m"
 COLOR_CYAN="\033[36m"
 COLOR_GRAY="\033[90m"
 
-# HYPE brand colors (fire gradient)
-HYPE_H="\033[38;2;255;68;68m"      # #ff4444 Red
-HYPE_Y="\033[38;2;255;140;0m"      # #ff8c00 Orange
-HYPE_P="\033[38;2;255;221;0m"      # #ffdd00 Yellow
+# HYPE brand colors (neon pink gradient)
+HYPE_H="\033[38;2;255;0;102m"      # #ff0066 Neon Pink
+HYPE_Y="\033[38;2;255;51;153m"     # #ff3399 Pink
+HYPE_P="\033[38;2;255;102;204m"    # #ff66cc Light Pink
 HYPE_E="\033[38;2;204;255;0m"      # #ccff00 Lime
 
 # Colorize "HYPE" text with fire gradient

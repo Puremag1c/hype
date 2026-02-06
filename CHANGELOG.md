@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.9.7] - 2026-02-06
+
+### Fixed
+
+- **Beads installation uses homebrew-core** - `install.sh` now uses `brew install beads` (homebrew-core, latest) instead of `brew tap steveyegge/beads && brew install bd` (tap, outdated 0.49.0). Tap version had SQLite bugs causing daemon zombie state. Existing tap installations are auto-migrated.
+
+- **Milestone visibility after creation** - `ensure_milestone()` now uses `bd sync --force` and retries 10 times (up from 5) to ensure milestone is visible to subsequent `bd list` calls. Addresses daemon cache not invalidating after writes.
+
+### Changed
+
+- **New HYPE color scheme** - Updated branding from fire gradient (red→orange→yellow→lime) to neon pink gradient (H=#ff0066, Y=#ff3399, P=#ff66cc, E=#ccff00). Applied to all log outputs and ASCII art logo across all scripts.
+
+---
+
 ## [1.9.6] - 2026-02-06
 
 ### Fixed

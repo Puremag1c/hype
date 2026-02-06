@@ -441,23 +441,25 @@ ensure_milestone() {
         bd close "$new_id" --reason="Phase milestone" >/dev/null 2>&1 || true
     fi
 
-    # Sync to flush writes to disk (prevents stale daemon cache)
-    bd sync >/dev/null 2>&1 || true
+    # Force sync to flush writes and invalidate daemon cache
+    bd sync --force >/dev/null 2>&1 || true
+    sleep 1  # Give daemon time to reload
 
-    # Verify milestone is visible (retry up to 5 times)
+    # Verify milestone is visible (retry up to 10 times with sync between attempts)
     # Prevents race condition where next cycle's bd list doesn't see the milestone
     local attempts=0
-    while [ $attempts -lt 5 ]; do
+    while [ $attempts -lt 10 ]; do
         if has_milestone "$label"; then
             return 0
         fi
         ((attempts++))
+        bd sync --force >/dev/null 2>&1 || true
         sleep 1
     done
 
     # Milestone not visible after retries — log warning but don't fail
     # Next cycle will retry ensure_milestone anyway
-    >&2 echo "WARN: Milestone $label created but not visible after 5s"
+    >&2 echo "WARN: Milestone $label created but not visible after 10s"
     return 1
 }
 export -f ensure_milestone 2>/dev/null || true

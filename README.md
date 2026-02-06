@@ -9,15 +9,17 @@
 
 > v1.9.4
 
-## Чё это
+## What's this / Чё это
+
+Your personal AI dev team. Describe what you want — get working code.
 
 Твоя личная AI-команда разрабов. Объясняешь что хочешь — получаешь готовый код.
 
-Без ковыряния в документации. Без mass hiring. Без "а давайте ещё один созвон".
+No docs diving. No hiring. No "let's have another meeting".
 
-Просто запускаешь и идёшь пить кофе ☕
+Без ковыряния в документации. Без найма. Без "а давайте ещё созвон".
 
-## Установка
+## Install / Установка
 
 ### macOS / Linux
 
@@ -27,24 +29,30 @@ curl -fsSL https://raw.githubusercontent.com/Puremag1c/hype/main/install.sh | ba
 
 ### Windows
 
-Сначала WSL (PowerShell от админа):
+First, WSL (PowerShell as admin) / Сначала WSL (PowerShell от админа):
 ```powershell
 wsl --install
 ```
-Потом в Ubuntu терминале — команду выше.
 
-## Команды
-
+Then in Ubuntu terminal / Потом в Ubuntu терминале:
 ```bash
-hype init         # Запуск в новом проекте
-hype start        # Продолжить работу
-hype status       # Чё там происходит
-hype stop         # Тормознуть процесс
-hype clear        # Почистить после итерации
-hype update       # Обновить hype
-hype wipe         # Снести всё нафиг
+curl -fsSL https://raw.githubusercontent.com/Puremag1c/hype/main/install.sh | bash
 ```
 
-## Что-то сломалось?
+## Commands / Команды
+
+```bash
+hype init         # Start new project / Запуск в новом проекте
+hype start        # Continue work / Продолжить работу
+hype status       # What's happening / Чё там происходит
+hype stop         # Pause / Тормознуть
+hype clear        # Cleanup after iteration / Почистить после итерации
+hype update       # Update hype / Обновить hype
+hype wipe         # Nuke everything / Снести всё нафиг
+```
+
+## Issues / Проблемы
+
+[Create an issue](https://github.com/Puremag1c/hype/issues) — we'll figure it out.
 
 [Создай issue](https://github.com/Puremag1c/hype/issues) — разберёмся.

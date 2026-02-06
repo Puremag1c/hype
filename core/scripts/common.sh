@@ -278,9 +278,13 @@ run_claude_with_progress() {
     # Cleanup function for trap
     _cleanup_progress() {
         if [ -n "$progress_pid" ]; then
-            # Kill entire process group (subshell + tail + jq)
-            kill -- -"$progress_pid" 2>/dev/null || kill "$progress_pid" 2>/dev/null || true
+            # Kill children first (tail, jq), then parent subshell
+            # pkill -P is more reliable than kill -- -$pid for subshells
+            pkill -P "$progress_pid" 2>/dev/null || true
+            kill "$progress_pid" 2>/dev/null || true
             wait "$progress_pid" 2>/dev/null || true
+            # Fallback: kill any orphaned tail watching our stream file
+            pkill -f "tail -F $raw_output" 2>/dev/null || true
         fi
         # Clean up stream file
         rm -f "$raw_output" 2>/dev/null || true
@@ -316,8 +320,10 @@ run_claude_with_progress() {
     local exit_code=${PIPESTATUS[1]}
 
     # Cleanup progress extractor (explicit, trap handles abnormal exit)
-    kill -- -"$progress_pid" 2>/dev/null || kill "$progress_pid" 2>/dev/null || true
+    pkill -P "$progress_pid" 2>/dev/null || true
+    kill "$progress_pid" 2>/dev/null || true
     wait "$progress_pid" 2>/dev/null || true
+    pkill -f "tail -F $raw_output" 2>/dev/null || true
 
     # Convert stream-json to readable log (extract assistant text messages)
     jq -r 'select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text' "$raw_output" 2>/dev/null > "$output_file" || cp "$raw_output" "$output_file"

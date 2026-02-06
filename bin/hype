@@ -699,6 +699,15 @@ upgrade_project() {
     update_gitignore
     update_beads_gitignore
 
+    # Ensure spinnerTipsEnabled is disabled in settings.json
+    if [[ -f ".claude/settings.json" ]]; then
+        if ! grep -q '"spinnerTipsEnabled"' ".claude/settings.json" 2>/dev/null; then
+            # Add spinnerTipsEnabled at the beginning of JSON object
+            sed -i '' 's/^{$/{\n  "spinnerTipsEnabled": false,/' ".claude/settings.json" 2>/dev/null || true
+            success "Added spinnerTipsEnabled: false to settings"
+        fi
+    fi
+
     # Update version marker
     echo "$VERSION" > .hype/version
 

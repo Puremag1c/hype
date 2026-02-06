@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.0.10] - 2026-02-06
+
+### Fixed
+
+- **SMOKE_TEST stale code prevention** - Complete rewrite of `testing.yaml` guidance to ensure testers always see fresh code:
+  - **Build command now required for packages** - Old guidance said "Python doesn't need build" which was WRONG for installed packages
+  - **Python editable install** - Explicit instruction to use `.venv/bin/pip install -e .` as build_command
+  - **Runtime warning for Python packages** - `run_build()` warns if pyproject.toml/setup.py exists but no build_command
+  - **Language-specific examples** - Added build/start commands for Python, Node.js, Go, Elixir, Rust
+
+  This fixes the cycle: IMPLEMENTATION → SMOKE_TEST → bug → fix → SMOKE_TEST seeing old code
+
+---
+
 ## [2.0.9] - 2026-02-06
 
 ### Fixed

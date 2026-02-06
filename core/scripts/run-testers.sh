@@ -279,7 +279,7 @@ ensure_testing_config() {
 \`\`\`yaml
 # .hype/testing.yaml - Testing configuration
 # type: web|api|cli|library
-# build_command: leave empty if no build needed (e.g. Python)
+# build_command: command to prepare fresh code (REQUIRED for most projects!)
 # start_command: command to start the dev server
 # health_check: endpoint to verify server is ready
 type: web
@@ -290,19 +290,26 @@ health_check: /
 startup_timeout: 30
 \`\`\`
 
-## Important
-- Use ACTUAL commands for this project (don't guess)
-- Test that commands work before saving
-- If no build needed (Python, etc.), leave build_command empty or omit it
-- For Python with venv: ALWAYS use venv python, e.g. '.venv/bin/python -m module' or 'source .venv/bin/activate && uvicorn ...'
-- For Python without venv: use uvicorn, flask run, django runserver, etc.
-- For Node: check package.json scripts
-- For Go: check for main.go or Makefile
+## CRITICAL: Build Command
+Build runs BEFORE EVERY smoke test to ensure fresh code. Without it, testers may see OLD code!
 
-## CRITICAL: Python venv
-If project has .venv/, pyproject.toml, or requirements.txt - it likely uses virtualenv.
-Using system python will run INSTALLED package, not current source code!
-Always prefix with '.venv/bin/' or activate venv first.
+### By Language:
+- **Python (with venv)**: \`build_command: .venv/bin/pip install -e .\` (editable install = changes visible immediately)
+- **Python (script only)**: Can omit if running \`python script.py\` directly (not a package)
+- **Node.js**: \`build_command: npm run build\` or \`npm ci\`
+- **Go**: \`build_command: go build -o ./bin/app\`
+- **Elixir**: \`build_command: mix deps.get && mix compile\`
+- **Rust**: \`build_command: cargo build --release\`
+
+### Start Command:
+- **Python**: \`.venv/bin/python -m module\` or \`.venv/bin/uvicorn app:app\`
+- **Node.js**: \`npm run dev\` or \`node dist/index.js\`
+- **Go**: \`./bin/app\` (run compiled binary)
+
+## WARNING: System Python
+If using system python (not venv), changes to source code are INVISIBLE!
+System python reads from /Library/Frameworks/... or /usr/lib/..., NOT your project.
+ALWAYS use venv: \`.venv/bin/python\`
 
 done_when: .hype/testing.yaml exists with valid, tested commands" >/dev/null 2>&1
 
@@ -460,6 +467,12 @@ run_build() {
 
     # Skip if no build command or placeholder
     if [ -z "$build_cmd" ] || [[ "$build_cmd" == *"["* ]]; then
+        # SAFETY: Warn if Python package project without build command
+        if [ -f "$PROJECT_DIR/pyproject.toml" ] || [ -f "$PROJECT_DIR/setup.py" ]; then
+            log "WARN" "⚠️  Python package detected but no build_command!"
+            log "WARN" "    Without 'pip install -e .' testers may see OLD code."
+            log "WARN" "    Add to .hype/testing.yaml: build_command: .venv/bin/pip install -e ."
+        fi
         log "INFO" "No build command specified, skipping build step"
         return 0
     fi

@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.9.11] - 2026-02-06
+
+### Fixed
+
+- **hype clear not cleaning ALL stashes** - Previous fix (1.9.10) only dropped stashes with "hype" in the message. Now uses `git stash clear` to remove ALL stashes for a clean iteration start.
+
+- **hype clear not deleting closed tasks** - `bd admin cleanup --force` was silently failing (stderr redirected to /dev/null). Now shows cleanup output for visibility.
+
+---
+
 ## [1.9.10] - 2026-02-06
 
 ### Added

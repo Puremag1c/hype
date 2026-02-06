@@ -569,10 +569,10 @@ cleanup_iteration() {
         [ "$worktree_count" -gt 0 ] && echo "  • $worktree_count worktree(s) in .hype-worktrees/"
     fi
 
-    # Stashes
+    # Stashes (clear ALL stashes for clean iteration)
     local stash_count
-    stash_count=$(git stash list 2>/dev/null | grep -i hype | wc -l | tr -d ' ')
-    [ "$stash_count" -gt 0 ] && echo "  • $stash_count hype-related git stash(es)"
+    stash_count=$(git stash list 2>/dev/null | wc -l | tr -d ' ')
+    [ "$stash_count" -gt 0 ] && echo "  • $stash_count git stash(es)"
 
     # SPEC.md
     [ -f "$project_dir/SPEC.md" ] && echo "  • SPEC.md → SPEC.prev.md (archived)"
@@ -597,7 +597,8 @@ cleanup_iteration() {
     for task_id in $open_ids; do
         bd close "$task_id" --reason="Closed by hype clear" 2>/dev/null || true
     done
-    bd admin cleanup --force 2>/dev/null || true
+    # Run cleanup and show result (was silently failing before)
+    bd admin cleanup --force || true
 
     # 4. Delete all milestones (using function from this file)
     echo "  → Deleting milestones..."
@@ -607,20 +608,13 @@ cleanup_iteration() {
 
     # 5. Clean git stash and worktrees
     echo "  → Cleaning stashes and worktrees..."
-    # Drop hype-related stashes (loop because indices shift after each drop)
-    local stash_dropped=0
-    while git stash list 2>/dev/null | grep -qi hype; do
-        # Find first hype stash index
-        local stash_idx
-        stash_idx=$(git stash list 2>/dev/null | grep -in hype | head -1 | cut -d: -f1)
-        if [ -n "$stash_idx" ]; then
-            git stash drop "stash@{$((stash_idx - 1))}" 2>/dev/null || break
-            ((stash_dropped++))
-        else
-            break
-        fi
-    done
-    [ "$stash_dropped" -gt 0 ] && echo "    Dropped $stash_dropped stash(es)"
+    # Clear ALL stashes (hype clear = full cleanup for new iteration)
+    local stash_count
+    stash_count=$(git stash list 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$stash_count" -gt 0 ]; then
+        git stash clear 2>/dev/null || true
+        echo "    Cleared $stash_count stash(es)"
+    fi
     rm -rf "$project_dir/.hype-worktrees" 2>/dev/null || true
     git worktree prune 2>/dev/null || true
 

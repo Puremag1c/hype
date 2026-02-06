@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.0.7] - 2026-02-06
+
+### Fixed
+
+- **Trigger tasks no longer block phase transitions** - detect-phase.sh now uses `--label=trigger` for identification instead of hardcoded title patterns. Trigger tasks (run-tester-*, run-analyst-*, run-plan-review, etc.) are excluded from P0 bug count and don't prevent IMPLEMENTATION→SMOKE_TEST transition.
+
+- **Zombie tail/jq processes eliminated** - run_claude_with_progress now saves tail PID to file for explicit cleanup. Added running_marker file for graceful shutdown. Cleanup sequence properly terminates grandchild processes (tail, jq) that previously survived parent death.
+
+### Changed
+
+- **All trigger task creation uses `--label=trigger`** - hype.sh, run-testers.sh now add trigger label when creating run-* tasks. This enables extensible trigger detection without code changes.
+
+- **detect-phase.sh hybrid detection** - Primary detection by label, fallback to title patterns for backward compatibility with pre-label triggers.
+
+---
+
 ## [2.0.6] - 2026-02-06
 
 ### Fixed

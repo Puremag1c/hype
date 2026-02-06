@@ -312,8 +312,52 @@ process_review() {
             ;;
         NO_FINDINGS)
             log "WARN" "REJECT: $task_id - audit task has no findings in notes"
-            bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
-                --notes="Review rejected: Audit task requires findings in notes field (min 50 chars)."
+            # Check retry count for escalation
+            local audit_retry
+            audit_retry=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("audit-retry:")) | split(":")[1]' 2>/dev/null | head -1)
+            audit_retry=${audit_retry:-0}
+
+            if [ "$audit_retry" -ge 2 ]; then
+                # Escalate to Architect - auditor couldn't produce findings
+                local task_title task_desc task_notes
+                task_title=$(echo "$task_json" | jq -r '.[0].title // "Unknown"' 2>/dev/null)
+                task_desc=$(echo "$task_json" | jq -r '.[0].description // ""' 2>/dev/null)
+                task_notes=$(echo "$task_json" | jq -r '.[0].notes // ""' 2>/dev/null)
+
+                log "WARN" "ESCALATE: $task_id - audit failed after 3 attempts, creating architect task"
+                bd create --title="Review failed audit: $task_title" --type=task --priority=1 \
+                    --labels="model:opus,escalation" \
+                    --description="## Context
+Audit task $task_id failed to produce findings after 3 attempts (sonnet + opus).
+
+## Original Task
+**Title:** $task_title
+**Description:** $task_desc
+
+## Auditor Notes
+$task_notes
+
+## Required Action
+1. Review why auditor couldn't complete this task
+2. Either: reformulate the audit task, or close as not applicable
+3. Close $task_id with appropriate reason" >/dev/null 2>&1 || true
+
+                bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
+                    --add-label=blocked:escalated \
+                    --notes="Escalated to Architect: auditor couldn't produce findings after 3 attempts."
+            elif [ "$audit_retry" -eq 1 ]; then
+                # Second retry - escalate to opus
+                log "INFO" "RETRY: $task_id - escalating to opus (attempt 2)"
+                bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
+                    --remove-label=audit-retry:1 --add-label=audit-retry:2 --add-label=model:opus \
+                    --notes="Retry 2: escalated to opus. Findings required (min 50 chars)."
+            else
+                # First retry
+                log "INFO" "RETRY: $task_id - first retry (attempt 1)"
+                bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
+                    --add-label=audit-retry:1 \
+                    --notes="Retry 1: findings required in notes field (min 50 chars)."
+            fi
             return 0
             ;;
         AUDIT_REVIEW)

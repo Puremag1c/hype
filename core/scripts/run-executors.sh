@@ -279,9 +279,17 @@ run_auditor() {
 
     log "INFO" "Starting auditor for $task_id: $task_title"
 
-    # Auditor always uses sonnet (sufficient for analysis)
+    # Check if task has model:opus label (escalated from previous timeout)
+    local has_opus
+    has_opus=$(echo "$task_json" | jq -r '.[0].labels[]? | select(. == "model:opus")' 2>/dev/null | head -1)
+
     local model
-    model=$(map_model "sonnet")
+    if [ -n "$has_opus" ]; then
+        model=$(map_model "opus")
+        log "INFO" "Using opus for $task_id (escalated)"
+    else
+        model=$(map_model "sonnet")
+    fi
 
     # Build prompt
     local auditor_prompt
@@ -307,7 +315,52 @@ PROJECT_ROOT: $PROJECT_DIR"
         else
             log "ERROR" "Auditor failed for $task_id (exit: $exit_code)"
         fi
-        bd update "$task_id" --status=open --remove-label=executor >/dev/null 2>&1 || true
+
+        # Get current retry count
+        local audit_retry
+        audit_retry=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("audit-retry:")) | split(":")[1]' 2>/dev/null | head -1)
+        audit_retry=${audit_retry:-0}
+
+        if [ "$audit_retry" -ge 2 ]; then
+            # 3rd failure - escalate to Architect
+            local task_desc
+            task_desc=$(echo "$task_json" | jq -r '.[0].description // ""' 2>/dev/null)
+
+            log "WARN" "ESCALATE: $task_id - auditor failed 3 times, creating architect task"
+            bd create --title="Review failed audit: $task_title" --type=task --priority=1 \
+                --labels="model:opus,escalation" \
+                --description="## Context
+Audit task $task_id failed after 3 attempts (timeout/error).
+
+## Original Task
+**Title:** $task_title
+**Description:** $task_desc
+
+## Failure Info
+- Exit code: $exit_code (124 = timeout)
+- Model used: opus (after escalation from sonnet)
+
+## Required Action
+1. Review if audit scope is too large
+2. Either: split into smaller audits, or reformulate
+3. Close $task_id with appropriate reason" >/dev/null 2>&1 || true
+
+            bd update "$task_id" --status=open --remove-label=executor \
+                --add-label=blocked:escalated \
+                --notes="Escalated to Architect: auditor failed 3 times (timeout/error)." >/dev/null 2>&1 || true
+        elif [ "$audit_retry" -eq 1 ]; then
+            # 2nd failure (already opus) - increment retry
+            log "INFO" "RETRY: $task_id - opus failed, attempt 3 next"
+            bd update "$task_id" --status=open --remove-label=executor \
+                --remove-label=audit-retry:1 --add-label=audit-retry:2 \
+                --notes="Retry 3: opus failed, will try once more." >/dev/null 2>&1 || true
+        else
+            # 1st failure - escalate to opus
+            log "INFO" "Escalating $task_id to opus for retry"
+            bd update "$task_id" --status=open --remove-label=executor \
+                --add-label=model:opus --add-label=audit-retry:1 \
+                --notes="Retry 2: escalated to opus after sonnet failure." >/dev/null 2>&1 || true
+        fi
         return 0
     fi
 

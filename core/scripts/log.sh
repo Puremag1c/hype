@@ -42,6 +42,18 @@ COLOR_RED="\033[31m"
 COLOR_CYAN="\033[36m"
 COLOR_GRAY="\033[90m"
 
+# HYPE brand colors (fire gradient)
+HYPE_H="\033[38;2;255;68;68m"      # #ff4444 Red
+HYPE_Y="\033[38;2;255;140;0m"      # #ff8c00 Orange
+HYPE_P="\033[38;2;255;221;0m"      # #ffdd00 Yellow
+HYPE_E="\033[38;2;204;255;0m"      # #ccff00 Lime
+
+# Colorize "HYPE" text with fire gradient
+colorize_hype() {
+    local text="$1"
+    echo "$text" | sed "s/HYPE/${HYPE_H}H${HYPE_Y}Y${HYPE_P}P${HYPE_E}E${COLOR_RESET}/g"
+}
+
 # Функция логирования
 log() {
     local agent=$1
@@ -63,7 +75,10 @@ log() {
             TASK_START|START)        color="$COLOR_CYAN" ;;
             *)                       color="$COLOR_GRAY" ;;
         esac
-        printf "${COLOR_GRAY}%s${COLOR_RESET} [%s] ${color}%s${COLOR_RESET}: %s\n" "$timestamp" "$agent" "$event" "$message"
+        # Colorize HYPE in agent name
+        local colored_agent
+        colored_agent=$(colorize_hype "$agent")
+        printf "${COLOR_GRAY}%s${COLOR_RESET} [%s] ${color}%s${COLOR_RESET}: %s\n" "$timestamp" "$colored_agent" "$event" "$message"
     fi
 }
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.9.4] - 2026-02-06
+
+### Added
+
+- **Colorful HYPE branding** - "HYPE" text now renders with fire gradient colors (H=Red, Y=Orange, P=Yellow, E=Lime) in terminal output. Applied to logs, status, help commands.
+
+- **ASCII art logo** - New ASCII art banner displayed on `hype init`, `hype start`, and `hype help`. Makes startup more visually distinctive.
+
+### Changed
+
+- **README.md header** - Added ASCII art logo to README for better GitHub presence.
+
+---
+
 ## [1.9.3] - 2026-02-06
 
 ### Fixed

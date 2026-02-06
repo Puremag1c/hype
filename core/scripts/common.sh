@@ -600,8 +600,21 @@ cleanup_iteration() {
     [ "$deleted_count" -gt 0 ] && echo "    Deleted $deleted_count milestone(s)"
 
     # 5. Clean git stash and worktrees
-    echo "  → Cleaning worktrees..."
-    git stash list 2>/dev/null | grep -i hype | cut -d: -f1 | xargs -I{} git stash drop {} 2>/dev/null || true
+    echo "  → Cleaning stashes and worktrees..."
+    # Drop hype-related stashes (loop because indices shift after each drop)
+    local stash_dropped=0
+    while git stash list 2>/dev/null | grep -qi hype; do
+        # Find first hype stash index
+        local stash_idx
+        stash_idx=$(git stash list 2>/dev/null | grep -in hype | head -1 | cut -d: -f1)
+        if [ -n "$stash_idx" ]; then
+            git stash drop "stash@{$((stash_idx - 1))}" 2>/dev/null || break
+            ((stash_dropped++))
+        else
+            break
+        fi
+    done
+    [ "$stash_dropped" -gt 0 ] && echo "    Dropped $stash_dropped stash(es)"
     rm -rf "$project_dir/.hype-worktrees" 2>/dev/null || true
     git worktree prune 2>/dev/null || true
 

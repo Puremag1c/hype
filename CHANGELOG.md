@@ -16,6 +16,8 @@
 
 - **Playwright tester conflict** - `functional` and `visual` testers now run sequentially instead of parallel to avoid Playwright MCP conflicts. Other testers (backend, api, cli) still run in parallel.
 
+- **hype clear not cleaning stash** - Fixed stash cleanup in `cleanup_iteration()`. Previous code failed because stash indices shift after each drop. Now uses loop to drop hype-related stashes correctly.
+
 ---
 
 ## [1.9.9] - 2026-02-06

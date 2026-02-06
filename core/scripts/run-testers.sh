@@ -294,9 +294,15 @@ startup_timeout: 30
 - Use ACTUAL commands for this project (don't guess)
 - Test that commands work before saving
 - If no build needed (Python, etc.), leave build_command empty or omit it
-- For Python: use uvicorn, flask run, django runserver, etc.
+- For Python with venv: ALWAYS use venv python, e.g. '.venv/bin/python -m module' or 'source .venv/bin/activate && uvicorn ...'
+- For Python without venv: use uvicorn, flask run, django runserver, etc.
 - For Node: check package.json scripts
 - For Go: check for main.go or Makefile
+
+## CRITICAL: Python venv
+If project has .venv/, pyproject.toml, or requirements.txt - it likely uses virtualenv.
+Using system python will run INSTALLED package, not current source code!
+Always prefix with '.venv/bin/' or activate venv first.
 
 done_when: .hype/testing.yaml exists with valid, tested commands" >/dev/null 2>&1
 
@@ -358,6 +364,15 @@ start_dev_server() {
     if [ -z "$start_cmd" ]; then
         log "WARN" "No start_command, testers will manage their own servers"
         return 0
+    fi
+
+    # SAFETY: Warn if using system python in project with venv
+    if [ -d "$PROJECT_DIR/.venv" ] || [ -d "$PROJECT_DIR/venv" ]; then
+        if echo "$start_cmd" | grep -qE "^python|^python3" && ! echo "$start_cmd" | grep -qE "\.venv/|venv/|source.*activate"; then
+            log "WARN" "⚠️  Project has venv but start_command uses system python!"
+            log "WARN" "    This will run INSTALLED package, not current source code."
+            log "WARN" "    Fix: .venv/bin/python -m ... or source .venv/bin/activate && ..."
+        fi
     fi
 
     log "INFO" "Starting dev server: $start_cmd"

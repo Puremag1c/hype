@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.0.9] - 2026-02-06
+
+### Fixed
+
+- **Python venv detection in SMOKE_TEST** - Testers creating `testing.yaml` now get explicit guidance to use venv python (`.venv/bin/python`) instead of system python. Added runtime warning in `start_dev_server()` if project has `.venv/` but `start_command` uses bare `python3`. Prevents testing outdated installed packages instead of current source code.
+
+---
+
 ## [2.0.8] - 2026-02-06
 
 ### Fixed

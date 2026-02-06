@@ -569,7 +569,7 @@ cleanup_iteration() {
 
     # 3. Clean beads tasks
     echo "  → Cleaning beads tasks..."
-    bd admin cleanup 2>/dev/null || true
+    bd admin cleanup --force 2>/dev/null || true
 
     # 4. Delete all milestones (using function from this file)
     echo "  → Deleting milestones..."

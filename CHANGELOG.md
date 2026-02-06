@@ -6,6 +6,8 @@
 
 - **Colorful HYPE in all log outputs** - Fire gradient colors now applied to all log functions across scripts: hype.sh, run-executors.sh, run-analysts.sh, run-testers.sh, run-senior-executor.sh. Previously only bin/hype had colors.
 
+- **Tasks hanging after cleanup** - Added `--force` flag to `bd admin cleanup` in `cleanup_iteration()`. Without it, closed tasks were not properly cleaned and accumulated.
+
 ---
 
 ## [1.9.4] - 2026-02-06

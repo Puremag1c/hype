@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.9.20] - 2026-02-06
+
+### Added
+
+- **Doctor agent** - New diagnostic agent for runtime HYPE problems. Run `hype doctor` when something goes wrong. Doctor collects system state, matches symptoms to known issues, and creates a doctor-log for the architect. Can also apply runtime fixes (stuck tasks, orphaned labels) with user confirmation.
+  - `core/agents/doctor.md` — agent prompt
+  - `core/scripts/doctor.sh` — entry point
+  - `hype doctor` command added to CLI
+  - `hype doctor --report` for non-interactive mode
+
+### Changed
+
+- **Documentation updated** - `docs/architecture.md` and `docs/troubleshooting.md` updated with current agent structure (24 agents), decomposed architects, and known issues for Doctor.
+- **PROJECT.md actualized** - Reflects current 24-agent structure, 6 testers, versioner, auditor.
+
+---
+
 ## [1.9.19] - 2026-02-06
 
 ### Changed

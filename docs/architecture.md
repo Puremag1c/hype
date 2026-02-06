@@ -7,15 +7,19 @@
 ```
 hype.sh (bash loop с lock file)
     │
-    ├─► detect-phase.sh → определяет текущую фазу
+    ├─► detect-phase.sh → определяет текущую фазу (JSON output)
     │
     ├─► НАПРЯМУЮ вызывает по фазе:
     │   ├─► INIT: Tech Writer (Opus, interactive)
-    │   ├─► PLANNING: Architect (Opus) — create_plan
+    │   ├─► PLANNING: Architect-Planner (Opus)
     │   ├─► HELPERS: run-analysts.sh → Analysts (Sonnet × 5)
-    │   ├─► PLAN_REVIEW: Architect (Opus) — plan_review
+    │   ├─► PLAN_REVIEW: Architect-Reviewer (Opus)
     │   ├─► IMPLEMENTATION: run-executors.sh + run-senior-executor.sh
-    │   └─► FINAL_REVIEW: Architect (Opus) — final_review
+    │   ├─► SMOKE_TEST: run-testers.sh → Testers × 6
+    │   ├─► SMOKE_REVIEW: Architect-QA (Opus)
+    │   ├─► FINAL_REVIEW: Architect-QA (Opus)
+    │   ├─► VERSIONING: Versioner (Haiku)
+    │   └─► BLOCKED_CYCLES: Architect-Ops (Sonnet)
     │
     └─► Manager (Sonnet) — ТОЛЬКО при проблемах:
         ├─► Blocked tasks
@@ -28,21 +32,22 @@ hype.sh (bash loop с lock file)
 ## Фазы проекта
 
 ```
-INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST → FINAL_REVIEW → DONE
-                                              ↑                 ↓
-                                              └── SMOKE_REVIEW ←┘ (если есть regression)
+INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST → FINAL_REVIEW → VERSIONING → DONE
+                                              ↑                  ↓
+                                              └── SMOKE_REVIEW ←─┘ (если есть regression)
 ```
 
 | Фаза | Условие перехода | Агент | Действие |
 |------|-----------------|-------|----------|
 | INIT | Нет SPEC.md | Tech Writer | Собирает требования от user (+ deep analysis для больших проектов) |
-| PLANNING | Есть SPEC.md | Architect | Создаёт задачи в beads |
+| PLANNING | Есть SPEC.md | Architect-Planner | Создаёт задачи в beads |
 | HELPERS | milestone:planning-done | Analysts ×5 | Параллельный аудит плана |
-| PLAN_REVIEW | milestone:analysts-done | Architect | Ревьюит добавления Analysts |
-| IMPLEMENTATION | milestone:plan-reviewed | Executors | Реализуют задачи |
-| SMOKE_TEST | milestone:impl-done | Testers ×N | Параллельная проверка работоспособности (по типу проекта) |
-| SMOKE_REVIEW | P0 bugs найдены | Architect | Обработка regression bugs (эскалация, контекст, приоритет) |
-| FINAL_REVIEW | milestone:smoke-test-done | Architect | Проверяет целостность |
+| PLAN_REVIEW | milestone:analysts-done | Architect-Reviewer | Ревьюит добавления Analysts |
+| IMPLEMENTATION | milestone:plan-reviewed | Executors + Auditor | Реализуют задачи + аудит |
+| SMOKE_TEST | все задачи closed | Testers ×6 | Параллельная проверка работоспособности |
+| SMOKE_REVIEW | regression tasks найдены | Architect-QA | Обработка regression bugs |
+| FINAL_REVIEW | milestone:smoke-test-done | Architect-QA | Проверяет целостность |
+| VERSIONING | FINAL_REVIEW: PASSED | Versioner | Обновляет VERSION + CHANGELOG |
 | DONE | milestone:project-done | — | Проект завершён |
 
 ## Агенты
@@ -58,15 +63,18 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 - **Задача:** Через диалог с user создать SPEC.md
 - **Особенности:** Интерактивный режим, без timeout
 
-### Architect (Opus)
-- **Роль:** Главный технический эксперт
-- **Задачи:**
-  - Создание плана из SPEC.md
-  - Разбивка на мелкие задачи (1-5 мин)
-  - Расстановка dependencies
-  - Назначение модели каждой задаче
-  - Ревью добавлений от Analysts
-  - Разрешение конфликтов и эскалаций
+### Architect (4 специализированных агента)
+
+**Декомпозирован в v1.9.19** — один большой architect.md разбит на 4 фокусных агента:
+
+| Агент | Model | Задача |
+|-------|-------|--------|
+| architect-planner | opus | Создание плана из SPEC.md, разбивка на задачи, deps |
+| architect-reviewer | opus | Ревью добавлений от Analysts |
+| architect-qa | opus | Final review, обработка regression bugs |
+| architect-ops | sonnet | Разрешение git conflicts, dependency cycles |
+
+**Принцип:** Opus для решений, Sonnet для механических операций.
 
 ### Analysts (Sonnet × 5)
 - **Роль:** Параллельный аудит плана
@@ -94,16 +102,31 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
   - Code review
   - Проверка на secrets
   - Merge через PR (или local merge)
-  - Релиз
+
+### Auditor (Sonnet → Opus)
+- **Роль:** Аудит задач с label `audit`
+- **Когда:** Задачи с "AUDIT SCOPE" в description или label `audit`
+- **Выход:** Findings в notes задачи, не код
+- **Эскалация:** sonnet → opus при timeout/failure
+
+### Versioner (Haiku)
+- **Роль:** Обновление VERSION и CHANGELOG после FINAL_REVIEW
+- **Когда:** После успешного FINAL_REVIEW: PASSED
+- **Задачи:**
+  - Определяет тип изменений (major/minor/patch)
+  - Обновляет VERSION файл
+  - Добавляет запись в CHANGELOG.md
 
 ### Testers (SMOKE_TEST фаза)
 - **Роль:** Проверка работоспособности после IMPLEMENTATION
-- **Виды:**
+- **Виды (6 штук):**
   - `tester-functional` (sonnet) — Must Have из SPEC.md (все проекты)
+  - `tester-backend` (sonnet) — Запуск существующих тестов + генерация новых (все проекты)
   - `tester-visual` (opus) — UI через Playwright MCP (web)
   - `tester-api` (haiku) — Endpoints, статус коды (api, web)
   - `tester-cli` (haiku) — Команды, --help (cli)
   - `tester-regression` (sonnet) — Тестовый suite (library)
+- **Sequential:** functional + visual запускаются последовательно (Playwright MCP conflicts)
 - **Hard gate:** P0 bugs блокируют milestone:smoke-test-done → возврат в IMPLEMENTATION
 
 ## Скрипты

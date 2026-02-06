@@ -1350,6 +1350,8 @@ cmd_help() {
     echo "  start        Start HYPE (project must be initialized)"
     echo "  stop         Stop HYPE (executors continue running)"
     echo "  status       Show project and HYPE status"
+    echo "  doctor       Diagnose HYPE problems (creates doctor-log)"
+    echo "               --report   Non-interactive mode"
     echo "  clear        Clean up after iteration (logs, tasks, SPEC → SPEC.prev)"
     echo "  update       Update hype to latest version"
     echo "  upgrade      Upgrade current project to latest hype version"
@@ -1370,6 +1372,7 @@ case "${1:-}" in
     stop)   cmd_stop ;;
     status) cmd_status ;;
     clear)  cmd_clear ;;
+    doctor) shift; exec "$HYPE_HOME/core/scripts/doctor.sh" "$@" ;;
     update) cmd_update ;;
     upgrade) shift; cmd_upgrade "$@" ;;
     delete) cmd_delete ;;

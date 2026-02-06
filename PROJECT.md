@@ -6,7 +6,8 @@
 
 Запустите `hype init` в любом проекте, опишите что хотите словами — система сама создаст план, распределит задачи между агентами и выдаст готовый результат.
 
-**Версия:** 1.9.19
+**Версия:** 1.9.20
+**Next:** 2.0.0 (Doctor completion + testing)
 
 ## Целевая аудитория
 
@@ -28,25 +29,36 @@
 
 ```
 hype/
-├── bin/hype              # CLI (init, start, status, update, delete)
+├── bin/hype                 # CLI (init, start, status, update, delete, doctor)
 ├── core/
-│   ├── agents/              # Промпты агентов (11 шт)
-│   │   ├── manager.md       # Координатор фаз (Sonnet)
-│   │   ├── tech-writer.md   # Сбор требований (Opus)
-│   │   ├── architect.md     # Планирование (Opus)
-│   │   ├── executor.md      # Реализация задач (по label)
-│   │   ├── senior-executor.md # Code review + merge (tiered: opus→opus, else→sonnet)
-│   │   ├── analyzer.md      # Глубокий анализ кода
-│   │   └── analyst-*.md     # 5 аналитиков (Sonnet)
-│   ├── scripts/             # Bash скрипты (12 шт)
-│   │   ├── hype.sh  # Главный цикл с lock file
-│   │   ├── detect-phase.sh  # Определение фазы проекта
-│   │   ├── run-analysts.sh  # Параллельный запуск аналитиков
-│   │   ├── run-executors.sh # Параллельный запуск исполнителей
+│   ├── agents/              # Промпты агентов (24 шт)
+│   │   ├── manager.md           # Координатор фаз (Sonnet)
+│   │   ├── tech-writer.md       # Сбор требований (Opus)
+│   │   ├── architect-planner.md # Создание плана из SPEC (Opus)
+│   │   ├── architect-reviewer.md# Ревью добавлений аналитиков (Opus)
+│   │   ├── architect-qa.md      # Final review + regression (Opus)
+│   │   ├── architect-ops.md     # Conflicts, cycles (Sonnet)
+│   │   ├── executor.md          # Реализация задач (по label)
+│   │   ├── senior-executor.md   # Code review + merge (tiered)
+│   │   ├── auditor.md           # Аудит задач с label:audit (Sonnet→Opus)
+│   │   ├── analyzer.md          # Deep analysis кода (Opus)
+│   │   ├── versioner.md         # VERSION + CHANGELOG (Haiku)
+│   │   ├── analyst-*.md         # 5 аналитиков (Sonnet)
+│   │   └── tester-*.md          # 6 тестеров (по типу проекта)
+│   ├── scripts/             # Bash скрипты (14 шт)
+│   │   ├── hype.sh              # Главный цикл с lock file
+│   │   ├── detect-phase.sh      # Определение фазы (JSON output)
+│   │   ├── common.sh            # Shared functions
+│   │   ├── run-analysts.sh      # Параллельный запуск аналитиков
+│   │   ├── run-executors.sh     # Параллельный запуск исполнителей
+│   │   ├── run-senior-executor.sh # Review + merge workflow
+│   │   ├── run-testers.sh       # Параллельный запуск тестеров
 │   │   └── ...
 │   └── commands/            # Slash-команды (/start, /status)
+├── docs/                    # Документация
+│   ├── architecture.md          # Как работает HYPE (для Doctor)
+│   └── troubleshooting.md       # Известные проблемы (для Doctor)
 ├── templates/               # Шаблоны (config, SPEC, CLAUDE)
-├── docs/architecture.md     # Детальная архитектура
 ├── install.sh               # Глобальная установка
 └── CHANGELOG.md             # История версий
 ```
@@ -62,13 +74,14 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 | Фаза | Агент | Что происходит |
 |------|-------|----------------|
 | INIT | Tech Writer | Собирает требования, создаёт SPEC.md (+ deep analysis для больших проектов) |
-| PLANNING | Architect | Создаёт задачи в beads, расставляет deps |
+| PLANNING | Architect-Planner | Создаёт задачи в beads, расставляет deps |
 | HELPERS | Analysts ×5 | Параллельный аудит плана |
-| PLAN_REVIEW | Architect | Ревью добавлений от Analysts |
-| IMPLEMENTATION | Executors | Параллельная реализация задач |
-| SMOKE_TEST | Testers ×N | Параллельная проверка работоспособности (по типу проекта) |
-| SMOKE_REVIEW | Architect | Обработка regression bugs (эскалация, контекст, приоритет) |
-| FINAL_REVIEW | Architect | Проверка целостности |
+| PLAN_REVIEW | Architect-Reviewer | Ревью добавлений от Analysts |
+| IMPLEMENTATION | Executors + Auditor | Параллельная реализация + аудит задач |
+| SMOKE_TEST | Testers ×6 | Параллельная проверка (по типу проекта) |
+| SMOKE_REVIEW | Architect-QA | Обработка regression bugs |
+| FINAL_REVIEW | Architect-QA | Проверка целостности |
+| VERSIONING | Versioner | Обновление VERSION + CHANGELOG |
 | DONE | — | Проект завершён |
 
 ### SMOKE_TEST Testers
@@ -80,10 +93,11 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 | tester-api | haiku | api, web | Endpoints, статус коды |
 | tester-cli | haiku | cli | Команды, --help |
 | tester-regression | sonnet | library | Тестовый suite |
+| tester-backend | sonnet | ALL | Запуск существующих тестов + генерация новых |
 
 **Hard gate:** P0 bugs блокируют milestone:smoke-test-done → возврат в IMPLEMENTATION
 
-**Regression detection:** Если баг был закрыт, но вернулся — testers reopenят его с `regression` label. Architect анализирует регрессии в режиме `smoke_review`: эскалирует модель, отправляет аналитикам, или понижает приоритет.
+**Regression detection:** Если баг был закрыт, но вернулся — testers reopenят его с `regression` label. Architect-QA анализирует регрессии: эскалирует модель, отправляет аналитикам, или понижает приоритет.
 
 ### Deep Analysis (INIT)
 
@@ -143,7 +157,36 @@ startup_timeout: 30          # Секунды на запуск сервера
 - gh — GitHub CLI (для PR workflow)
 - gitleaks — secret detection (авто-установка при наличии GitHub)
 
-## Планируется
+## v2.0.0: Doctor (в работе)
+
+**Doctor** — диагностический инструмент архитектора внутри целевого проекта.
+
+```bash
+hype doctor          # Интерактивная диагностика
+hype doctor --report # Только создать doctor-log
+```
+
+**Назначение:**
+Когда у пользователя проблема с HYPE — Doctor собирает информацию и формирует структурированный отчёт (doctor-log). Пользователь передаёт этот отчёт архитектору HYPE, который понимает проблему и может её исправить.
+
+**Workflow:**
+1. Пользователь запускает `hype doctor`
+2. Doctor спрашивает "что беспокоит"
+3. Doctor собирает данные: bd stats, логи, процессы, фазу
+4. Doctor формирует doctor-log с диагнозом
+5. Пользователь передаёт doctor-log архитектору HYPE
+6. (Опционально) Doctor предлагает runtime-фиксы для простых проблем
+
+**Принципы:**
+- ВСЕГДА создаёт doctor-log (главный результат)
+- НЕ правит код — ни HYPE, ни проекта
+- Runtime-фиксы через bd только с подтверждением (stuck tasks, orphaned labels)
+
+**Знания Doctor:**
+- `docs/architecture.md` — как работает HYPE
+- `docs/troubleshooting.md` — известные проблемы и решения
+
+## Планируется (после 2.0.0)
 
 - OS Notifications (macOS/Linux)
 - Webhook уведомления (Telegram, Slack)

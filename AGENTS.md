@@ -1,34 +1,43 @@
 # Agent Instructions
 
-This project uses **bd** (beads) for issue tracking.
+Инструкции по использованию beads для агента.
 
-## Quick Reference
+## Beads (bd)
 
 ```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --status in_progress  # Claim work
-bd close <id>         # Complete work
+bd ready              # Доступные задачи (без блокеров)
+bd show <id>          # Детали задачи
+bd update <id> --status in_progress  # Взять в работу
+bd close <id>         # Закрыть задачу
+bd stats              # Статистика проекта
+bd blocked            # Заблокированные задачи
 ```
 
-## Session Completion
+## Session Close Protocol
 
-**When ending a work session**, complete ALL steps below:
+**КРИТИЧНО:** Работа НЕ завершена пока `git push` не прошёл.
 
-1. **File issues for remaining work** — Create issues for anything that needs follow-up
-2. **Run quality gates** (if code changed) — Tests, linters, builds
-3. **Update issue status** — Close finished work, update in-progress items
-4. **Push to remote**:
-   ```bash
-   git pull --rebase
-   git push
-   git status  # MUST show "up to date with origin"
-   ```
-5. **Verify** — All changes committed AND pushed
+```bash
+# 1. Проверить что изменилось
+git status
 
-**Note:** Beads daemon auto-syncs changes. No manual `bd sync` needed.
+# 2. Закрыть выполненные задачи
+bd close <id1> <id2> ...
 
-**CRITICAL RULES:**
-- Work is NOT complete until `git push` succeeds
-- NEVER stop before pushing — that leaves work stranded locally
-- If push fails, resolve and retry until it succeeds
+# 3. Создать задачи на follow-up (если есть)
+bd create --title="..." --type=task --priority=2
+
+# 4. Синхронизировать и пушить
+git add <files>
+git commit -m "..."
+bd sync
+git push
+
+# 5. Проверить
+git status  # должен показать "up to date with origin"
+```
+
+**Правила:**
+- НИКОГДА не останавливаться до git push
+- НИКОГДА не говорить "готов к пушу когда захочешь" — ТЫ должен запушить
+- Если push падает — разрешить и повторить

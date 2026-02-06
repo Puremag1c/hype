@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.10] - 2026-02-06
+
+### Fixed
+
+- **Milestone tasks picked up by executor/review** - `run-executors.sh` and `run-senior-executor.sh` now filter out tasks with `milestone:*` labels. Previously only title was checked, so milestones with titles like "Planning complete" bypassed the filter.
+
+---
+
 ## [1.9.9] - 2026-02-06
 
 ### Fixed

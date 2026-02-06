@@ -571,7 +571,7 @@ cleanup_iteration() {
 
     # Stashes
     local stash_count
-    stash_count=$(git stash list 2>/dev/null | grep -ci hype || echo 0)
+    stash_count=$(git stash list 2>/dev/null | grep -i hype | wc -l | tr -d ' ')
     [ "$stash_count" -gt 0 ] && echo "  • $stash_count hype-related git stash(es)"
 
     # SPEC.md
@@ -589,8 +589,14 @@ cleanup_iteration() {
     rm -f "$logs_dir"/*.log 2>/dev/null || true
     rm -rf "$logs_dir"/archive 2>/dev/null || true
 
-    # 3. Clean beads tasks
+    # 3. Clean beads tasks (close open tasks first, then cleanup)
     echo "  → Cleaning beads tasks..."
+    # Close all open/in_progress tasks first (bd admin cleanup only deletes closed)
+    local open_ids
+    open_ids=$(bd list --json --limit 0 2>/dev/null | jq -r '.[] | select(.status == "open" or .status == "in_progress") | .id' 2>/dev/null || true)
+    for task_id in $open_ids; do
+        bd close "$task_id" --reason="Closed by hype clear" 2>/dev/null || true
+    done
     bd admin cleanup --force 2>/dev/null || true
 
     # 4. Delete all milestones (using function from this file)

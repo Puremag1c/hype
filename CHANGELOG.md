@@ -18,6 +18,8 @@
 
 - **hype clear not cleaning stash** - Fixed stash cleanup in `cleanup_iteration()`. Previous code failed because stash indices shift after each drop. Now uses loop to drop hype-related stashes correctly.
 
+- **hype clear leaving open tasks** - `bd admin cleanup` only deletes closed tasks. Now closes all open/in_progress tasks first before cleanup. Also fixed stash count integer error (`grep -c` → `wc -l`).
+
 ---
 
 ## [1.9.9] - 2026-02-06

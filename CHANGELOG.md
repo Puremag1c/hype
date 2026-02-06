@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.9.16] - 2026-02-06
+
+### Fixed
+
+- **Race condition in milestone creation** - Milestones were created prematurely when trigger tasks were `in_progress` (not visible to `--status=open` check). After timeout, triggers returned to `open` but milestone already existed, causing deadlock. Now checks both `open` AND `in_progress` statuses before creating milestones.
+- **Self-healing for premature milestones** - `detect-phase.sh` now detects and removes `milestone:analysts-done` if analyst triggers are still pending, automatically recovering from race conditions.
+
+---
+
 ## [1.9.15] - 2026-02-06
 
 ### Changed

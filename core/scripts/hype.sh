@@ -741,9 +741,12 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             ./scripts/run-analysts.sh
 
             # Check if all analysts done and create milestone (single source of truth)
-            local open_triggers
-            open_triggers=$(bd list --status=open --json --limit 0 2>/dev/null | jq '[.[] | select(.title | startswith("run-analyst-"))] | length' 2>/dev/null || echo "0")
-            if [ "$open_triggers" -eq 0 ]; then
+            # Must check BOTH open AND in_progress to prevent race condition:
+            # If trigger is in_progress during check, milestone would be created prematurely
+            local pending_triggers
+            pending_triggers=$(bd list --json --limit 0 2>/dev/null | \
+                jq '[.[] | select(.status == "open" or .status == "in_progress") | select(.title | startswith("run-analyst-"))] | length' 2>/dev/null || echo "0")
+            if [ "$pending_triggers" -eq 0 ]; then
                 if ! has_milestone "milestone:analysts-done"; then
                     log "INFO" "All analysts done, creating milestone"
                     ensure_milestone "milestone:analysts-done" "Analysts complete"
@@ -803,13 +806,15 @@ For each task: bd show <id> --json, then decide action and REMOVE regression lab
             ./scripts/run-testers.sh
 
             # Check results - milestone created only if ALL tasks are closed
-            local open_tasks
-            open_tasks=$(bd list --status=open --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+            # Must check BOTH open AND in_progress to prevent race condition
+            local pending_tasks
+            pending_tasks=$(bd list --json --limit 0 2>/dev/null | \
+                jq '[.[] | select(.status == "open" or .status == "in_progress")] | length' 2>/dev/null || echo "0")
 
-            if [ "$open_tasks" -gt 0 ]; then
+            if [ "$pending_tasks" -gt 0 ]; then
                 # Testers created tasks (bugs, regressions)
                 # detect-phase.sh will route to SMOKE_REVIEW (if regression) or IMPLEMENTATION
-                log "WARN" "SMOKE_TEST: $open_tasks open task(s) found"
+                log "WARN" "SMOKE_TEST: $pending_tasks pending task(s) found"
             else
                 # All tasks closed - create milestone
                 log "INFO" "SMOKE_TEST: All tests passed - creating milestone"

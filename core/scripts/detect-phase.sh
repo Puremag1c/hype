@@ -195,6 +195,19 @@ if [ "$HAS_ANALYSTS_DONE" -eq 0 ]; then
     exit 0
 fi
 
+# SELF-HEALING: Check for premature milestone (triggers still pending)
+# Race condition: milestone created while trigger was in_progress, then timeout reset it to open
+PENDING_ANALYST_TRIGGERS=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open" or .status == "in_progress") | select(.title | test("^run-analyst-"))] | length' 2>/dev/null || echo "0")
+if [ "$PENDING_ANALYST_TRIGGERS" -gt 0 ] && [ "$HAS_ANALYSTS_DONE" -gt 0 ]; then
+    >&2 echo "SELF-HEAL: Removing premature milestone:analysts-done ($PENDING_ANALYST_TRIGGERS triggers pending)"
+    MILESTONE_IDS=$(echo "$ALL_TASKS_JSON" | jq -r '.[] | select(.labels[]? == "milestone:analysts-done") | .id' 2>/dev/null || true)
+    for mid in $MILESTONE_IDS; do
+        bd delete "$mid" >/dev/null 2>&1 || true
+    done
+    output_json "HELPERS"
+    exit 0
+fi
+
 # PLAN_REVIEW: analysts закончили, Architect ревьюит
 if [ "$HAS_PLAN_REVIEWED" -eq 0 ]; then
     output_json "PLAN_REVIEW"

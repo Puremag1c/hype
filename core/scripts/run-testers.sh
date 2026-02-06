@@ -73,14 +73,15 @@ get_project_type() {
 }
 
 # Get testers for project type
+# Note: backend runs for all types, playwright testers (functional, visual) listed separately
 get_testers_for_type() {
     local type=$1
     case "$type" in
-        web)      echo "functional visual api" ;;
-        api)      echo "functional api" ;;
-        cli)      echo "functional cli" ;;
-        library)  echo "functional regression" ;;
-        *)        echo "functional" ;;
+        web)      echo "backend api functional visual" ;;
+        api)      echo "backend api functional" ;;
+        cli)      echo "backend cli functional" ;;
+        library)  echo "backend regression functional" ;;
+        *)        echo "backend functional" ;;
     esac
 }
 
@@ -183,6 +184,7 @@ $spec_content"
         visual)     tester_model=$(map_model "${MODEL_TESTER_VISUAL:-opus}") ;;
         functional) tester_model=$(map_model "${MODEL_TESTER_FUNCTIONAL:-sonnet}") ;;
         regression) tester_model=$(map_model "${MODEL_TESTER_REGRESSION:-sonnet}") ;;
+        backend)    tester_model=$(map_model "${MODEL_TESTER_BACKEND:-sonnet}") ;;
         *)          tester_model=$(map_model "${MODEL_TESTERS:-haiku}") ;;
     esac
 
@@ -516,15 +518,33 @@ main() {
         fi
     done
 
-    # Run all testers in parallel, collect PIDs (pass cache)
-    local tester_pids=""
+    # Run testers - Playwright testers (functional, visual) run sequentially to avoid MCP conflicts
+    # Non-Playwright testers (backend, api, cli, regression) run in parallel
+    local parallel_pids=""
+    local playwright_testers=""
+
     for tester in $testers; do
-        run_tester "$tester" "$project_type" "$bd_cache" &
-        tester_pids="$tester_pids $!"
+        case "$tester" in
+            functional|visual)
+                # Queue for sequential execution
+                playwright_testers="$playwright_testers $tester"
+                ;;
+            *)
+                # Run in parallel
+                run_tester "$tester" "$project_type" "$bd_cache" &
+                parallel_pids="$parallel_pids $!"
+                ;;
+        esac
     done
 
-    # Wait for testers only (not server which runs in background)
-    for pid in $tester_pids; do
+    # Run Playwright testers sequentially (avoid MCP conflicts)
+    for tester in $playwright_testers; do
+        log "INFO" "Running $tester (sequential - Playwright)"
+        run_tester "$tester" "$project_type" "$bd_cache"
+    done
+
+    # Wait for parallel testers
+    for pid in $parallel_pids; do
         wait "$pid" 2>/dev/null || true
     done
 

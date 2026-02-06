@@ -2,6 +2,10 @@
 
 ## [1.9.10] - 2026-02-06
 
+### Added
+
+- **Backend tester** - New `tester-backend.md` agent that runs existing project tests (pytest, npm test, mix test, etc.) and generates tests for SPEC.md requirements not covered. Uses sonnet model.
+
 ### Fixed
 
 - **Milestone tasks picked up by executor/review** - `run-executors.sh` and `run-senior-executor.sh` now filter out tasks with `milestone:*` labels. Previously only title was checked, so milestones with titles like "Planning complete" bypassed the filter.
@@ -9,6 +13,8 @@
 - **Auditor model escalation** - Auditor now checks for `model:opus` label and escalates from sonnet→opus on timeout/failure. After 3 failures, escalates to Architect with full context.
 
 - **Audit NO_FINDINGS retry tracking** - When auditor produces insufficient findings (<50 chars), task gets `audit-retry:N` label with escalation: retry 1 (sonnet), retry 2 (opus), retry 3 → escalate to Architect.
+
+- **Playwright tester conflict** - `functional` and `visual` testers now run sequentially instead of parallel to avoid Playwright MCP conflicts. Other testers (backend, api, cli) still run in parallel.
 
 ---
 

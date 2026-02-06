@@ -25,7 +25,9 @@ jobs:
 
       - name: Install beads (bd)
         run: |
-          go install github.com/steveyegge/beads/cmd/bd@latest
+          git clone --depth 1 https://github.com/steveyegge/beads.git /tmp/beads
+          cd /tmp/beads/cmd/bd
+          go build -o $HOME/go/bin/bd .
           echo "$HOME/go/bin" >> $GITHUB_PATH
 
       - name: Install bats (macOS)

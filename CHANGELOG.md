@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.9.17] - 2026-02-06
+
+### Added
+
+- **Versioner agent** - New dedicated agent for updating VERSION and CHANGELOG after successful FINAL_REVIEW. Removes versioning responsibility from Architect (was often skipped). Uses haiku model for cost efficiency.
+
+### Changed
+
+- **Architect no longer handles versioning** - Versioning steps removed from architect.md. HYPE now calls versioner agent automatically after `FINAL_REVIEW: PASSED`.
+
+---
+
 ## [1.9.16] - 2026-02-06
 
 ### Fixed

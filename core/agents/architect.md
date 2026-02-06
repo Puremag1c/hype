@@ -305,97 +305,23 @@ git status --porcelain | grep '^??'
 
 **НЕ оставляй untracked файлы в рабочей директории!**
 
-### 5. Версионирование (ОБЯЗАТЕЛЬНО при любых изменениях)
+### 5. Результат review
 
-**Каждый набор изменений = новая версия.** Версионируй ПЕРЕД созданием P0 задач.
-
-#### 5.1 Проверь есть ли изменения для версионирования
-
-```bash
-# Есть ли закрытые задачи в этой итерации?
-CLOSED_COUNT=$(bd list --status=closed --json | jq 'length')
-if [ "$CLOSED_COUNT" -eq 0 ]; then
-    echo "No changes to version"
-    # Пропусти версионирование, перейди к шагу 6
-fi
-```
-
-#### 5.2 Прочитай текущую версию
-
-```bash
-cat VERSION 2>/dev/null || echo "0.0.0"
-```
-
-#### 5.3 Определи тип изменений
-
-Проанализируй closed задачи этой итерации:
-
-```bash
-bd list --status=closed --json | jq -r '.[] | "\(.type) \(.title)"'
-```
-
-Правила версионирования:
-- **MAJOR** (X.0.0): **ТОЛЬКО по явному запросу пользователя** (никогда автоматически!)
-- **MINOR** (+0.1.0): новый функционал, видимый пользователю (новая кнопка, endpoint, команда CLI)
-- **PATCH** (+0.0.1): bugfix, tweak, рефакторинг, обновление зависимостей (пользователь не заметит)
-
-#### 5.4 Обнови VERSION
-
-```bash
-# Пример: была 0.2.0, добавили features → 0.3.0
-echo "0.3.0" > VERSION
-```
-
-#### 5.5 Сгенерируй CHANGELOG.md
-
-```bash
-TODAY=$(date +%Y-%m-%d)
-NEW_VERSION=$(cat VERSION)
-
-cat > CHANGELOG_NEW.md << EOF
-# Changelog
-
-## [$NEW_VERSION] - $TODAY
-
-### Added
-- <новые features из bd list>
-
-### Changed
-- <изменения из bd list>
-
-### Fixed
-- <bugfixes из bd list>
-
-EOF
-
-tail -n +3 CHANGELOG.md >> CHANGELOG_NEW.md 2>/dev/null || true
-mv CHANGELOG_NEW.md CHANGELOG.md
-```
-
-#### 5.6 Закоммить версию
-
-```bash
-git add VERSION CHANGELOG.md
-git commit -m "Release v$(cat VERSION)"
-```
-
-### 6. Результат review
+**Версионирование выполняется автоматически** — HYPE вызовет Versioner агента после PASSED.
 
 #### Если найдены проблемы:
 
 ```bash
 bd create --title="Fix: <описание проблемы>" --type=bug --priority=0
 echo "FINAL_REVIEW: NEEDS_FIXES"
-echo "VERSION: $(cat VERSION)"  # Текущая версия УЖЕ закоммичена
 ```
 
-Система вернётся в IMPLEMENTATION для исправления. После исправления — снова версия (+0.0.1).
+Система вернётся в IMPLEMENTATION для исправления.
 
 #### Если всё ок:
 
 ```bash
 echo "FINAL_REVIEW: PASSED"
-echo "VERSION: $(cat VERSION)"
 ```
 
 ---

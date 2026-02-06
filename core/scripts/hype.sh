@@ -859,6 +859,29 @@ For each task: bd show <id> --json, then decide action and REMOVE regression lab
                 sleep 5
             done
 
+            # Run versioner after successful final review
+            if [ "$final_review_success" = true ]; then
+                log "INFO" "FINAL_REVIEW passed, running versioner..."
+
+                # Create trigger task for versioner
+                local versioner_trigger
+                versioner_trigger=$(bd create --title="run-versioning" --type=task --priority=0 2>&1 | grep -oE '[A-Za-z]+-[a-z0-9]+' | head -1)
+
+                if [ -n "$versioner_trigger" ]; then
+                    local versioner_model
+                    versioner_model=$(map_model "${MODEL_VERSIONER:-haiku}")
+
+                    # Run versioner with trigger task context
+                    local versioner_prompt="TRIGGER_TASK: $versioner_trigger"
+                    if run_agent_with_mode "versioner" ".claude/agents/versioner.md" "$versioner_model" "" "$versioner_prompt" "${VERSIONER_TIMEOUT:-5m}"; then
+                        log "INFO" "Versioner completed"
+                    else
+                        log "WARN" "Versioner failed/timed out, closing trigger"
+                        bd close "$versioner_trigger" --reason="Versioner timeout" >/dev/null 2>&1 || true
+                    fi
+                fi
+            fi
+
             # Check if architect created project-done milestone
             check_and_create_done_milestone
 

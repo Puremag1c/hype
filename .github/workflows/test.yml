@@ -41,12 +41,12 @@ jobs:
           git clone --depth 1 https://github.com/steveyegge/beads.git /tmp/beads
           cd /tmp/beads/cmd/bd && go build -o $HOME/go/bin/bd .
           echo "$HOME/go/bin" >> $GITHUB_PATH
-      - name: Install bats (macOS)
+      - name: Install bats + parallel (macOS)
         if: runner.os == 'macOS'
-        run: brew install bats-core
-      - name: Install bats (Linux)
+        run: brew install bats-core parallel
+      - name: Install bats + parallel (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y bats jq
+        run: sudo apt-get update && sudo apt-get install -y bats jq parallel
       - run: ./tests/run_tests.sh integration
         continue-on-error: true
 
@@ -67,11 +67,11 @@ jobs:
           git clone --depth 1 https://github.com/steveyegge/beads.git /tmp/beads
           cd /tmp/beads/cmd/bd && go build -o $HOME/go/bin/bd .
           echo "$HOME/go/bin" >> $GITHUB_PATH
-      - name: Install bats (macOS)
+      - name: Install bats + parallel (macOS)
         if: runner.os == 'macOS'
-        run: brew install bats-core
-      - name: Install bats (Linux)
+        run: brew install bats-core parallel
+      - name: Install bats + parallel (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y bats jq
+        run: sudo apt-get update && sudo apt-get install -y bats jq parallel
       - run: ./tests/run_tests.sh e2e
         continue-on-error: true

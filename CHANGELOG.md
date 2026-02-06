@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.0.3] - 2026-02-06
+
+### Fixed
+
+- **CI: install GNU parallel** - `bats --jobs` requires GNU `parallel` which was missing in CI runners. Now installed via brew (macOS) and apt (Linux).
+
+---
+
 ## [2.0.2] - 2026-02-06
 
 ### Fixed

@@ -15,7 +15,6 @@ setup() {
     TEST_TMPDIR=$(mktemp -d)/doctortest
     mkdir -p "$TEST_TMPDIR/.hype"
     mkdir -p "$TEST_TMPDIR/logs"
-    mkdir -p "$TEST_TMPDIR/scripts"
 
     cd "$TEST_TMPDIR"
     git init --quiet
@@ -24,7 +23,7 @@ setup() {
 
     bd init --quiet 2>/dev/null || true
 
-    # Link scripts for detect-phase.sh
+    # Link scripts for detect-phase.sh (symlink, not directory)
     ln -sf "$SCRIPTS_DIR" "$TEST_TMPDIR/scripts"
 
     export PROJECT_ROOT="$TEST_TMPDIR"
@@ -175,7 +174,6 @@ teardown() {
 }
 
 @test "Doctor: can detect current phase" {
-    skip_if_ci "symlink path issues in parallel execution"
     cd "$TEST_TMPDIR"
     touch SPEC.md
 

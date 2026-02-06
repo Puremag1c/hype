@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.13] - 2026-02-06
+
+### Changed
+
+- **Config cleanup on upgrade** - `hype upgrade` now removes deprecated variables from `.hype/config.sh` that are no longer in the template.
+
+---
+
 ## [1.9.12] - 2026-02-06
 
 ### Changed

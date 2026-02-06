@@ -714,25 +714,29 @@ upgrade_project() {
     success "Upgraded to $VERSION"
 }
 
-# Merge config: add new variables from template, keep user values
+# Merge config: add new variables from template, remove deprecated, keep user values
 merge_config() {
     local user_config="$1"
     local template="$2"
     local added=()
+    local removed=()
 
-    # Extract variable names from template (lines like VAR_NAME=)
+    # Build list of valid variable names from template
+    local valid_vars=()
     while IFS= read -r line; do
-        # Skip comments and empty lines
+        if [[ "$line" =~ ^([A-Z_][A-Z0-9_]*)= ]]; then
+            valid_vars+=("${BASH_REMATCH[1]}")
+        fi
+    done < "$template"
+
+    # 1. Add new variables (in template but not in user config)
+    while IFS= read -r line; do
         [[ "$line" =~ ^[[:space:]]*# ]] && continue
         [[ -z "$line" ]] && continue
 
-        # Match variable assignment (VAR=value or VAR="value")
         if [[ "$line" =~ ^([A-Z_][A-Z0-9_]*)= ]]; then
             local var_name="${BASH_REMATCH[1]}"
-
-            # Check if variable exists in user config
             if ! grep -q "^${var_name}=" "$user_config" 2>/dev/null; then
-                # Add the variable (and preceding comment if any)
                 echo "" >> "$user_config"
                 echo "# Added in upgrade" >> "$user_config"
                 echo "$line" >> "$user_config"
@@ -741,9 +745,39 @@ merge_config() {
         fi
     done < "$template"
 
-    if [[ ${#added[@]} -gt 0 ]]; then
-        success "Added new config variables: ${added[*]}"
+    # 2. Remove deprecated variables (in user config but not in template)
+    local tmp_config="${user_config}.tmp"
+    > "$tmp_config"
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^([A-Z_][A-Z0-9_]*)= ]]; then
+            local var_name="${BASH_REMATCH[1]}"
+            local is_valid=false
+            for v in "${valid_vars[@]}"; do
+                [[ "$v" == "$var_name" ]] && is_valid=true && break
+            done
+            if [[ "$is_valid" == "false" ]]; then
+                removed+=("$var_name")
+                continue  # Skip deprecated variable
+            fi
+        fi
+        echo "$line" >> "$tmp_config"
+    done < "$user_config"
+
+    # Replace if we removed anything
+    if [[ ${#removed[@]} -gt 0 ]]; then
+        mv "$tmp_config" "$user_config"
     else
+        rm -f "$tmp_config"
+    fi
+
+    # Report changes
+    if [[ ${#added[@]} -gt 0 ]]; then
+        success "Added config variables: ${added[*]}"
+    fi
+    if [[ ${#removed[@]} -gt 0 ]]; then
+        success "Removed deprecated variables: ${removed[*]}"
+    fi
+    if [[ ${#added[@]} -eq 0 && ${#removed[@]} -eq 0 ]]; then
         info "Config up to date"
     fi
 }

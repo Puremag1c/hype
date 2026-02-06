@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.8] - 2026-02-06
+
+### Fixed
+
+- **Milestone not visible after creation** - `has_milestone()` now uses `bd list --all` to include closed issues. Previously milestones were created and immediately closed, but `bd list` without `--all` only shows open issues, so milestones were never detected.
+
+---
+
 ## [1.9.7] - 2026-02-06
 
 ### Fixed

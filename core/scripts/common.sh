@@ -415,7 +415,7 @@ export -f is_audit_task 2>/dev/null || true
 has_milestone() {
     local label="$1"
     local found
-    found=$(bd list --json --limit 0 2>/dev/null | \
+    found=$(bd list --json --limit 0 --all 2>/dev/null | \
         jq -r ".[] | select(.labels[]? == \"$label\") | .id" 2>/dev/null | head -1)
     [ -n "$found" ]
 }

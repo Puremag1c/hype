@@ -386,6 +386,7 @@ cmd_init() {
         info "Creating Claude Code settings..."
         cat > .claude/settings.json << 'EOF'
 {
+  "spinnerTipsEnabled": false,
   "permissions": {
     "allow": [
       "Bash(bd *)",

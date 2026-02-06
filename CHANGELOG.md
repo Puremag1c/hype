@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.12] - 2026-02-06
+
+### Changed
+
+- **Disable spinner tips in projects** - `hype init` now creates `.claude/settings.json` with `spinnerTipsEnabled: false` to disable tips during interactive sessions.
+
+---
+
 ## [1.9.11] - 2026-02-06
 
 ### Fixed

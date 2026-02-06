@@ -549,7 +549,8 @@ stat -f %m $(python3 -c "import module; print(module.__file__)")
 ```
 
 **Решение:**
-HYPE v2.0.11+ автоматически создаёт P0 task через `validate_testing_config()`.
+Исправить testing.yaml — Opus создаёт конфиг при первом SMOKE_TEST через ensure_testing_config().
+Если конфиг некорректный, testers найдут баги и система исправит в следующей итерации.
 
 **Manual fix (testing.yaml):**
 ```yaml
@@ -566,31 +567,6 @@ start_command: .venv/bin/python -m chatfilter.main
 - `python3` = system python → читает `/Library/Frameworks/.../site-packages/`
 - `.venv/bin/python` = venv python → читает проект
 - `pip install -e .` = editable install → изменения видны сразу
-
----
-
-### PROBLEM: SMOKE_TEST config issues detected
-
-**Симптомы:**
-- В логах: "Testing config issues detected"
-- P0 task "SMOKE: Fix testing.yaml configuration" создан
-- SMOKE_TEST не запускается
-
-**Причина:**
-`validate_testing_config()` обнаружила проблемы конфигурации.
-
-**Диагностика:**
-```bash
-bd list --status=open --json | jq '.[] | select(.title | contains("testing.yaml"))'
-cat .hype/testing.yaml
-```
-
-**Решение:**
-Это нормальное поведение — система создала P0 task для самоисцеления.
-Opus исправит testing.yaml в следующей IMPLEMENTATION итерации.
-
-**Manual fix:**
-Исправить testing.yaml согласно инструкциям в P0 task.
 
 ---
 

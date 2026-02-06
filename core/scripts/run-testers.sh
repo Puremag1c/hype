@@ -361,71 +361,6 @@ read_testing_config() {
     export TESTING_TYPE TESTING_BUILD_CMD TESTING_START_CMD TESTING_URL TESTING_HEALTH TESTING_TIMEOUT
 }
 
-# Validate testing config for common misconfigurations
-# Creates P0 task if issues found (self-healing via IMPLEMENTATION phase)
-validate_testing_config() {
-    local issues=()
-
-    # Check 1: Python package without build_command
-    # Without editable install, testers will see OLD installed code, not current source
-    if [ -f "$PROJECT_DIR/pyproject.toml" ] || [ -f "$PROJECT_DIR/setup.py" ]; then
-        if [ -z "$TESTING_BUILD_CMD" ]; then
-            issues+=("Python package detected but no build_command. Without 'pip install -e .' testers see OLD code.")
-        fi
-    fi
-
-    # Check 2: venv exists but start_command uses system python
-    # System python reads from /Library/Frameworks/... not project source
-    if [ -d "$PROJECT_DIR/.venv" ] || [ -d "$PROJECT_DIR/venv" ]; then
-        if echo "$TESTING_START_CMD" | grep -qE "^python|^python3" && \
-           ! echo "$TESTING_START_CMD" | grep -qE "\.venv/|venv/|source.*activate"; then
-            issues+=("Project has venv but start_command uses system python. System python runs INSTALLED package, not current source.")
-        fi
-    fi
-
-    # If issues found, create P0 task and block SMOKE_TEST
-    if [ ${#issues[@]} -gt 0 ]; then
-        log "ERROR" "Testing config issues detected:"
-        for issue in "${issues[@]}"; do
-            log "ERROR" "  - $issue"
-        done
-
-        # Create P0 task for Opus to fix
-        bd create --title="SMOKE: Fix testing.yaml configuration" \
-            --type=bug --priority=0 \
-            --description="## Problem
-testing.yaml has configuration issues that cause testers to see OLD code.
-
-## Issues Found
-$(printf '- %s\n' "${issues[@]}")
-
-## Current Config
-\`\`\`yaml
-$(cat "$PROJECT_DIR/.hype/testing.yaml" 2>/dev/null || echo "File not found")
-\`\`\`
-
-## How to Fix
-
-### For Python packages (pyproject.toml/setup.py):
-\`\`\`yaml
-build_command: .venv/bin/pip install -e .
-start_command: .venv/bin/python -m YOUR_MODULE
-\`\`\`
-
-### Why this matters:
-- Without editable install, Python runs the INSTALLED package from site-packages
-- Source code changes are INVISIBLE to the running server
-- Testers find bugs that are already fixed in source → infinite loop
-
-done_when: testing.yaml updated with correct venv paths and editable install" >/dev/null 2>&1
-
-        return 1
-    fi
-
-    log "INFO" "Testing config validated"
-    return 0
-}
-
 # Start dev server (single instance for all testers)
 start_dev_server() {
     local start_cmd="$TESTING_START_CMD"
@@ -572,13 +507,6 @@ main() {
 
     # Read testing config
     read_testing_config
-
-    # Validate config for common issues (Python venv, build_command)
-    # Creates P0 task if issues found → routes to IMPLEMENTATION for self-healing
-    if ! validate_testing_config; then
-        log "WARN" "SMOKE_TEST: config issues detected - task created for fix"
-        return 0  # Task created, hype.sh will route to IMPLEMENTATION
-    fi
 
     # Kill any existing process on test port
     stop_dev_server

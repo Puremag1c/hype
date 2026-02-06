@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.9] - 2026-02-06
+
+### Fixed
+
+- **Phase detection not seeing closed milestones** - `detect-phase.sh` now uses `bd list --all` to include closed issues. This was the second occurrence of the same bug fixed in 1.9.8 (which only fixed `has_milestone()` but not `detect-phase.sh`).
+
+---
+
 ## [1.9.8] - 2026-02-06
 
 ### Fixed

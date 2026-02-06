@@ -53,7 +53,7 @@ fi
 # Собираем статистику из beads (batched - 2 запроса вместо 11)
 # Кэшируем JSON для всех фильтров через jq
 # ВАЖНО: --limit 0 для unlimited (по умолчанию 50, что ломает milestone detection)
-ALL_TASKS_JSON=$(bd list --json --limit 0 2>/dev/null)
+ALL_TASKS_JSON=$(bd list --json --limit 0 --all 2>/dev/null)
 if [ $? -ne 0 ] || ! echo "$ALL_TASKS_JSON" | jq -e 'type == "array"' >/dev/null 2>&1; then
     echo '{"phase":"ERROR","stats":{},"progress_pct":0,"in_progress_ids":[],"regression_count":0,"p0_bugs":0,"error":"bd list failed or returned invalid JSON"}'
     >&2 echo "bd list вернул невалидный JSON или ошибку"

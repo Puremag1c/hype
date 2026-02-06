@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.0.2] - 2026-02-06
+
+### Fixed
+
+- **Zombie tail processes on tester interrupt** - `run_claude_with_progress` now uses trap to kill entire process group (tail + jq) on EXIT/INT/TERM, preventing zombie processes when wrapper is interrupted.
+- **Tester tasks left in_progress on abnormal exit** - `run_tester` now has cleanup trap that closes beads task if wrapper script is killed before normal completion.
+
+---
+
 ## [2.0.1] - 2026-02-06
 
 ### Changed

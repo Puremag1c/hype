@@ -112,9 +112,9 @@ run_test_suite() {
     log_info "Running $suite tests ($test_files file(s))..."
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-    # Use parallel execution: 4 jobs for integration/e2e, sequential for unit
+    # Use parallel execution if GNU parallel is available
     local jobs_flag=""
-    if [[ "$suite" != "unit" ]]; then
+    if [[ "$suite" != "unit" ]] && command -v parallel &>/dev/null; then
         jobs_flag="--jobs 4"
     fi
 

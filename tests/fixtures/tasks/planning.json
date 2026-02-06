@@ -1,0 +1,50 @@
+[
+  {
+    "id": "test-001",
+    "title": "Create user authentication",
+    "type": "task",
+    "priority": "P1",
+    "status": "open",
+    "labels": ["backend", "model:sonnet"],
+    "description": "Implement user login and registration",
+    "notes": "",
+    "blocked_by": [],
+    "blocks": ["test-002"]
+  },
+  {
+    "id": "test-002",
+    "title": "Add session management",
+    "type": "task",
+    "priority": "P1",
+    "status": "open",
+    "labels": ["backend", "model:sonnet"],
+    "description": "Implement session tokens and refresh",
+    "notes": "",
+    "blocked_by": ["test-001"],
+    "blocks": []
+  },
+  {
+    "id": "test-003",
+    "title": "Setup database schema",
+    "type": "task",
+    "priority": "P0",
+    "status": "open",
+    "labels": ["backend", "model:haiku"],
+    "description": "Create users and sessions tables",
+    "notes": "",
+    "blocked_by": [],
+    "blocks": []
+  },
+  {
+    "id": "milestone-planning",
+    "title": "Planning complete",
+    "type": "task",
+    "priority": "P2",
+    "status": "closed",
+    "labels": ["milestone:planning-done"],
+    "description": "",
+    "notes": "",
+    "blocked_by": [],
+    "blocks": []
+  }
+]

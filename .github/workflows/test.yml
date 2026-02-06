@@ -1,0 +1,44 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install bats (macOS)
+        if: runner.os == 'macOS'
+        run: brew install bats-core
+
+      - name: Install bats (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bats
+
+      - name: Install jq
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y jq
+
+      - name: Run unit tests
+        run: ./tests/run_tests.sh unit
+
+      - name: Run integration tests
+        run: ./tests/run_tests.sh integration
+        continue-on-error: true  # Integration tests may need bd
+
+      - name: Run e2e tests
+        run: ./tests/run_tests.sh e2e
+        continue-on-error: true  # E2E tests need full environment

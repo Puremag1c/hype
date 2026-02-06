@@ -1,0 +1,50 @@
+[
+  {
+    "id": "test-001",
+    "title": "Create user authentication",
+    "type": "task",
+    "priority": "P1",
+    "status": "closed",
+    "labels": ["backend", "model:sonnet"],
+    "description": "Implement user login and registration",
+    "notes": "Completed",
+    "blocked_by": [],
+    "blocks": []
+  },
+  {
+    "id": "test-002",
+    "title": "Add session management",
+    "type": "task",
+    "priority": "P1",
+    "status": "closed",
+    "labels": ["backend", "model:sonnet"],
+    "description": "Implement session tokens and refresh",
+    "notes": "Completed",
+    "blocked_by": [],
+    "blocks": []
+  },
+  {
+    "id": "bug-001",
+    "title": "Login fails on Safari",
+    "type": "bug",
+    "priority": "P0",
+    "status": "open",
+    "labels": ["bug", "regression"],
+    "description": "Login button unresponsive on Safari 17",
+    "notes": "",
+    "blocked_by": [],
+    "blocks": []
+  },
+  {
+    "id": "milestone-smoke",
+    "title": "Smoke test started",
+    "type": "task",
+    "priority": "P2",
+    "status": "closed",
+    "labels": ["milestone:smoke-test-started"],
+    "description": "",
+    "notes": "",
+    "blocked_by": [],
+    "blocks": []
+  }
+]

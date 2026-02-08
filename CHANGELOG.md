@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.0.17] - 2026-02-08
+
+### Changed
+
+- **Doctor agent rewritten to avoid hasty conclusions:**
+  - Model changed: sonnet → opus (accuracy > speed for diagnostics)
+  - Added "НЕ СПЕШИ" section with self-check questions
+  - Required multiple hypotheses (2-3) before concluding
+  - Added verification checklist (СТОП-ЧЕКЛИСТ) before taking action
+  - Added confidence levels (high/medium/low) for diagnoses
+  - Added "Антипаттерны" section showing what NOT to do
+  - Removed quick reference table (encouraged shortcuts)
+  - Doctor-log now includes hypotheses considered and supporting evidence
+
+### Fixed
+
+- **Test mock compatibility with bd_safe** - Mock `bd` now created as executable script in PATH instead of bash function. Fixes tests failing because `timeout_cmd` spawns subprocess where bash function exports aren't visible.
+
+### Documentation
+
+- **Updated troubleshooting.md with recent fixes:**
+  - Added: Beads daemon explosion (270+ processes) - v2.0.14
+  - Added: Phase UNKNOWN on macOS (flock issue) - v2.0.15
+  - Added: Script terminated on agent timeout (set -e) - v2.0.13
+  - Added: Agent file not found - v2.0.16
+
+---
+
 ## [2.0.16] - 2026-02-08
 
 ### Fixed

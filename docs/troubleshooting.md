@@ -37,6 +37,63 @@ bd daemon start
 
 ---
 
+### PROBLEM: Beads daemon explosion (270+ processes)
+
+**Симптомы:**
+- `pgrep -c bd` показывает 100+ процессов
+- Система тормозит
+- Логи: много "socket busy" или connection errors
+
+**Причина:**
+Параллельные bd вызовы перегружают socket daemon'а. Каждый считает что daemon мёртв и спавнит новый.
+
+**Диагностика:**
+```bash
+pgrep -c bd
+ps aux | grep "bd daemon" | wc -l
+```
+
+**Решение (runtime-fix):**
+```bash
+# Убить все bd процессы
+pkill -9 bd
+rm -f .beads/daemon.*
+bd daemon start
+```
+
+**Решение (permanent):**
+HYPE 2.0.14+ использует `bd_safe()` с сериализацией через mkdir-lock. Все bd вызовы выполняются последовательно.
+
+---
+
+### PROBLEM: Phase UNKNOWN на macOS
+
+**Симптомы:**
+- detect-phase.sh возвращает `{"phase":"UNKNOWN",...}`
+- Только на macOS
+- После upgrade HYPE
+
+**Причина:**
+1. `flock` команда отсутствует на macOS
+2. Perl fallback не работает (exit 255)
+3. bd_safe не может выполнить команду
+
+**Диагностика:**
+```bash
+which flock  # Should be empty on macOS
+./scripts/detect-phase.sh 2>&1
+# Check for exit 255 or "command not found"
+```
+
+**Решение:**
+Обновиться до HYPE 2.0.15+ который использует mkdir-based locking вместо flock.
+```bash
+cd ~/.hype && git pull
+hype upgrade --force
+```
+
+---
+
 ### PROBLEM: Stuck in_progress task
 
 **Симптомы:**
@@ -473,6 +530,31 @@ HYPE автоматически:
 1. Reset stale task to open
 2. Cleanup orphaned worktree
 3. Retry с эскалацией модели
+
+---
+
+### PROBLEM: Script terminated on agent timeout
+
+**Симптомы:**
+- "Terminated: 15" в логах
+- hype.sh внезапно завершается при timeout агента
+- Exit code 124
+
+**Причина:**
+`set -e` убивает скрипт когда `run_claude_with_progress` возвращает non-zero (timeout=124). Error handling не успевает выполниться.
+
+**Диагностика:**
+```bash
+grep -i "terminated\|exit 124" logs/hype.log
+```
+
+**Решение:**
+Обновиться до HYPE 2.0.13+ где используется `|| exit_code=$?` pattern для перехвата exit code без срабатывания set -e.
+
+```bash
+cd ~/.hype && git pull
+hype upgrade --force
+```
 
 ---
 

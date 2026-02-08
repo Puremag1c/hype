@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.0.12] - 2026-02-08
+
+### Fixed
+
+- **CRITICAL: Beads daemon hang protection** - All `bd` commands in `run-testers.sh` now wrapped with `bd_safe()` which applies 10-second timeout via `timeout_cmd`. Previously, if beads daemon became unresponsive (daemon explosion bug), `bd show/list/update/create/close` calls would hang forever, freezing SMOKE_TEST phase indefinitely.
+
+- **Beads health check at SMOKE_TEST start** - Added daemon health check before running testers. If `bd stats` times out, attempts automatic restart (`bd daemon restart`). If recovery fails, logs FATAL error with manual fix instructions instead of hanging.
+
+- **Root cause of 4+ hour SMOKE_TEST freeze** - Functional tester would complete successfully, but post-completion `bd show` (line 227) to verify trigger status would hang when daemon was unresponsive. Visual tester never started, run-testers.sh became orphan process (PPID=1).
+
+---
+
 ## [2.0.11] - 2026-02-06
 
 ### Changed

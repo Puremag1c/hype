@@ -28,6 +28,18 @@ if [ -f "$CONFIG_FILE" ]; then
 fi
 
 TESTER_TIMEOUT="${TESTER_TIMEOUT:-10m}"
+BD_TIMEOUT="${BD_TIMEOUT:-10s}"  # Timeout for bd commands
+
+# bd_safe - wrapper for bd commands with timeout protection
+# Prevents hanging when beads daemon is unresponsive
+bd_safe() {
+    timeout_cmd "$BD_TIMEOUT" bd "$@"
+    local exit_code=$?
+    if [ $exit_code -eq 124 ]; then
+        log "ERROR" "bd command timeout: bd $*"
+    fi
+    return $exit_code
+}
 SMOKE_TEST_TIMEOUT="${SMOKE_TEST_TIMEOUT:-15m}"
 
 mkdir -p "$LOGS_DIR"
@@ -113,10 +125,10 @@ run_tester() {
     _tester_cleanup() {
         if [ -n "$task_id" ]; then
             local status
-            status=$(bd show "$task_id" --json 2>/dev/null | jq -r 'if type == "array" then .[0].status else .status end' 2>/dev/null || echo "unknown")
+            status=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r 'if type == "array" then .[0].status else .status end' 2>/dev/null || echo "unknown")
             if [ "$status" != "closed" ]; then
                 log "WARN" "Cleanup: closing tester-$tester task $task_id"
-                bd close "$task_id" --reason="Tester cleanup (abnormal exit)" >/dev/null 2>&1 || true
+                bd_safe close "$task_id" --reason="Tester cleanup (abnormal exit)" >/dev/null 2>&1 || true
             fi
         fi
     }
@@ -135,7 +147,7 @@ run_tester() {
     trap _tester_cleanup EXIT INT TERM
 
     # Claim trigger task
-    if ! bd update "$task_id" --status=in_progress >/dev/null 2>&1; then
+    if ! bd_safe update "$task_id" --status=in_progress >/dev/null 2>&1; then
         log "INFO" "Trigger $trigger_task already claimed"
         trap - EXIT INT TERM  # Clear trap - not our task
         task_id=""  # Prevent cleanup
@@ -145,7 +157,7 @@ run_tester() {
     # Check if agent file exists
     if [ ! -f "$agent_file" ]; then
         log "WARN" "Agent file not found: $agent_file"
-        bd close "$task_id" --reason="Agent file not found" >/dev/null 2>&1
+        bd_safe close "$task_id" --reason="Agent file not found" >/dev/null 2>&1
         return 0
     fi
 
@@ -155,7 +167,7 @@ run_tester() {
             log "WARN" "Playwright MCP not available, skipping visual tester"
             mkdir -p "$PROJECT_DIR/.hype/evidence/visual"
             echo "Skipped: Playwright MCP not available" > "$PROJECT_DIR/.hype/evidence/visual/skipped.txt"
-            bd close "$task_id" --reason="Skipped: Playwright MCP not available" >/dev/null 2>&1
+            bd_safe close "$task_id" --reason="Skipped: Playwright MCP not available" >/dev/null 2>&1
             return 0
         fi
     fi
@@ -212,10 +224,10 @@ $spec_content"
     if [ $exit_code -ne 0 ]; then
         if [ $exit_code -eq 124 ]; then
             log "WARN" "Tester $tester timeout"
-            bd update "$task_id" --status=open --notes="Timeout at $(date '+%Y-%m-%d %H:%M:%S')" >/dev/null 2>&1
+            bd_safe update "$task_id" --status=open --notes="Timeout at $(date '+%Y-%m-%d %H:%M:%S')" >/dev/null 2>&1
         else
             log "ERROR" "Tester $tester failed (exit: $exit_code)"
-            bd update "$task_id" --status=open --notes="Failed (exit: $exit_code)" >/dev/null 2>&1
+            bd_safe update "$task_id" --status=open --notes="Failed (exit: $exit_code)" >/dev/null 2>&1
         fi
         return 0
     fi
@@ -224,10 +236,10 @@ $spec_content"
     # But verify it's closed
     local task_status
     # bd show returns array, not object
-    task_status=$(bd show "$task_id" --json 2>/dev/null | jq -r 'if type == "array" then .[0].status else .status end' 2>/dev/null || echo "unknown")
+    task_status=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r 'if type == "array" then .[0].status else .status end' 2>/dev/null || echo "unknown")
     if [ "$task_status" != "closed" ]; then
         log "WARN" "Tester $tester didn't close trigger, closing now"
-        bd close "$task_id" --reason="Tester completed (auto-closed)" >/dev/null 2>&1
+        bd_safe close "$task_id" --reason="Tester completed (auto-closed)" >/dev/null 2>&1
     fi
 
     # Clear trap and task_id to prevent double-close on normal exit
@@ -245,7 +257,7 @@ create_tester_triggers() {
     for tester in $testers; do
         local trigger_title="run-tester-$tester"
         if ! echo "$bd_cache" | jq -e ".[] | select(.title == \"$trigger_title\")" > /dev/null 2>&1; then
-            bd create --title="$trigger_title" --type=task --priority=0 --label=trigger >/dev/null 2>&1
+            bd_safe create --title="$trigger_title" --type=task --priority=0 --label=trigger >/dev/null 2>&1
             log "INFO" "Created trigger: $trigger_title"
         fi
     done
@@ -266,7 +278,7 @@ ensure_testing_config() {
     # Check if testing.yaml exists
     if [ ! -f "$config_file" ]; then
         log "ERROR" "Missing .hype/testing.yaml"
-        bd create --title="Create testing configuration" \
+        bd_safe create --title="Create testing configuration" \
             --type=bug --priority=0 \
             --label=model:opus \
             --description="Analyze the project and create .hype/testing.yaml
@@ -400,7 +412,7 @@ start_dev_server() {
     kill $DEV_SERVER_PID 2>/dev/null || true
 
     # Create P0 bug for server failure
-    bd create --title="SMOKE: [Server] Dev server failed to start" \
+    bd_safe create --title="SMOKE: [Server] Dev server failed to start" \
         --type=bug --priority=0 \
         --description="## Start Command
 $start_cmd
@@ -469,7 +481,7 @@ run_build() {
     if ! timeout_cmd "5m" bash -c "$build_cmd" > "$LOGS_DIR/build.log" 2>&1; then
         log "ERROR" "Build failed! See $LOGS_DIR/build.log"
         # Create P0 bug for build failure
-        bd create --title="SMOKE: [Build] Build command failed" \
+        bd_safe create --title="SMOKE: [Build] Build command failed" \
             --type=bug --priority=0 \
             --description="## Build Command
 $build_cmd
@@ -493,6 +505,19 @@ main() {
     # Visual separation
     echo ""
     echo "" >> "$LOGS_DIR/hype.log"
+
+    # Health check: verify bd daemon is responsive before starting
+    # Prevents hanging if daemon is frozen (common failure mode)
+    if ! bd_safe stats >/dev/null 2>&1; then
+        log "ERROR" "Beads daemon unresponsive! Attempting restart..."
+        timeout_cmd 10s bd daemon restart . >/dev/null 2>&1 || true
+        sleep 2
+        if ! bd_safe stats >/dev/null 2>&1; then
+            log "FATAL" "Beads daemon failed to recover. Run: pkill -9 -f 'bd daemon' && bd daemon start"
+            return 1
+        fi
+        log "INFO" "Beads daemon recovered"
+    fi
 
     # Get project type first
     local project_type
@@ -536,13 +561,13 @@ main() {
 
     # Cache bd list at start (v1.9.0 optimization)
     local bd_cache
-    bd_cache=$(bd list --json 2>/dev/null || echo "[]")
+    bd_cache=$(bd_safe list --json 2>/dev/null || echo "[]")
 
     # Create trigger tasks (pass cache)
     create_tester_triggers "$testers" "$bd_cache"
 
     # Refresh cache after creating triggers
-    bd_cache=$(bd list --json 2>/dev/null || echo "[]")
+    bd_cache=$(bd_safe list --json 2>/dev/null || echo "[]")
 
     # Check that triggers exist (using cache)
     local missing=0
@@ -590,7 +615,7 @@ main() {
 
     # Refresh cache for post-test checks (single bd call instead of 3)
     local post_cache
-    post_cache=$(bd list --status=open --json 2>/dev/null || echo "[]")
+    post_cache=$(bd_safe list --status=open --json 2>/dev/null || echo "[]")
 
     # Check completion
     local open_triggers

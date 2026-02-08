@@ -211,6 +211,61 @@ $task_notes
     fi
 }
 
+# === Handle preflight rejection with review-retry increment ===
+# Common logic for NO_BRANCH, NO_COMMITS, SECRETS_DETECTED rejections
+# Increments counter and escalates model after 3 failures
+
+handle_preflight_rejection() {
+    local task_id=$1
+    local task_json=$2
+    local rejection_type=$3
+    local rejection_note=$4
+
+    # Get current review-retry counter
+    local review_retry
+    review_retry=$(echo "$task_json" | jq -r '[.[0].labels[]? | select(startswith("review-retry:")) | split(":")[1] | tonumber] | max // 0' 2>/dev/null || echo "0")
+    local prev_retry=$review_retry
+    ((review_retry++))
+
+    # Get current model
+    local current_model
+    current_model=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("model:")) | split(":")[1]' 2>/dev/null | head -1)
+    current_model=${current_model:-sonnet}
+
+    if [ "$review_retry" -ge 3 ]; then
+        # Escalation threshold reached
+        if [ "$current_model" = "haiku" ]; then
+            log "WARN" "ESCALATE: $task_id - $rejection_type 3x, haiku → sonnet"
+            bd_safe update "$task_id" --status=open \
+                --remove-label=needs-review --remove-label=executor \
+                --remove-label="review-retry:$prev_retry" --add-label="review-retry:$review_retry" \
+                --remove-label="model:haiku" --add-label="model:sonnet" \
+                --notes="$rejection_note ESCALATED haiku → sonnet after $review_retry attempts."
+        elif [ "$current_model" = "sonnet" ]; then
+            log "WARN" "ESCALATE: $task_id - $rejection_type 3x, sonnet → opus"
+            bd_safe update "$task_id" --status=open \
+                --remove-label=needs-review --remove-label=executor \
+                --remove-label="review-retry:$prev_retry" --add-label="review-retry:$review_retry" \
+                --remove-label="model:sonnet" --add-label="model:opus" \
+                --notes="$rejection_note ESCALATED sonnet → opus after $review_retry attempts."
+        else
+            # Already opus - reset counter and warn
+            log "WARN" "RETRY LIMIT: $task_id - $rejection_type $review_retry attempts (already opus)"
+            bd_safe update "$task_id" --status=open \
+                --remove-label=needs-review --remove-label=executor \
+                --remove-label="review-retry:$prev_retry" --add-label="review-retry:0" \
+                --notes="$rejection_note After $review_retry attempts (opus). Reset counter. Manual review may be needed."
+        fi
+    else
+        # Normal retry with incremented counter
+        log "INFO" "RETRY: $task_id - $rejection_type (attempt $review_retry/3)"
+        bd_safe update "$task_id" --status=open \
+            --remove-label=needs-review --remove-label=executor \
+            --remove-label="review-retry:$prev_retry" --add-label="review-retry:$review_retry" \
+            --notes="$rejection_note (attempt $review_retry/3)"
+    fi
+}
+
 # === Build context for Claude ===
 
 build_review_context() {
@@ -293,21 +348,18 @@ process_review() {
 
     case "$preflight_result" in
         NO_BRANCH)
-            log "WARN" "REJECT: $task_id - no branch found"
-            bd_safe update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
-                --notes="Review rejected: Branch task/beads-$task_id not found. Please push your changes."
+            handle_preflight_rejection "$task_id" "$task_json" "NO_BRANCH" \
+                "Review rejected: Branch task/beads-$task_id not found. Please push your changes."
             return 0
             ;;
         NO_COMMITS)
-            log "WARN" "REJECT: $task_id - no commits in branch"
-            bd_safe update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
-                --notes="Review rejected: No commits found. Please implement the task."
+            handle_preflight_rejection "$task_id" "$task_json" "NO_COMMITS" \
+                "Review rejected: No commits found. Please implement the task."
             return 0
             ;;
         SECRETS_DETECTED)
-            log "ERROR" "REJECT: $task_id - secrets detected in diff"
-            bd_safe update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
-                --notes="SECURITY: Potential secrets detected in diff. Remove sensitive data and resubmit."
+            handle_preflight_rejection "$task_id" "$task_json" "SECRETS_DETECTED" \
+                "SECURITY: Potential secrets detected in diff. Remove sensitive data and resubmit."
             return 0
             ;;
         NO_FINDINGS)

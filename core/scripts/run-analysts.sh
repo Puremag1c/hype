@@ -24,6 +24,18 @@ if [ -f "$CONFIG_FILE" ]; then
 fi
 
 ANALYST_TIMEOUT="${ANALYST_TIMEOUT:-10m}"
+BD_TIMEOUT="${BD_TIMEOUT:-10s}"  # Timeout for bd commands
+
+# bd_safe - wrapper for bd commands with timeout protection
+# Prevents hanging when beads daemon is unresponsive
+bd_safe() {
+    timeout_cmd "$BD_TIMEOUT" bd "$@"
+    local exit_code=$?
+    if [ $exit_code -eq 124 ]; then
+        log "ERROR" "bd command timeout: bd $*"
+    fi
+    return $exit_code
+}
 
 mkdir -p "$LOGS_DIR"
 
@@ -66,7 +78,7 @@ run_analyst() {
     fi
 
     # Claim trigger task
-    if ! bd update "$task_id" --status=in_progress >/dev/null 2>&1; then
+    if ! bd_safe update "$task_id" --status=in_progress >/dev/null 2>&1; then
         log "INFO" "Trigger $trigger_task already claimed"
         return 0
     fi
@@ -74,7 +86,7 @@ run_analyst() {
     # Check if agent file exists
     if [ ! -f "$agent_file" ]; then
         log "WARN" "Agent file not found: $agent_file"
-        bd close "$task_id" --reason="Agent file not found" >/dev/null 2>&1
+        bd_safe close "$task_id" --reason="Agent file not found" >/dev/null 2>&1
         return 0
     fi
 
@@ -101,22 +113,23 @@ $spec_content"
     local analyst_model
     analyst_model=$(map_model "${MODEL_ANALYSTS:-sonnet}")
 
-    run_claude_with_progress "$full_prompt" "$analyst_model" "$ANALYST_TIMEOUT" "$output_file" "ANALYST $analyst" "$LOGS_DIR"
-    local exit_code=$?
+    # Use || to prevent set -e from killing script on timeout/failure
+    local exit_code=0
+    run_claude_with_progress "$full_prompt" "$analyst_model" "$ANALYST_TIMEOUT" "$output_file" "ANALYST $analyst" "$LOGS_DIR" || exit_code=$?
 
     if [ $exit_code -ne 0 ]; then
         if [ $exit_code -eq 124 ]; then
             log "WARN" "Analyst $analyst timeout"
-            bd update "$task_id" --status=open --notes="Timeout at $(date '+%Y-%m-%d %H:%M:%S')" >/dev/null 2>&1
+            bd_safe update "$task_id" --status=open --notes="Timeout at $(date '+%Y-%m-%d %H:%M:%S')" >/dev/null 2>&1
         else
             log "ERROR" "Analyst $analyst failed (exit: $exit_code)"
-            bd update "$task_id" --status=open --notes="Failed (exit: $exit_code)" >/dev/null 2>&1
+            bd_safe update "$task_id" --status=open --notes="Failed (exit: $exit_code)" >/dev/null 2>&1
         fi
         return 0
     fi
 
     # Close trigger task
-    bd close "$task_id" --reason="Analyst $analyst completed" >/dev/null 2>&1
+    bd_safe close "$task_id" --reason="Analyst $analyst completed" >/dev/null 2>&1
     log "INFO" "Analyst $analyst completed"
 }
 
@@ -129,7 +142,7 @@ main() {
 
     # Cache bd list at start (v1.9.0 optimization)
     local bd_cache
-    bd_cache=$(bd list --json 2>/dev/null || echo "[]")
+    bd_cache=$(bd_safe list --json 2>/dev/null || echo "[]")
 
     # Check that all trigger tasks exist (using cache)
     local missing=0

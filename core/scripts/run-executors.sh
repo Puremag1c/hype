@@ -209,8 +209,9 @@ $retry_context}"
 
     # Run executor with real-time progress logging
     # Uses worktree for git isolation, all bd operations through daemon
-    run_claude_with_progress "$full_prompt" "$model" "$TASK_TIMEOUT" "$output_file" "EXEC $slot" "$LOGS_DIR" "$worktree_path"
-    local exit_code=$?
+    # Use || to prevent set -e from killing script on timeout/failure
+    local exit_code=0
+    run_claude_with_progress "$full_prompt" "$model" "$TASK_TIMEOUT" "$output_file" "EXEC $slot" "$LOGS_DIR" "$worktree_path" || exit_code=$?
 
     # Always cleanup worktree (success or failure)
     cleanup_worktree "$slot"
@@ -305,8 +306,9 @@ PROJECT_ROOT: $PROJECT_DIR"
     local audit_timeout="${AUDIT_TIMEOUT:-5m}"
 
     # Run auditor (no worktree needed - auditor doesn't create branches)
-    run_claude_with_progress "$full_prompt" "$model" "$audit_timeout" "$output_file" "AUDIT" "$LOGS_DIR" "$PROJECT_DIR"
-    local exit_code=$?
+    # Use || to prevent set -e from killing script on timeout/failure
+    local exit_code=0
+    run_claude_with_progress "$full_prompt" "$model" "$audit_timeout" "$output_file" "AUDIT" "$LOGS_DIR" "$PROJECT_DIR" || exit_code=$?
 
     if [ $exit_code -ne 0 ]; then
         if [ $exit_code -eq 124 ]; then

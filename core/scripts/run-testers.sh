@@ -218,8 +218,9 @@ $spec_content"
     esac
 
     # Run tester with real-time progress logging
-    run_claude_with_progress "$full_prompt" "$tester_model" "$TESTER_TIMEOUT" "$output_file" "TESTER $tester" "$LOGS_DIR"
-    local exit_code=$?
+    # Use || to prevent set -e from killing script on timeout/failure
+    local exit_code=0
+    run_claude_with_progress "$full_prompt" "$tester_model" "$TESTER_TIMEOUT" "$output_file" "TESTER $tester" "$LOGS_DIR" || exit_code=$?
 
     if [ $exit_code -ne 0 ]; then
         if [ $exit_code -eq 124 ]; then

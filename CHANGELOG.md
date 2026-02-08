@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.0.13] - 2026-02-08
+
+### Fixed
+
+- **CRITICAL: set -e kills script on agent timeout** - Fixed bug where `set -euo pipefail` would terminate entire script when `run_claude_with_progress` returned non-zero (timeout=124 or failure). Now uses `|| exit_code=$?` pattern to properly capture exit code without triggering set -e.
+
+- **Affected files:**
+  - `run-testers.sh` - tester agent timeout now handled gracefully
+  - `run-executors.sh` - executor and auditor timeout now handled gracefully
+  - `run-analysts.sh` - analyst timeout now handled gracefully
+
+- **Added bd_safe to run-analysts.sh** - All `bd` commands now wrapped with timeout protection (consistent with run-testers.sh fix in 2.0.12).
+
+- **Root cause of "Terminated: 15" crash** - When functional tester hit 10-minute timeout, SIGTERM was sent (exit 124), but `set -e` killed the script before error handling code could execute. This caused hype.sh to exit with code 124 instead of gracefully recovering.
+
+---
+
 ## [2.0.12] - 2026-02-08
 
 ### Fixed

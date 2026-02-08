@@ -381,6 +381,37 @@ cat .hype/config.sh | grep MAX_PARALLEL
 
 ## Claude CLI проблемы
 
+### PROBLEM: Agent file not found
+
+**Симптомы:**
+- "Agent file not found: .claude/agents/xxx.md"
+- HYPE падает при запуске фазы
+
+**Причина:**
+1. Symlinks устарели после upgrade
+2. Agent был переименован (например architect.md → architect-*.md)
+3. `.claude/agents` — директория вместо symlink
+
+**Диагностика:**
+```bash
+ls -la .claude/agents/
+ls ~/.hype/core/agents/
+file .claude/agents  # Should show "symbolic link"
+```
+
+**Решение (runtime-fix):**
+```bash
+hype upgrade --force
+```
+
+Если не помогает:
+```bash
+rm -rf .claude/agents
+ln -sf ~/.hype/core/agents .claude/agents
+```
+
+---
+
 ### PROBLEM: "No messages returned" crash
 
 **Симптомы:**

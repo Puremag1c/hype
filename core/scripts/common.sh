@@ -9,15 +9,41 @@ export NO_COLOR=1
 BD_TIMEOUT="${BD_TIMEOUT:-10s}"
 BD_LOCK_FILE="${BD_LOCK_FILE:-/tmp/hype-bd.lock}"
 
-# bd_safe - wrapper for bd commands with flock serialization and timeout
+# flock_cmd - cross-platform flock wrapper (macOS + Linux)
+# On macOS: uses perl-based locking (flock not available by default)
+# On Linux: uses native flock
+flock_cmd() {
+    local lockfile="$1"
+    shift
+
+    # Use flock on Linux (faster)
+    if command -v flock &>/dev/null; then
+        flock "$lockfile" "$@"
+        return $?
+    fi
+
+    # macOS fallback: perl-based exclusive lock
+    perl -e '
+        use Fcntl qw(:flock);
+        my $lockfile = shift @ARGV;
+        open(my $fh, ">", $lockfile) or die "Cannot open $lockfile: $!";
+        flock($fh, LOCK_EX) or die "Cannot lock $lockfile: $!";
+        my $exit_code = system(@ARGV);
+        close($fh);
+        exit($exit_code >> 8);
+    ' "$lockfile" "$@"
+}
+export -f flock_cmd 2>/dev/null || true
+
+# bd_safe - wrapper for bd commands with serialization and timeout
 # Prevents daemon explosion from parallel bd calls overwhelming the socket
-# Uses flock to serialize access - only one bd command runs at a time
+# Uses flock_cmd to serialize access - only one bd command runs at a time
 bd_safe() {
     # Create lock file if doesn't exist
     touch "$BD_LOCK_FILE" 2>/dev/null || true
 
-    # flock serializes access, timeout_cmd prevents hanging
-    flock "$BD_LOCK_FILE" timeout_cmd "$BD_TIMEOUT" bd "$@"
+    # flock_cmd serializes access, timeout_cmd prevents hanging
+    flock_cmd "$BD_LOCK_FILE" timeout_cmd "$BD_TIMEOUT" bd "$@"
     local exit_code=$?
 
     if [ $exit_code -eq 124 ]; then

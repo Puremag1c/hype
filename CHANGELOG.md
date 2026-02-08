@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.0.15] - 2026-02-08
+
+### Fixed
+
+- **CRITICAL: macOS compatibility for bd_safe** - Replaced perl-based flock with mkdir-based locking. Perl's `system()` cannot invoke bash functions like `timeout_cmd`, causing exit code 255 on macOS.
+
+- **New mkdir-based locking mechanism:**
+  - Uses `mkdir /tmp/hype-bd.lock.d` (atomic on all Unix)
+  - Stale lock detection (60s timeout for crashed processes)
+  - 30s wait timeout with force unlock
+  - No external dependencies (works on macOS and Linux)
+
+- **Why flock approach failed:**
+  - `flock` command not available on macOS by default
+  - Perl fallback couldn't call bash functions (`timeout_cmd`)
+  - Resulted in exit code 255 → Phase: UNKNOWN
+
+---
+
 ## [2.0.14] - 2026-02-08
 
 ### Fixed

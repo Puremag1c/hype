@@ -9,42 +9,43 @@ export NO_COLOR=1
 BD_TIMEOUT="${BD_TIMEOUT:-10s}"
 BD_LOCK_FILE="${BD_LOCK_FILE:-/tmp/hype-bd.lock}"
 
-# flock_cmd - cross-platform flock wrapper (macOS + Linux)
-# On macOS: uses perl-based locking (flock not available by default)
-# On Linux: uses native flock
-flock_cmd() {
-    local lockfile="$1"
-    shift
-
-    # Use flock on Linux (faster)
-    if command -v flock &>/dev/null; then
-        flock "$lockfile" "$@"
-        return $?
-    fi
-
-    # macOS fallback: perl-based exclusive lock
-    perl -e '
-        use Fcntl qw(:flock);
-        my $lockfile = shift @ARGV;
-        open(my $fh, ">", $lockfile) or die "Cannot open $lockfile: $!";
-        flock($fh, LOCK_EX) or die "Cannot lock $lockfile: $!";
-        my $exit_code = system(@ARGV);
-        close($fh);
-        exit($exit_code >> 8);
-    ' "$lockfile" "$@"
-}
-export -f flock_cmd 2>/dev/null || true
-
 # bd_safe - wrapper for bd commands with serialization and timeout
 # Prevents daemon explosion from parallel bd calls overwhelming the socket
-# Uses flock_cmd to serialize access - only one bd command runs at a time
+# Uses mkdir-based locking (works on macOS and Linux, no external deps)
 bd_safe() {
-    # Create lock file if doesn't exist
-    touch "$BD_LOCK_FILE" 2>/dev/null || true
+    local lock_dir="/tmp/hype-bd.lock.d"
+    local lock_timeout=30
+    local waited=0
 
-    # flock_cmd serializes access, timeout_cmd prevents hanging
-    flock_cmd "$BD_LOCK_FILE" timeout_cmd "$BD_TIMEOUT" bd "$@"
+    # Try to acquire lock via mkdir (atomic operation)
+    while ! mkdir "$lock_dir" 2>/dev/null; do
+        # Check for stale lock (older than 60s = crashed process)
+        if [ -d "$lock_dir" ]; then
+            local lock_age
+            # macOS: stat -f %m, Linux: stat -c %Y
+            lock_age=$(( $(date +%s) - $(stat -f %m "$lock_dir" 2>/dev/null || stat -c %Y "$lock_dir" 2>/dev/null || echo 0) ))
+            if [ "$lock_age" -gt 60 ]; then
+                rmdir "$lock_dir" 2>/dev/null || true
+                continue
+            fi
+        fi
+
+        if [ $waited -ge $lock_timeout ]; then
+            >&2 echo "WARN: bd lock timeout after ${lock_timeout}s, forcing unlock"
+            rmdir "$lock_dir" 2>/dev/null || true
+            continue
+        fi
+
+        sleep 0.5
+        waited=$((waited + 1))
+    done
+
+    # Run command with timeout
+    timeout_cmd "$BD_TIMEOUT" bd "$@"
     local exit_code=$?
+
+    # Release lock
+    rmdir "$lock_dir" 2>/dev/null || true
 
     if [ $exit_code -eq 124 ]; then
         >&2 echo "ERROR: bd command timeout: bd $*"

@@ -26,13 +26,153 @@ mock_bd_init() {
     # Create call log
     : > "$MOCK_BD_STATE_DIR/calls.log"
 
-    # Export bd function that uses mock
+    # Create mock bd executable script (needed for bd_safe which uses timeout_cmd)
+    # The script sources this file and calls the bd function
+    local mock_bin_dir="$MOCK_BD_STATE_DIR/bin"
+    mkdir -p "$mock_bin_dir"
+
+    cat > "$mock_bin_dir/bd" << 'MOCK_SCRIPT'
+#!/usr/bin/env bash
+# Mock bd script - reads state from MOCK_BD_STATE_DIR
+
+if [[ -z "$MOCK_BD_STATE_DIR" ]]; then
+    echo "ERROR: MOCK_BD_STATE_DIR not set" >&2
+    exit 1
+fi
+
+cmd="$1"
+shift
+
+# Log the call
+echo "bd $cmd $*" >> "$MOCK_BD_STATE_DIR/calls.log"
+
+case "$cmd" in
+    list)
+        json_output=false
+        status_filter=""
+        show_all=false
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --json) json_output=true ;;
+                --status=*) status_filter="${1#--status=}" ;;
+                --all) show_all=true ;;
+            esac
+            shift
+        done
+        tasks=$(cat "$MOCK_BD_STATE_DIR/tasks.json")
+        if [[ -n "$status_filter" ]]; then
+            tasks=$(echo "$tasks" | jq "[.[] | select(.status == \"$status_filter\")]")
+        fi
+        if [[ "$show_all" != "true" ]]; then
+            tasks=$(echo "$tasks" | jq '[.[] | select(.status != "closed")]')
+        fi
+        if [[ "$json_output" == "true" ]]; then
+            echo "$tasks"
+        else
+            echo "$tasks" | jq -r '.[] | "○ \(.id) [\(.priority)] [\(.type)] - \(.title)"'
+        fi
+        ;;
+    show)
+        task_id=""
+        json_output=false
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --json) json_output=true ;;
+                -*) ;;
+                *) task_id="$1" ;;
+            esac
+            shift
+        done
+        task=$(cat "$MOCK_BD_STATE_DIR/tasks.json" | jq "[.[] | select(.id == \"$task_id\")]")
+        if [[ "$json_output" == "true" ]]; then
+            echo "$task"
+        else
+            echo "$task" | jq -r '.[0] | "○ \(.id) · \(.title)"'
+        fi
+        ;;
+    update)
+        task_id=""
+        new_status=""
+        new_notes=""
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --status=*) new_status="${1#--status=}" ;;
+                --notes=*) new_notes="${1#--notes=}" ;;
+                -*) ;;
+                *) task_id="$1" ;;
+            esac
+            shift
+        done
+        tasks=$(cat "$MOCK_BD_STATE_DIR/tasks.json")
+        if [[ -n "$new_status" ]]; then
+            tasks=$(echo "$tasks" | jq "map(if .id == \"$task_id\" then .status = \"$new_status\" else . end)")
+        fi
+        if [[ -n "$new_notes" ]]; then
+            tasks=$(echo "$tasks" | jq "map(if .id == \"$task_id\" then .notes = \"$new_notes\" else . end)")
+        fi
+        echo "$tasks" > "$MOCK_BD_STATE_DIR/tasks.json"
+        echo "✓ Updated issue: $task_id"
+        ;;
+    close)
+        task_ids=()
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --reason=*) ;;
+                -*) ;;
+                *) task_ids+=("$1") ;;
+            esac
+            shift
+        done
+        tasks=$(cat "$MOCK_BD_STATE_DIR/tasks.json")
+        for tid in "${task_ids[@]}"; do
+            tasks=$(echo "$tasks" | jq "map(if .id == \"$tid\" then .status = \"closed\" else . end)")
+            echo "✓ Closed: $tid"
+        done
+        echo "$tasks" > "$MOCK_BD_STATE_DIR/tasks.json"
+        ;;
+    create)
+        title=""
+        type="task"
+        priority="2"
+        labels=""
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --title=*) title="${1#--title=}" ;;
+                --type=*) type="${1#--type=}" ;;
+                --priority=*) priority="${1#--priority=}" ;;
+                --labels=*) labels="${1#--labels=}" ;;
+            esac
+            shift
+        done
+        new_id="mock-$(date +%s)-$RANDOM"
+        new_task=$(jq -n --arg id "$new_id" --arg title "$title" --arg type "$type" --arg priority "P$priority" --arg labels "$labels" '{id:$id,title:$title,type:$type,priority:$priority,status:"open",labels:(if $labels!=""then($labels|split(","))else[]end),description:"",notes:""}')
+        tasks=$(cat "$MOCK_BD_STATE_DIR/tasks.json")
+        echo "$tasks" | jq ". + [$new_task]" > "$MOCK_BD_STATE_DIR/tasks.json"
+        echo "Created: $new_id"
+        ;;
+    sync|dep|delete|admin)
+        echo "✓ $cmd (mock)"
+        ;;
+    *)
+        echo "Mock bd: unknown command '$cmd'" >&2
+        exit 1
+        ;;
+esac
+MOCK_SCRIPT
+    chmod +x "$mock_bin_dir/bd"
+
+    # Prepend mock bin to PATH so it's found before real bd
+    export PATH="$mock_bin_dir:$PATH"
+
+    # Also export bd function for direct calls within test (not through timeout_cmd)
     export -f bd
 }
 
 # Cleanup mock bd
 mock_bd_cleanup() {
     if [[ -n "$MOCK_BD_STATE_DIR" && -d "$MOCK_BD_STATE_DIR" ]]; then
+        # Remove mock bin from PATH
+        PATH="${PATH#"$MOCK_BD_STATE_DIR/bin:"}"
         rm -rf "$MOCK_BD_STATE_DIR"
     fi
     unset MOCK_BD_STATE_DIR MOCK_BD_FIXTURE

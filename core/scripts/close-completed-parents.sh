@@ -7,7 +7,9 @@
 
 set -euo pipefail
 
-SCRIPT_DIR=$(dirname "$0")
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
 source "$SCRIPT_DIR/log.sh"
 
 # === Close completed features ===
@@ -18,13 +20,13 @@ close_completed_features() {
 
     # Получаем все open features
     local features
-    features=$(bd list --type=feature --status=open --json 2>/dev/null || echo "[]")
+    features=$(bd_safe list --type=feature --status=open --json 2>/dev/null || echo "[]")
 
     # Проверяем каждую feature
     for feature_id in $(echo "$features" | jq -r '.[].id' 2>/dev/null); do
         # Получаем children этой feature
         local children
-        children=$(bd children "$feature_id" --json 2>/dev/null || echo "[]")
+        children=$(bd_safe children "$feature_id" --json 2>/dev/null || echo "[]")
 
         local total closed
         total=$(echo "$children" | jq 'length')
@@ -32,7 +34,7 @@ close_completed_features() {
 
         # Если есть children и все closed — закрываем feature
         if [ "$total" -gt 0 ] && [ "$total" = "$closed" ]; then
-            bd close "$feature_id" --reason="All $total children completed" >/dev/null 2>&1
+            bd_safe close "$feature_id" --reason="All $total children completed" >/dev/null 2>&1
             log "MANAGER" "AUTO_CLOSE" "Feature $feature_id closed (all $total children done)"
             ((closed_count++))
         fi
@@ -46,7 +48,7 @@ close_completed_features() {
 
 close_completed_epics() {
     local output
-    output=$(bd epic close-eligible 2>&1 || true)
+    output=$(bd_safe epic close-eligible 2>&1 || true)
 
     # Логируем если что-то закрылось
     if echo "$output" | grep -q "Closed"; then

@@ -21,6 +21,10 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
+
 # Находим корень проекта
 find_project_root() {
     local dir="$PWD"
@@ -53,14 +57,14 @@ fi
 # Собираем статистику из beads (batched - 2 запроса вместо 11)
 # Кэшируем JSON для всех фильтров через jq
 # ВАЖНО: --limit 0 для unlimited (по умолчанию 50, что ломает milestone detection)
-ALL_TASKS_JSON=$(bd list --json --limit 0 --all 2>/dev/null)
+ALL_TASKS_JSON=$(bd_safe list --json --limit 0 --all 2>/dev/null)
 if [ $? -ne 0 ] || ! echo "$ALL_TASKS_JSON" | jq -e 'type == "array"' >/dev/null 2>&1; then
     echo '{"phase":"ERROR","stats":{},"progress_pct":0,"in_progress_ids":[],"regression_count":0,"p0_bugs":0,"error":"bd list failed or returned invalid JSON"}'
     >&2 echo "bd list вернул невалидный JSON или ошибку"
     exit 1
 fi
 
-CLOSED_TASKS_JSON=$(bd list --status=closed --json --limit 0 2>/dev/null)
+CLOSED_TASKS_JSON=$(bd_safe list --status=closed --json --limit 0 2>/dev/null)
 if [ $? -ne 0 ] || ! echo "$CLOSED_TASKS_JSON" | jq -e 'type == "array"' >/dev/null 2>&1; then
     echo '{"phase":"ERROR","stats":{},"progress_pct":0,"in_progress_ids":[],"regression_count":0,"p0_bugs":0,"error":"bd list --status=closed failed"}'
     >&2 echo "bd list --status=closed вернул невалидный JSON или ошибку"
@@ -223,7 +227,7 @@ if [ "$PENDING_ANALYST_TRIGGERS" -gt 0 ] && [ "$HAS_ANALYSTS_DONE" -gt 0 ]; then
     >&2 echo "SELF-HEAL: Removing premature milestone:analysts-done ($PENDING_ANALYST_TRIGGERS triggers pending)"
     MILESTONE_IDS=$(echo "$ALL_TASKS_JSON" | jq -r '.[] | select(.labels[]? == "milestone:analysts-done") | .id' 2>/dev/null || true)
     for mid in $MILESTONE_IDS; do
-        bd delete "$mid" >/dev/null 2>&1 || true
+        bd_safe delete "$mid" >/dev/null 2>&1 || true
     done
     output_json "HELPERS"
     exit 0
@@ -265,7 +269,7 @@ fi
 # IMPLEMENTATION: есть открытые или in_progress задачи
 if [ "$OPEN" -gt 0 ] || [ "$IN_PROGRESS" -gt 0 ]; then
     # Safety net: проверяем циклы перед началом реализации
-    cycles_output=$(bd dep cycles 2>&1 || true)
+    cycles_output=$(bd_safe dep cycles 2>&1 || true)
     if echo "$cycles_output" | grep -q "→"; then
         output_json "BLOCKED_CYCLES"
         >&2 echo "Dependency cycles detected! Fix before implementation."

@@ -28,19 +28,8 @@ if [ -f "$CONFIG_FILE" ]; then
 fi
 
 TESTER_TIMEOUT="${TESTER_TIMEOUT:-10m}"
-BD_TIMEOUT="${BD_TIMEOUT:-10s}"  # Timeout for bd commands
-
-# bd_safe - wrapper for bd commands with timeout protection
-# Prevents hanging when beads daemon is unresponsive
-bd_safe() {
-    timeout_cmd "$BD_TIMEOUT" bd "$@"
-    local exit_code=$?
-    if [ $exit_code -eq 124 ]; then
-        log "ERROR" "bd command timeout: bd $*"
-    fi
-    return $exit_code
-}
 SMOKE_TEST_TIMEOUT="${SMOKE_TEST_TIMEOUT:-15m}"
+# bd_safe is provided by common.sh with flock serialization
 
 mkdir -p "$LOGS_DIR"
 mkdir -p "$PROJECT_DIR/.hype/evidence"

@@ -378,8 +378,8 @@ create_analyst_triggers() {
 
     for analyst in "${analysts[@]}"; do
         local trigger_title="run-analyst-$analyst"
-        if ! bd list --json 2>/dev/null | jq -e ".[] | select(.title == \"$trigger_title\")" > /dev/null 2>&1; then
-            bd create --title="$trigger_title" --type=task --priority=1 --label=trigger >/dev/null 2>&1 || true
+        if ! bd_safe list --json 2>/dev/null | jq -e ".[] | select(.title == \"$trigger_title\")" > /dev/null 2>&1; then
+            bd_safe create --title="$trigger_title" --type=task --priority=1 --label=trigger >/dev/null 2>&1 || true
             log "INFO" "Created trigger: $trigger_title"
         fi
     done
@@ -407,7 +407,7 @@ check_and_create_done_milestone() {
 check_problems_and_consult_manager() {
     # Cache bd list once (v1.9.0 optimization - was 4 calls, now 1)
     local bd_cache
-    bd_cache=$(bd list --json 2>/dev/null || echo "[]")
+    bd_cache=$(bd_safe list --json 2>/dev/null || echo "[]")
 
     # Count blocked tasks (from cache)
     local blocked_count
@@ -589,9 +589,9 @@ generate_iteration_stats() {
 
     # Get task stats from beads
     local total closed blocked
-    total=$(bd list --json 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
-    closed=$(bd list --status=closed --json 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
-    blocked=$(bd list --json 2>/dev/null | jq '[.[] | select(.labels[]? | startswith("blocked:"))] | length' 2>/dev/null || echo "0")
+    total=$(bd_safe list --json 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+    closed=$(bd_safe list --status=closed --json 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+    blocked=$(bd_safe list --json 2>/dev/null | jq '[.[] | select(.labels[]? | startswith("blocked:"))] | length' 2>/dev/null || echo "0")
 
     # Count agent runs from logs
     local manager_runs architect_runs executor_runs analyst_runs senior_runs
@@ -608,7 +608,7 @@ generate_iteration_stats() {
 
     # Get blocked tasks details
     local blocked_details
-    blocked_details=$(bd list --json 2>/dev/null | jq -r '.[] | select(.labels[]? | startswith("blocked:")) | "- `\(.id)`: \(.title)"' 2>/dev/null || echo "- none")
+    blocked_details=$(bd_safe list --json 2>/dev/null | jq -r '.[] | select(.labels[]? | startswith("blocked:")) | "- `\(.id)`: \(.title)"' 2>/dev/null || echo "- none")
 
     # Generate report
     cat > "$stats_file" << EOF
@@ -725,7 +725,7 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
 
             # Ensure milestone exists (architect may forget step 7)
             local task_count
-            task_count=$(bd list --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+            task_count=$(bd_safe list --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
             if [ "$task_count" -gt 0 ]; then
                 if ! has_milestone "milestone:planning-done"; then
                     log "INFO" "Creating planning-done milestone (architect skipped step 7)"
@@ -744,7 +744,7 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             # Must check BOTH open AND in_progress to prevent race condition:
             # If trigger is in_progress during check, milestone would be created prematurely
             local pending_triggers
-            pending_triggers=$(bd list --json --limit 0 2>/dev/null | \
+            pending_triggers=$(bd_safe list --json --limit 0 2>/dev/null | \
                 jq '[.[] | select(.status == "open" or .status == "in_progress") | select(.title | startswith("run-analyst-"))] | length' 2>/dev/null || echo "0")
             if [ "$pending_triggers" -eq 0 ]; then
                 if ! has_milestone "milestone:analysts-done"; then
@@ -760,8 +760,8 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             local arch_model
             arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
             # Create trigger task if not exists
-            if ! bd list --json 2>/dev/null | jq -e '.[] | select(.title == "run-plan-review")' > /dev/null 2>&1; then
-                bd create --title="run-plan-review" --type=task --priority=0 --label=trigger >/dev/null 2>&1 || true
+            if ! bd_safe list --json 2>/dev/null | jq -e '.[] | select(.title == "run-plan-review")' > /dev/null 2>&1; then
+                bd_safe create --title="run-plan-review" --type=task --priority=0 --label=trigger >/dev/null 2>&1 || true
             fi
             run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "plan_review" "" "${PLAN_REVIEW_TIMEOUT:-10m}"
             ;;
@@ -775,13 +775,13 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
 
             # Create trigger task if not exists
-            if ! bd list --json 2>/dev/null | jq -e '.[] | select(.title == "run-smoke-review")' > /dev/null 2>&1; then
-                bd create --title="run-smoke-review" --type=task --priority=0 --label=trigger >/dev/null 2>&1 || true
+            if ! bd_safe list --json 2>/dev/null | jq -e '.[] | select(.title == "run-smoke-review")' > /dev/null 2>&1; then
+                bd_safe create --title="run-smoke-review" --type=task --priority=0 --label=trigger >/dev/null 2>&1 || true
             fi
 
             # Collect regression task IDs for Architect prompt
             local regression_tasks regression_prompt
-            regression_tasks=$(bd list --status=open --json 2>/dev/null | jq -r '.[] | select(.labels | index("regression")) | "\(.id): \(.title)"' 2>/dev/null || echo "")
+            regression_tasks=$(bd_safe list --status=open --json 2>/dev/null | jq -r '.[] | select(.labels | index("regression")) | "\(.id): \(.title)"' 2>/dev/null || echo "")
             regression_prompt="
 REGRESSION TASKS TO REVIEW:
 $regression_tasks
@@ -808,7 +808,7 @@ For each task: bd show <id> --json, then decide action and REMOVE regression lab
             # Check results - milestone created only if ALL tasks are closed
             # Must check BOTH open AND in_progress to prevent race condition
             local pending_tasks
-            pending_tasks=$(bd list --json --limit 0 2>/dev/null | \
+            pending_tasks=$(bd_safe list --json --limit 0 2>/dev/null | \
                 jq '[.[] | select(.status == "open" or .status == "in_progress")] | length' 2>/dev/null || echo "0")
 
             if [ "$pending_tasks" -gt 0 ]; then
@@ -842,7 +842,7 @@ For each task: bd show <id> --json, then decide action and REMOVE regression lab
                     fi
                     # Agent ran but didn't write PASSED - might have created tasks
                     local open_count
-                    open_count=$(bd list --status=open --json 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+                    open_count=$(bd_safe list --status=open --json 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
                     if [ "$open_count" -gt 0 ]; then
                         log "INFO" "FINAL_REVIEW: Architect created $open_count task(s), returning to IMPLEMENTATION"
                         # Invalidate smoke-test-done milestone — need to re-test after fix
@@ -865,7 +865,7 @@ For each task: bd show <id> --json, then decide action and REMOVE regression lab
 
                 # Create trigger task for versioner
                 local versioner_trigger
-                versioner_trigger=$(bd create --title="run-versioning" --type=task --priority=0 --label=trigger 2>&1 | grep -oE '[A-Za-z]+-[a-z0-9]+' | head -1)
+                versioner_trigger=$(bd_safe create --title="run-versioning" --type=task --priority=0 --label=trigger 2>&1 | grep -oE '[A-Za-z]+-[a-z0-9]+' | head -1)
 
                 if [ -n "$versioner_trigger" ]; then
                     local versioner_model
@@ -877,7 +877,7 @@ For each task: bd show <id> --json, then decide action and REMOVE regression lab
                         log "INFO" "Versioner completed"
                     else
                         log "WARN" "Versioner failed/timed out, closing trigger"
-                        bd close "$versioner_trigger" --reason="Versioner timeout" >/dev/null 2>&1 || true
+                        bd_safe close "$versioner_trigger" --reason="Versioner timeout" >/dev/null 2>&1 || true
                     fi
                 fi
             fi
@@ -889,11 +889,11 @@ For each task: bd show <id> --json, then decide action and REMOVE regression lab
             if [ "$final_review_success" = false ]; then
                 local latest_log open_count
                 latest_log=$(ls -t "$LOGS_DIR"/architect-*.log 2>/dev/null | head -1)
-                open_count=$(bd list --status=open --json 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+                open_count=$(bd_safe list --status=open --json 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
 
                 if [ "$open_count" -eq 0 ] && { [ -z "$latest_log" ] || ! grep -q "FINAL_REVIEW: PASSED" "$latest_log" 2>/dev/null; }; then
                     log "WARN" "FINAL_REVIEW incomplete after $final_review_attempt attempts, creating blocker"
-                    bd create --title="FINAL_REVIEW incomplete - check logs" \
+                    bd_safe create --title="FINAL_REVIEW incomplete - check logs" \
                         --type=bug --priority=0 \
                         --description="Architect did not complete FINAL_REVIEW after $final_review_attempt attempts. Manual intervention required." >/dev/null 2>&1 || true
                 fi
@@ -929,8 +929,8 @@ For each task: bd show <id> --json, then decide action and REMOVE regression lab
             log "INFO" "Attempt $blocked_count/3 to fix cycles..."
 
             # Create P0 task for Architect (if not exists)
-            if ! bd list --json 2>/dev/null | jq -e '.[] | select(.title == "Fix dependency cycles")' > /dev/null 2>&1; then
-                bd create --title="Fix dependency cycles" --type=task --priority=0 \
+            if ! bd_safe list --json 2>/dev/null | jq -e '.[] | select(.title == "Fix dependency cycles")' > /dev/null 2>&1; then
+                bd_safe create --title="Fix dependency cycles" --type=task --priority=0 \
                     --description="bd dep cycles detected circular dependencies. Fix before IMPLEMENTATION can proceed.
 
 Run: bd dep cycles
@@ -940,7 +940,7 @@ Then: bd dep remove <task> <dep> for one edge in each cycle" \
 
             # Run Architect to fix cycles
             local cycles_output
-            cycles_output=$(bd dep cycles 2>&1 || true)
+            cycles_output=$(bd_safe dep cycles 2>&1 || true)
             log "INFO" "Running Architect to fix cycles..."
             run_agent_with_mode "architect" ".claude/agents/architect.md" "opus" "fix_cycles" "CYCLES:
 $cycles_output"

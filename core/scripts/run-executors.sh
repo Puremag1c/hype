@@ -109,7 +109,7 @@ count_active_executors() {
         echo "$cache" | jq '[.[] | select(.labels[]? == "executor")] | length' 2>/dev/null || echo "0"
     else
         # Fallback: fresh bd list
-        bd list --status=in_progress --json 2>/dev/null | \
+        bd_safe list --status=in_progress --json 2>/dev/null | \
             jq '[.[] | select(.labels[]? == "executor")] | length' 2>/dev/null || echo "0"
     fi
 }
@@ -124,7 +124,7 @@ get_ready_tasks() {
     #   - исключаем regression (ждут smoke_review от Architect)
     #   - сортируем по приоритету (P0 первые)
     #   - sort -u для дедупликации (bd ready может вернуть дубликаты)
-    bd ready --json 2>/dev/null | \
+    bd_safe ready --json 2>/dev/null | \
         jq -r '.[] | select(.issue_type == "task" or .issue_type == "bug" or .issue_type == "feature") | select(.title | test("^run-|^milestone:") | not) | select((.labels // []) | any(test("^milestone:")) | not) | select((.labels // []) | index("regression") | not) | "\(.priority):\(.id)"' 2>/dev/null | \
         sort -n | \
         cut -d: -f2 | \
@@ -140,7 +140,7 @@ run_executor() {
 
     # Check task status before claim (avoid race condition confusion)
     local current_status
-    current_status=$(bd show "$task_id" --json 2>/dev/null | jq -r '.[0].status // "unknown"' 2>/dev/null)
+    current_status=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].status // "unknown"' 2>/dev/null)
 
     if [ "$current_status" != "open" ]; then
         log "INFO" "Task $task_id not open (status: $current_status), skipping"
@@ -149,7 +149,7 @@ run_executor() {
 
     # Try to claim the task (atomic via beads)
     # Remove needs-review in case this is a retry after timeout
-    if ! bd update "$task_id" --status=in_progress --add-label=executor --remove-label=needs-review >/dev/null 2>&1; then
+    if ! bd_safe update "$task_id" --status=in_progress --add-label=executor --remove-label=needs-review >/dev/null 2>&1; then
         log "INFO" "Task $task_id claim failed (race condition), skipping"
         return 0
     fi
@@ -160,7 +160,7 @@ run_executor() {
 
     # Get task details
     local task_json
-    task_json=$(bd show "$task_id" --json 2>/dev/null || echo "[]")
+    task_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
 
     # Validate task exists (race condition protection)
     local task_title
@@ -232,16 +232,16 @@ $retry_context}"
             # Remove old retry label if exists, add new one
             old_retry_label=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("retry:"))' 2>/dev/null | head -1)
             if [ -n "$old_retry_label" ]; then
-                bd update "$task_id" --status=open --remove-label=executor --remove-label="$old_retry_label" --add-label="retry:$new_retry" --notes="$updated_notes" >/dev/null 2>&1 || true
+                bd_safe update "$task_id" --status=open --remove-label=executor --remove-label="$old_retry_label" --add-label="retry:$new_retry" --notes="$updated_notes" >/dev/null 2>&1 || true
             else
-                bd update "$task_id" --status=open --remove-label=executor --add-label="retry:$new_retry" --notes="$updated_notes" >/dev/null 2>&1 || true
+                bd_safe update "$task_id" --status=open --remove-label=executor --add-label="retry:$new_retry" --notes="$updated_notes" >/dev/null 2>&1 || true
             fi
         else
             log "ERROR" "Executor failed for $task_id (exit: $exit_code)"
             # Save structured attempt result
             local updated_notes
             updated_notes=$(save_attempt_result "$task_id" "FAILED with exit code $exit_code")
-            bd update "$task_id" --status=open --remove-label=executor --notes="$updated_notes" >/dev/null 2>&1 || true
+            bd_safe update "$task_id" --status=open --remove-label=executor --notes="$updated_notes" >/dev/null 2>&1 || true
         fi
         return 0
     fi
@@ -251,7 +251,7 @@ $retry_context}"
     # Fallback: ensure labels are updated even if agent didn't do it
     # Agent should call: bd update --remove-label=executor --add-label=needs-review
     # But we ensure it as safety net
-    bd update "$task_id" --remove-label=executor --add-label=needs-review >/dev/null 2>&1 || true
+    bd_safe update "$task_id" --remove-label=executor --add-label=needs-review >/dev/null 2>&1 || true
 }
 
 # === Run auditor for analysis tasks ===
@@ -261,14 +261,14 @@ run_auditor() {
     local task_id=$1
 
     # Try to claim the task
-    if ! bd update "$task_id" --status=in_progress --add-label=executor --remove-label=needs-review >/dev/null 2>&1; then
+    if ! bd_safe update "$task_id" --status=in_progress --add-label=executor --remove-label=needs-review >/dev/null 2>&1; then
         log "INFO" "Task $task_id claim failed (race condition), skipping"
         return 0
     fi
 
     # Get task details
     local task_json
-    task_json=$(bd show "$task_id" --json 2>/dev/null || echo "[]")
+    task_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
 
     local task_title
     task_title=$(echo "$task_json" | jq -r '.[0].title // empty' 2>/dev/null || true)
@@ -328,7 +328,7 @@ PROJECT_ROOT: $PROJECT_DIR"
             task_desc=$(echo "$task_json" | jq -r '.[0].description // ""' 2>/dev/null)
 
             log "WARN" "ESCALATE: $task_id - auditor failed 3 times, creating architect task"
-            bd create --title="Review failed audit: $task_title" --type=task --priority=1 \
+            bd_safe create --title="Review failed audit: $task_title" --type=task --priority=1 \
                 --labels="model:opus,escalation" \
                 --description="## Context
 Audit task $task_id failed after 3 attempts (timeout/error).
@@ -346,7 +346,7 @@ Audit task $task_id failed after 3 attempts (timeout/error).
 2. Either: split into smaller audits, or reformulate
 3. Close $task_id with appropriate reason" >/dev/null 2>&1 || true
 
-            bd update "$task_id" --status=open --remove-label=executor \
+            bd_safe update "$task_id" --status=open --remove-label=executor \
                 --add-label=blocked:escalated \
                 --notes="Escalated to Architect: auditor failed 3 times (timeout/error)." >/dev/null 2>&1 || true
         else
@@ -360,21 +360,21 @@ Audit task $task_id failed after 3 attempts (timeout/error).
             if [ "$current_model" = "haiku" ]; then
                 # haiku → sonnet
                 log "INFO" "Escalating $task_id: haiku → sonnet (retry $next_retry)"
-                bd update "$task_id" --status=open --remove-label=executor \
+                bd_safe update "$task_id" --status=open --remove-label=executor \
                     --remove-label="audit-retry:$audit_retry" --remove-label=model:haiku \
                     --add-label=model:sonnet --add-label="audit-retry:$next_retry" \
                     --notes="Retry $next_retry: escalated haiku → sonnet." >/dev/null 2>&1 || true
             elif [ "$current_model" = "sonnet" ]; then
                 # sonnet → opus
                 log "INFO" "Escalating $task_id: sonnet → opus (retry $next_retry)"
-                bd update "$task_id" --status=open --remove-label=executor \
+                bd_safe update "$task_id" --status=open --remove-label=executor \
                     --remove-label="audit-retry:$audit_retry" --remove-label=model:sonnet \
                     --add-label=model:opus --add-label="audit-retry:$next_retry" \
                     --notes="Retry $next_retry: escalated sonnet → opus." >/dev/null 2>&1 || true
             else
                 # opus → stay opus, just increment retry
                 log "INFO" "RETRY: $task_id - opus retry $next_retry"
-                bd update "$task_id" --status=open --remove-label=executor \
+                bd_safe update "$task_id" --status=open --remove-label=executor \
                     --remove-label="audit-retry:$audit_retry" --add-label="audit-retry:$next_retry" \
                     --notes="Retry $next_retry: opus retry." >/dev/null 2>&1 || true
             fi
@@ -385,7 +385,7 @@ Audit task $task_id failed after 3 attempts (timeout/error).
     log "INFO" "Auditor completed for $task_id"
 
     # Ensure needs-review is set
-    bd update "$task_id" --remove-label=executor --add-label=needs-review >/dev/null 2>&1 || true
+    bd_safe update "$task_id" --remove-label=executor --add-label=needs-review >/dev/null 2>&1 || true
 }
 
 # === Main ===
@@ -397,7 +397,7 @@ main() {
 
     # Cache in_progress tasks for backpressure check (v1.9.0 optimization)
     local in_progress_cache
-    in_progress_cache=$(bd list --status=in_progress --json 2>/dev/null || echo "[]")
+    in_progress_cache=$(bd_safe list --status=in_progress --json 2>/dev/null || echo "[]")
 
     # Check backpressure (using cache)
     local active
@@ -437,7 +437,7 @@ main() {
 
         # Pre-check status (reduce race condition confusion in logs)
         local current_status task_title model
-        current_status=$(bd show "$task_id" --json 2>/dev/null | jq -r '.[0].status // "unknown"' 2>/dev/null || echo "unknown")
+        current_status=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].status // "unknown"' 2>/dev/null || echo "unknown")
 
         if [ "$current_status" != "open" ]; then
             log "INFO" "SKIP: $task_id already $current_status"
@@ -447,7 +447,7 @@ main() {
 
         # Get task details for logging and routing
         local task_json
-        task_json=$(bd show "$task_id" --json 2>/dev/null || echo "[]")
+        task_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
         task_title=$(echo "$task_json" | jq -r '.[0].title // "unknown"' 2>/dev/null | head -c 40)
         model=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("model:")) | split(":")[1]' 2>/dev/null | head -1)
         model="${model:-sonnet}"

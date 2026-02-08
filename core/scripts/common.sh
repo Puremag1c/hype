@@ -5,6 +5,29 @@
 # Disable terminal color queries from beads (causes garbage escape sequences)
 export NO_COLOR=1
 
+# BD_TIMEOUT - timeout for bd commands (prevents hanging on daemon issues)
+BD_TIMEOUT="${BD_TIMEOUT:-10s}"
+BD_LOCK_FILE="${BD_LOCK_FILE:-/tmp/hype-bd.lock}"
+
+# bd_safe - wrapper for bd commands with flock serialization and timeout
+# Prevents daemon explosion from parallel bd calls overwhelming the socket
+# Uses flock to serialize access - only one bd command runs at a time
+bd_safe() {
+    # Create lock file if doesn't exist
+    touch "$BD_LOCK_FILE" 2>/dev/null || true
+
+    # flock serializes access, timeout_cmd prevents hanging
+    flock "$BD_LOCK_FILE" timeout_cmd "$BD_TIMEOUT" bd "$@"
+    local exit_code=$?
+
+    if [ $exit_code -eq 124 ]; then
+        >&2 echo "ERROR: bd command timeout: bd $*"
+    fi
+
+    return $exit_code
+}
+export -f bd_safe 2>/dev/null || true
+
 # strip_ansi - removes ANSI escape sequences from input
 # Handles: colors, cursor movement, OSC sequences
 # Usage: echo "text" | strip_ansi
@@ -114,7 +137,7 @@ append_notes() {
     local task_id="$1"
     local new_note="$2"
     local current_notes
-    current_notes=$(bd show "$task_id" --json 2>/dev/null | jq -r '.[0].notes // ""' 2>/dev/null || echo "")
+    current_notes=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].notes // ""' 2>/dev/null || echo "")
 
     if [ -n "$current_notes" ]; then
         echo "$current_notes
@@ -137,23 +160,23 @@ reset_stale_tasks() {
     local log_prefix="${2:-stale}"
     local reset_count=0
 
-    for task_id in $(bd list --status=in_progress --json 2>/dev/null | jq -r '.[].id' 2>/dev/null || true); do
+    for task_id in $(bd_safe list --status=in_progress --json 2>/dev/null | jq -r '.[].id' 2>/dev/null || true); do
         # Skip tasks waiting for review - they're not stale, just queued
         local has_needs_review
-        has_needs_review=$(bd show "$task_id" --json 2>/dev/null | jq -r '.[0].labels | index("needs-review") // empty' 2>/dev/null || echo "")
+        has_needs_review=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].labels | index("needs-review") // empty' 2>/dev/null || echo "")
         if [ -n "$has_needs_review" ]; then
             continue
         fi
 
         # Skip regression tasks - they're waiting for Architect smoke_review
         local has_regression
-        has_regression=$(bd show "$task_id" --json 2>/dev/null | jq -r '.[0].labels | index("regression") // empty' 2>/dev/null || echo "")
+        has_regression=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].labels | index("regression") // empty' 2>/dev/null || echo "")
         if [ -n "$has_regression" ]; then
             continue
         fi
 
         local updated_at
-        updated_at=$(bd show "$task_id" --json 2>/dev/null | jq -r '.[0].updated_at' 2>/dev/null || echo "")
+        updated_at=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].updated_at' 2>/dev/null || echo "")
 
         if [ -n "$updated_at" ]; then
             local task_epoch now_epoch age
@@ -173,7 +196,7 @@ reset_stale_tasks() {
                 # Append to notes instead of overwriting (preserve review feedback)
                 local updated_notes
                 updated_notes=$(append_notes "$task_id" "Reset: $log_prefix (${age}s without update)")
-                bd update "$task_id" --status=open --remove-label=executor --notes="$updated_notes" >/dev/null 2>&1 || true
+                bd_safe update "$task_id" --status=open --remove-label=executor --notes="$updated_notes" >/dev/null 2>&1 || true
                 ((reset_count++)) || true
             fi
         fi
@@ -197,7 +220,7 @@ build_retry_context() {
     local task_id="$1"
     local task_json notes retry_count scope_count review_count total_failures
 
-    task_json=$(bd show "$task_id" --json 2>/dev/null || echo "[]")
+    task_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
     notes=$(echo "$task_json" | jq -r '.[0].notes // ""' 2>/dev/null || echo "")
 
     # Get all failure counts from labels
@@ -246,7 +269,7 @@ save_attempt_result() {
     local result="$2"
     local task_json retry_count timestamp
 
-    task_json=$(bd show "$task_id" --json 2>/dev/null || echo "[]")
+    task_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
     retry_count=$(echo "$task_json" | jq -r '[.[0].labels[]? | select(startswith("retry:")) | split(":")[1] | tonumber] | max // 0' 2>/dev/null || echo "0")
     timestamp=$(date '+%Y-%m-%d %H:%M:%S')
 
@@ -474,7 +497,7 @@ export -f is_audit_task 2>/dev/null || true
 has_milestone() {
     local label="$1"
     local found
-    found=$(bd list --json --limit 0 --all 2>/dev/null | \
+    found=$(bd_safe list --json --limit 0 --all 2>/dev/null | \
         jq -r ".[] | select(.labels[]? == \"$label\") | .id" 2>/dev/null | head -1)
     [ -n "$found" ]
 }
@@ -494,14 +517,14 @@ ensure_milestone() {
 
     # Create and immediately close
     local new_id
-    new_id=$(bd create --title="$title" --type=task --labels="$label" 2>&1 | \
+    new_id=$(bd_safe create --title="$title" --type=task --labels="$label" 2>&1 | \
         grep -oE '[A-Za-z]+-[a-z0-9]+' | head -1)
     if [ -n "$new_id" ]; then
-        bd close "$new_id" --reason="Phase milestone" >/dev/null 2>&1 || true
+        bd_safe close "$new_id" --reason="Phase milestone" >/dev/null 2>&1 || true
     fi
 
     # Force sync to flush writes and invalidate daemon cache
-    bd sync --force >/dev/null 2>&1 || true
+    bd_safe sync --force >/dev/null 2>&1 || true
     sleep 1  # Give daemon time to reload
 
     # Verify milestone is visible (retry up to 10 times with sync between attempts)
@@ -512,7 +535,7 @@ ensure_milestone() {
             return 0
         fi
         ((attempts++))
-        bd sync --force >/dev/null 2>&1 || true
+        bd_safe sync --force >/dev/null 2>&1 || true
         sleep 1
     done
 
@@ -530,12 +553,12 @@ export -f ensure_milestone 2>/dev/null || true
 delete_milestone() {
     local label="$1"
     local task_ids
-    task_ids=$(bd list --json --limit 0 2>/dev/null | \
+    task_ids=$(bd_safe list --json --limit 0 2>/dev/null | \
         jq -r ".[] | select(.labels[]? == \"$label\") | .id" 2>/dev/null || true)
 
     if [ -n "$task_ids" ]; then
         for task_id in $task_ids; do
-            bd delete "$task_id" >/dev/null 2>&1 || true
+            bd_safe delete "$task_id" >/dev/null 2>&1 || true
         done
     fi
 }
@@ -547,13 +570,13 @@ export -f delete_milestone 2>/dev/null || true
 # NOTE: Ищет во ВСЕХ задачах (не только closed) — milestones могут застрять в open
 delete_all_milestones() {
     local task_ids
-    task_ids=$(bd list --json --limit 0 2>/dev/null | \
+    task_ids=$(bd_safe list --json --limit 0 2>/dev/null | \
         jq -r '.[] | select(.labels[]? | test("^milestone:")) | .id' 2>/dev/null || true)
 
     local count=0
     if [ -n "$task_ids" ]; then
         for task_id in $task_ids; do
-            bd delete "$task_id" >/dev/null 2>&1 || true
+            bd_safe delete "$task_id" >/dev/null 2>&1 || true
             ((count++)) || true
         done
     fi
@@ -581,7 +604,7 @@ cleanup_iteration() {
     # Check for in_progress tasks
     local in_progress_count
     local in_progress_tasks
-    in_progress_tasks=$(bd list --status=in_progress --json 2>/dev/null || echo "[]")
+    in_progress_tasks=$(bd_safe list --status=in_progress --json 2>/dev/null || echo "[]")
     in_progress_count=$(echo "$in_progress_tasks" | jq 'length')
 
     if [[ "$in_progress_count" -gt 0 ]]; then
@@ -612,12 +635,12 @@ cleanup_iteration() {
 
     # Beads tasks
     local task_count
-    task_count=$(bd list --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo 0)
+    task_count=$(bd_safe list --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo 0)
     [ "$task_count" -gt 0 ] && echo "  • $task_count beads task(s)"
 
     # Milestones
     local milestone_count
-    milestone_count=$(bd list --status=closed --json --limit 0 2>/dev/null | jq '[.[] | select(.labels[]? | test("^milestone:"))] | length' 2>/dev/null || echo 0)
+    milestone_count=$(bd_safe list --status=closed --json --limit 0 2>/dev/null | jq '[.[] | select(.labels[]? | test("^milestone:"))] | length' 2>/dev/null || echo 0)
     [ "$milestone_count" -gt 0 ] && echo "  • $milestone_count milestone(s)"
 
     # Worktrees
@@ -641,7 +664,7 @@ cleanup_iteration() {
 
     # 1. Sync beads (backup to issues.jsonl)
     echo "  → Syncing beads..."
-    bd sync 2>/dev/null || true
+    bd_safe sync 2>/dev/null || true
 
     # 2. Delete logs
     echo "  → Deleting logs..."
@@ -652,12 +675,12 @@ cleanup_iteration() {
     echo "  → Cleaning beads tasks..."
     # Close all open/in_progress tasks first (bd admin cleanup only deletes closed)
     local open_ids
-    open_ids=$(bd list --json --limit 0 2>/dev/null | jq -r '.[] | select(.status == "open" or .status == "in_progress") | .id' 2>/dev/null || true)
+    open_ids=$(bd_safe list --json --limit 0 2>/dev/null | jq -r '.[] | select(.status == "open" or .status == "in_progress") | .id' 2>/dev/null || true)
     for task_id in $open_ids; do
-        bd close "$task_id" --reason="Closed by hype clear" 2>/dev/null || true
+        bd_safe close "$task_id" --reason="Closed by hype clear" 2>/dev/null || true
     done
     # Run cleanup and show result (was silently failing before)
-    bd admin cleanup --force || true
+    bd_safe admin cleanup --force || true
 
     # 4. Delete all milestones (using function from this file)
     echo "  → Deleting milestones..."

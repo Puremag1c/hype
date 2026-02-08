@@ -1,5 +1,38 @@
 # Changelog
 
+## [2.0.14] - 2026-02-08
+
+### Fixed
+
+- **CRITICAL: flock serialization for all bd commands** - All `bd` calls across HYPE now use centralized `bd_safe()` wrapper with flock serialization. Prevents beads daemon explosion (270+ daemon processes) when parallel agents overwhelm the socket.
+
+- **Centralized bd_safe in common.sh** - Single source of truth for bd wrapper with:
+  - `flock /tmp/hype-bd.lock` - serializes all bd calls
+  - `timeout_cmd 10s` - prevents hangs on unresponsive daemon
+  - Error logging on timeout (exit code 124)
+
+- **Updated scripts to use bd_safe:**
+  - `common.sh` - centralized wrapper with flock
+  - `hype.sh` - all bd calls serialized
+  - `run-executors.sh` - all bd calls serialized
+  - `run-senior-executor.sh` - all bd calls serialized
+  - `run-analysts.sh` - removed duplicate bd_safe, uses common.sh
+  - `run-testers.sh` - removed duplicate bd_safe, uses common.sh
+  - `detect-phase.sh` - now sources common.sh, uses bd_safe
+  - `doctor.sh` - uses bd_safe
+  - `close-completed-parents.sh` - sources common.sh, uses bd_safe
+
+- **Root cause of daemon explosion** - Multiple parallel bd calls would simultaneously:
+  1. Try to connect to daemon socket
+  2. Get timeout/error (socket overloaded)
+  3. Assume daemon is dead
+  4. Each spawn a NEW daemon
+  5. Result: 270+ daemon processes fighting for socket
+
+- **flock solution** - Only one bd command executes at a time. Queue forms naturally. No parallel socket abuse. Daemon stays stable.
+
+---
+
 ## [2.0.13] - 2026-02-08
 
 ### Fixed

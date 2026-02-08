@@ -24,18 +24,7 @@ if [ -f "$CONFIG_FILE" ]; then
 fi
 
 ANALYST_TIMEOUT="${ANALYST_TIMEOUT:-10m}"
-BD_TIMEOUT="${BD_TIMEOUT:-10s}"  # Timeout for bd commands
-
-# bd_safe - wrapper for bd commands with timeout protection
-# Prevents hanging when beads daemon is unresponsive
-bd_safe() {
-    timeout_cmd "$BD_TIMEOUT" bd "$@"
-    local exit_code=$?
-    if [ $exit_code -eq 124 ]; then
-        log "ERROR" "bd command timeout: bd $*"
-    fi
-    return $exit_code
-}
+# bd_safe is provided by common.sh with flock serialization
 
 mkdir -p "$LOGS_DIR"
 
@@ -168,7 +157,7 @@ main() {
 
     # Check completion status (milestone created by HYPE)
     local open_triggers
-    open_triggers=$(bd list --status=open --json 2>/dev/null | jq '[.[] | select(.title | startswith("run-analyst-"))] | length' 2>/dev/null || echo "0")
+    open_triggers=$(bd_safe list --status=open --json 2>/dev/null | jq '[.[] | select(.title | startswith("run-analyst-"))] | length' 2>/dev/null || echo "0")
 
     if [ "$open_triggers" -eq 0 ]; then
         log "INFO" "All analysts completed"
@@ -177,8 +166,8 @@ main() {
     fi
 
     # Sync only if daemon is not running (daemon auto-syncs)
-    if ! bd sync --status 2>/dev/null | grep -q "auto-commit.*enabled"; then
-        bd sync 2>/dev/null || true
+    if ! bd_safe sync --status 2>/dev/null | grep -q "auto-commit.*enabled"; then
+        bd_safe sync 2>/dev/null || true
     fi
     log "INFO" "ANALYZE FINISHED"
 }

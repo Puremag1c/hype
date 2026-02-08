@@ -55,7 +55,7 @@ log() {
 get_review_tasks() {
     # Tasks with label=needs-review (executor label irrelevant - needs-review means executor finished)
     # Exclude milestone tasks (they should never be in review queue)
-    bd list --status=in_progress --json 2>/dev/null | \
+    bd_safe list --status=in_progress --json 2>/dev/null | \
         jq -r '.[] | select(.labels | index("needs-review")) | select((.labels // []) | any(test("^milestone:")) | not) | .id' 2>/dev/null || true
 }
 
@@ -197,16 +197,16 @@ $task_notes
 
     # Check result
     local updated_json
-    updated_json=$(bd show "$task_id" --json 2>/dev/null || echo "[]")
+    updated_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
     local task_status
     task_status=$(echo "$updated_json" | jq -r '.[0].status // "unknown"' 2>/dev/null || echo "unknown")
 
     if [ "$task_status" = "closed" ]; then
         log "SUCCESS" "AUDIT CLOSED: $task_id"
-        bd update "$task_id" --remove-label=needs-review --remove-label=executor --add-label=reviewed >/dev/null 2>&1 || true
+        bd_safe update "$task_id" --remove-label=needs-review --remove-label=executor --add-label=reviewed >/dev/null 2>&1 || true
     else
         # Architect didn't close - might have created tasks, clean up labels
-        bd update "$task_id" --remove-label=needs-review --remove-label=executor >/dev/null 2>&1 || true
+        bd_safe update "$task_id" --remove-label=needs-review --remove-label=executor >/dev/null 2>&1 || true
         log "WARN" "AUDIT PENDING: $task_id - Architect may have created follow-up tasks"
     fi
 }
@@ -276,7 +276,7 @@ process_review() {
 
     # Get task details
     local task_json
-    task_json=$(bd show "$task_id" --json 2>/dev/null || echo "[]")
+    task_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
 
     # Validate task exists (race condition protection)
     local task_title
@@ -294,19 +294,19 @@ process_review() {
     case "$preflight_result" in
         NO_BRANCH)
             log "WARN" "REJECT: $task_id - no branch found"
-            bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
+            bd_safe update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
                 --notes="Review rejected: Branch task/beads-$task_id not found. Please push your changes."
             return 0
             ;;
         NO_COMMITS)
             log "WARN" "REJECT: $task_id - no commits in branch"
-            bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
+            bd_safe update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
                 --notes="Review rejected: No commits found. Please implement the task."
             return 0
             ;;
         SECRETS_DETECTED)
             log "ERROR" "REJECT: $task_id - secrets detected in diff"
-            bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
+            bd_safe update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
                 --notes="SECURITY: Potential secrets detected in diff. Remove sensitive data and resubmit."
             return 0
             ;;
@@ -325,7 +325,7 @@ process_review() {
                 task_notes=$(echo "$task_json" | jq -r '.[0].notes // ""' 2>/dev/null)
 
                 log "WARN" "ESCALATE: $task_id - audit failed after 3 attempts, creating architect task"
-                bd create --title="Review failed audit: $task_title" --type=task --priority=1 \
+                bd_safe create --title="Review failed audit: $task_title" --type=task --priority=1 \
                     --labels="model:opus,escalation" \
                     --description="## Context
 Audit task $task_id failed to produce findings after 3 attempts (sonnet + opus).
@@ -342,7 +342,7 @@ $task_notes
 2. Either: reformulate the audit task, or close as not applicable
 3. Close $task_id with appropriate reason" >/dev/null 2>&1 || true
 
-                bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
+                bd_safe update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
                     --add-label=blocked:escalated \
                     --notes="Escalated to Architect: auditor couldn't produce findings after 3 attempts."
             else
@@ -356,21 +356,21 @@ $task_notes
                 if [ "$current_model" = "haiku" ]; then
                     # haiku → sonnet
                     log "INFO" "RETRY: $task_id - haiku → sonnet (attempt $next_retry)"
-                    bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
+                    bd_safe update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
                         --remove-label="audit-retry:$audit_retry" --remove-label=model:haiku \
                         --add-label=model:sonnet --add-label="audit-retry:$next_retry" \
                         --notes="Retry $next_retry: escalated haiku → sonnet. Findings required (min 50 chars)."
                 elif [ "$current_model" = "sonnet" ]; then
                     # sonnet → opus
                     log "INFO" "RETRY: $task_id - sonnet → opus (attempt $next_retry)"
-                    bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
+                    bd_safe update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
                         --remove-label="audit-retry:$audit_retry" --remove-label=model:sonnet \
                         --add-label=model:opus --add-label="audit-retry:$next_retry" \
                         --notes="Retry $next_retry: escalated sonnet → opus. Findings required (min 50 chars)."
                 else
                     # opus → stay opus, just increment retry
                     log "INFO" "RETRY: $task_id - opus retry $next_retry"
-                    bd update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
+                    bd_safe update "$task_id" --status=open --remove-label=needs-review --remove-label=executor \
                         --remove-label="audit-retry:$audit_retry" --add-label="audit-retry:$next_retry" \
                         --notes="Retry $next_retry: opus retry. Findings required (min 50 chars)."
                 fi
@@ -464,7 +464,7 @@ $review_context
 
     # Check result and log appropriately
     local updated_json
-    updated_json=$(bd show "$task_id" --json 2>/dev/null || echo "[]")
+    updated_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
     local task_status
     task_status=$(echo "$updated_json" | jq -r '.[0].status // "unknown"' 2>/dev/null || echo "unknown")
 
@@ -472,14 +472,14 @@ $review_context
         # Verify merge actually happened by checking if main changed
         if [ "$main_before" != "unknown" ] && [ "$main_before" = "$main_after" ]; then
             log "WARN" "Task $task_id closed but main unchanged, reopening"
-            bd update "$task_id" --status=open --remove-label=executor --notes="Auto-reopened: closed without merge to main"
+            bd_safe update "$task_id" --status=open --remove-label=executor --notes="Auto-reopened: closed without merge to main"
         else
             log "SUCCESS" "APPROVED: $task_id (merged)"
-            bd update "$task_id" --remove-label=needs-review --remove-label=executor --add-label=reviewed >/dev/null 2>&1 || true
+            bd_safe update "$task_id" --remove-label=needs-review --remove-label=executor --add-label=reviewed >/dev/null 2>&1 || true
         fi
     elif [ "$task_status" = "open" ]; then
         # Task returned for rework - cleanup executor label
-        bd update "$task_id" --remove-label=executor >/dev/null 2>&1 || true
+        bd_safe update "$task_id" --remove-label=executor >/dev/null 2>&1 || true
         # Extract reason from notes
         local notes
         notes=$(echo "$updated_json" | jq -r '.[0].notes // ""' 2>/dev/null | tail -1 | head -c 80)
@@ -503,14 +503,14 @@ $review_context
 
             if [ "$current_model" = "haiku" ]; then
                 log "WARN" "REVIEW ESCALATE: $task_id - haiku → sonnet after 3 attempts"
-                bd update "$task_id" \
+                bd_safe update "$task_id" \
                     --remove-label="review-retry:$((review_retry-1))" \
                     --remove-label="model:haiku" \
                     --add-label="model:sonnet" \
                     --notes="Review escalated haiku → sonnet after 3 failed attempts."
             elif [ "$current_model" = "sonnet" ]; then
                 log "WARN" "REVIEW ESCALATE: $task_id - sonnet → opus after 3 attempts"
-                bd update "$task_id" \
+                bd_safe update "$task_id" \
                     --remove-label="review-retry:$((review_retry-1))" \
                     --remove-label="model:sonnet" \
                     --add-label="model:opus" \
@@ -518,14 +518,14 @@ $review_context
             else
                 # Already opus - just reset retry counter
                 log "WARN" "REVIEW RETRY: $task_id - opus, resetting retry counter"
-                bd update "$task_id" \
+                bd_safe update "$task_id" \
                     --remove-label="review-retry:$((review_retry-1))" \
                     --notes="Review retry reset (already opus)."
             fi
         else
             log "WARN" "REVIEW RETRY: $task_id - no action taken (attempt $review_retry/3)"
-            bd update "$task_id" --remove-label="review-retry:$((review_retry-1))" --add-label="review-retry:$review_retry" >/dev/null 2>&1 || \
-            bd update "$task_id" --add-label="review-retry:$review_retry" >/dev/null 2>&1
+            bd_safe update "$task_id" --remove-label="review-retry:$((review_retry-1))" --add-label="review-retry:$review_retry" >/dev/null 2>&1 || \
+            bd_safe update "$task_id" --add-label="review-retry:$review_retry" >/dev/null 2>&1
         fi
     fi
 }
@@ -556,7 +556,7 @@ main() {
     if [ -n "$task_id" ]; then
         log "INFO" "Review: $task_id"
         process_review "$task_id"
-        bd sync 2>/dev/null || true
+        bd_safe sync 2>/dev/null || true
         log "INFO" "Processed 1 review"
     fi
 }

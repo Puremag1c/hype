@@ -64,21 +64,21 @@ gather_context() {
     # Beads status
     context+="## Beads Status\n"
     context+="\`\`\`\n"
-    context+=$(timeout_cmd 5s bd sync --status 2>&1 || echo "DAEMON_ERROR: bd sync timeout")
+    context+=$(bd_safe sync --status 2>&1 || echo "DAEMON_ERROR: bd sync timeout")
     context+="\n\n"
-    context+=$(bd stats 2>&1 || echo "bd stats failed")
+    context+=$(bd_safe stats 2>&1 || echo "bd stats failed")
     context+="\n\`\`\`\n\n"
 
     # In-progress tasks
     context+="## In-Progress Tasks\n"
     context+="\`\`\`\n"
-    context+=$(bd list --status=in_progress --json 2>/dev/null | jq -r '.[] | "\(.id): \(.title) (updated: \(.updated_at))"' 2>/dev/null || echo "none")
+    context+=$(bd_safe list --status=in_progress --json 2>/dev/null | jq -r '.[] | "\(.id): \(.title) (updated: \(.updated_at))"' 2>/dev/null || echo "none")
     context+="\n\`\`\`\n\n"
 
     # Blocked tasks
     context+="## Blocked Tasks\n"
     context+="\`\`\`\n"
-    context+=$(bd blocked 2>&1 || echo "none")
+    context+=$(bd_safe blocked 2>&1 || echo "none")
     context+="\n\`\`\`\n\n"
 
     # Current phase

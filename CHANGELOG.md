@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.0.18] - 2026-02-08
+
+### Fixed
+
+- **CRITICAL: Infinite rejection loop without escalation** - Preflight rejections (NO_BRANCH, NO_COMMITS, SECRETS_DETECTED) were not incrementing `review-retry` counter, causing tasks to loop forever without model escalation.
+
+- **Added `handle_preflight_rejection()` helper:**
+  - Increments `review-retry` on each rejection
+  - Escalates model after 3 failures (haiku → sonnet → opus)
+  - Resets counter with warning when opus reaches limit
+  - Unified logic for all preflight rejection types
+
+---
+
 ## [2.0.17] - 2026-02-08
 
 ### Changed

@@ -720,7 +720,7 @@ dispatch_phase() {
             arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
             local spec_content
             spec_content=$(cat SPEC.md 2>/dev/null || echo "SPEC.md not found")
-            run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "create_plan" "SPEC:
+            run_agent_with_mode "architect" ".claude/agents/architect-planner.md" "$arch_model" "create_plan" "SPEC:
 $spec_content" "${PLANNING_TIMEOUT:-15m}"
 
             # Ensure milestone exists (architect may forget step 7)
@@ -763,7 +763,7 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             if ! bd_safe list --json 2>/dev/null | jq -e '.[] | select(.title == "run-plan-review")' > /dev/null 2>&1; then
                 bd_safe create --title="run-plan-review" --type=task --priority=0 --label=trigger >/dev/null 2>&1 || true
             fi
-            run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "plan_review" "" "${PLAN_REVIEW_TIMEOUT:-10m}"
+            run_agent_with_mode "architect" ".claude/agents/architect-reviewer.md" "$arch_model" "plan_review" "" "${PLAN_REVIEW_TIMEOUT:-10m}"
             ;;
 
         SMOKE_REVIEW)
@@ -788,7 +788,7 @@ $regression_tasks
 
 For each task: bd show <id> --json, then decide action and REMOVE regression label."
 
-            run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "smoke_review" "$regression_prompt" "${SMOKE_REVIEW_TIMEOUT:-10m}"
+            run_agent_with_mode "architect" ".claude/agents/architect-qa.md" "$arch_model" "smoke_review" "$regression_prompt" "${SMOKE_REVIEW_TIMEOUT:-10m}"
             ;;
 
         IMPLEMENTATION)
@@ -832,7 +832,7 @@ For each task: bd show <id> --json, then decide action and REMOVE regression lab
                 ((final_review_attempt++)) || true
                 log "INFO" "FINAL_REVIEW: Starting Architect (attempt $final_review_attempt/${RETRY_LIMIT:-3})..."
 
-                if run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "final_review" "" "${FINAL_REVIEW_TIMEOUT:-15m}"; then
+                if run_agent_with_mode "architect" ".claude/agents/architect-qa.md" "$arch_model" "final_review" "" "${FINAL_REVIEW_TIMEOUT:-15m}"; then
                     # Check if architect actually completed (wrote PASSED)
                     local latest_log
                     latest_log=$(ls -t "$LOGS_DIR"/architect-*.log 2>/dev/null | head -1)
@@ -942,7 +942,7 @@ Then: bd dep remove <task> <dep> for one edge in each cycle" \
             local cycles_output
             cycles_output=$(bd_safe dep cycles 2>&1 || true)
             log "INFO" "Running Architect to fix cycles..."
-            run_agent_with_mode "architect" ".claude/agents/architect.md" "opus" "fix_cycles" "CYCLES:
+            run_agent_with_mode "architect" ".claude/agents/architect-ops.md" "sonnet" "fix_cycles" "CYCLES:
 $cycles_output"
             ;;
 

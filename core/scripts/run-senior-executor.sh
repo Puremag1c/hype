@@ -142,7 +142,7 @@ route_audit_to_architect() {
     task_notes=$(echo "$task_json" | jq -r '.[0].notes // ""' 2>/dev/null)
 
     # Check if architect agent exists
-    local agent_file=".claude/agents/architect.md"
+    local agent_file=".claude/agents/architect-reviewer.md"
     local agent_prompt
     if [ -f "$agent_file" ]; then
         agent_prompt=$(cat "$agent_file")

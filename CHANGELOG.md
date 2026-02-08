@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.0.16] - 2026-02-08
+
+### Fixed
+
+- **CRITICAL: Missing architect.md** - After refactoring architect into 4 specialized agents (commit 9332042), the code wasn't updated to use new agent files.
+
+- **Mapped modes to specialized agents:**
+  - `create_plan` → `architect-planner.md`
+  - `plan_review` → `architect-reviewer.md`
+  - `audit_review` → `architect-reviewer.md`
+  - `smoke_review` → `architect-qa.md`
+  - `final_review` → `architect-qa.md`
+  - `fix_cycles` → `architect-ops.md` (also changed model from opus to sonnet)
+
+- **Files updated:**
+  - `core/scripts/hype.sh` - 5 references fixed
+  - `core/scripts/run-senior-executor.sh` - 1 reference fixed
+
+---
+
 ## [2.0.15] - 2026-02-08
 
 ### Fixed

@@ -34,12 +34,12 @@ else
 
     if [ -n "$CLOSED_BUG" ]; then
         echo "REGRESSION: Reopening $CLOSED_BUG"
-        bd update "$CLOSED_BUG" --status=open --add-label=regression \
+        bd update "$CLOSED_BUG" --status=open --add-label=regression --add-label=smoke \
             --notes="Regression detected during SMOKE_TEST. Issue reappeared after previous fix."
     else
         # Step 3: Create NEW bug with done_when
         bd create --title="SMOKE: [Backend] <description>" \
-            --type=bug --priority=0 \
+            --type=bug --priority=0 --label=smoke \
             --description="... (include done_when!) ..."
     fi
 fi
@@ -169,7 +169,7 @@ ISSUE_KEYWORD="test_name"  # Use test name as keyword
 
 # If no duplicate found:
 bd create --title="SMOKE: [Backend] Test failure: test_name" \
-    --type=bug --priority=0 \
+    --type=bug --priority=0 --label=smoke \
     --description="## Test
 test_name in test_file.py
 

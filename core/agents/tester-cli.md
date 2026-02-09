@@ -36,12 +36,12 @@ else
 
     if [ -n "$CLOSED_BUG" ]; then
         echo "REGRESSION: Reopening $CLOSED_BUG"
-        bd update "$CLOSED_BUG" --status=open --add-label=regression \
+        bd update "$CLOSED_BUG" --status=open --add-label=regression --add-label=smoke \
             --notes="Regression detected during SMOKE_TEST. Issue reappeared after previous fix."
     else
         # Step 3: Create NEW bug with done_when
         bd create --title="SMOKE: [CLI] <description>" \
-            --type=bug --priority=0 \
+            --type=bug --priority=0 --label=smoke \
             --description="... (include done_when!) ..."
     fi
 fi
@@ -156,7 +156,7 @@ ISSUE_KEYWORD="help"
 
 # If no duplicate/regression found, create:
 bd create --title="SMOKE: [CLI] --help command fails" \
-  --type=bug --priority=0 \
+  --type=bug --priority=0 --label=smoke \
   --description="## Command
 $BIN_PATH --help
 

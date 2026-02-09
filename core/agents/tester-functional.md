@@ -35,12 +35,12 @@ else
 
     if [ -n "$CLOSED_BUG" ]; then
         echo "REGRESSION: Reopening $CLOSED_BUG"
-        bd update "$CLOSED_BUG" --status=open --add-label=regression \
+        bd update "$CLOSED_BUG" --status=open --add-label=regression --add-label=smoke \
             --notes="Regression detected during SMOKE_TEST. Issue reappeared after previous fix."
     else
         # Step 3: Create NEW bug with done_when
         bd create --title="SMOKE: [Must Have] <description>" \
-            --type=bug --priority=0 \
+            --type=bug --priority=0 --label=smoke \
             --description="... (see template below) ..."
     fi
 fi
@@ -115,7 +115,7 @@ sleep 5
 if ! curl -s "$TEST_URL" > /dev/null 2>&1; then
     echo "ERROR: Server not available at $TEST_URL"
     bd create --title="SMOKE: [Startup] Server not available" \
-      --type=bug --priority=0 \
+      --type=bug --priority=0 --label=smoke \
       --description="TEST_URL: $TEST_URL
 Server did not respond. Check if server started correctly."
     exit 1
@@ -194,7 +194,7 @@ ISSUE_KEYWORD="spinner"
 
 # If no duplicate/regression found, create:
 bd create --title="SMOKE: [Must Have] Button click doesn't show spinner" \
-  --type=bug --priority=0 \
+  --type=bug --priority=0 --label=smoke \
   --description="## Expected
 Clicking Connect button shows loading spinner
 
@@ -222,7 +222,7 @@ ISSUE_KEYWORD="navigation"
 # ... run protocol check first ...
 
 bd create --title="SMOKE: [UX] Navigation truncated on mobile" \
-  --type=bug --priority=2 \
+  --type=bug --priority=2 --label=smoke \
   --description="## Issue
 Navigation links overflow on mobile viewport (375px)
 

@@ -36,12 +36,12 @@ else
 
     if [ -n "$CLOSED_BUG" ]; then
         echo "REGRESSION: Reopening $CLOSED_BUG"
-        bd update "$CLOSED_BUG" --status=open --add-label=regression \
+        bd update "$CLOSED_BUG" --status=open --add-label=regression --add-label=smoke \
             --notes="Regression detected during SMOKE_TEST. Issue reappeared after previous fix."
     else
         # Step 3: Create NEW bug with done_when
         bd create --title="SMOKE: [API] <description>" \
-            --type=bug --priority=0 \
+            --type=bug --priority=0 --label=smoke \
             --description="... (include done_when!) ..."
     fi
 fi
@@ -142,7 +142,7 @@ ISSUE_KEYWORD="api/X"  # Use endpoint path as keyword
 
 # If no duplicate/regression found, create:
 bd create --title="SMOKE: [API] Endpoint /api/X returns 500" \
-  --type=bug --priority=0 \
+  --type=bug --priority=0 --label=smoke \
   --description="## Endpoint
 GET $TEST_URL/api/X
 

@@ -36,12 +36,12 @@ else
 
     if [ -n "$CLOSED_BUG" ]; then
         echo "REGRESSION: Reopening $CLOSED_BUG"
-        bd update "$CLOSED_BUG" --status=open --add-label=regression \
+        bd update "$CLOSED_BUG" --status=open --add-label=regression --add-label=smoke \
             --notes="Regression detected during SMOKE_TEST. Issue reappeared after previous fix."
     else
         # Step 3: Create NEW bug with done_when
         bd create --title="SMOKE: [Visual] <description>" \
-            --type=bug --priority=0 \
+            --type=bug --priority=0 --label=smoke \
             --description="... (include done_when!) ..."
     fi
 fi
@@ -114,7 +114,7 @@ sleep 5
 if ! curl -s "$TEST_URL" > /dev/null 2>&1; then
     echo "ERROR: Server not available at $TEST_URL"
     bd create --title="SMOKE: [Visual] Server not available" \
-      --type=bug --priority=0 --description="Server not responding at $TEST_URL"
+      --type=bug --priority=0 --label=smoke --description="Server not responding at $TEST_URL"
     bd close $TRIGGER_TASK --reason="Server not available"
     exit 1
 fi
@@ -168,7 +168,7 @@ ISSUE_KEYWORD="layout"  # or "broken", "overflow", etc.
 
 # If no duplicate/regression found, create:
 bd create --title="SMOKE: [Visual] <description of issue>" \
-  --type=bug --priority=0 \
+  --type=bug --priority=0 --label=smoke \
   --description="## Issue
 <what's wrong with the UI>
 

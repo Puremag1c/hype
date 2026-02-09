@@ -767,9 +767,8 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             ;;
 
         SMOKE_REVIEW)
-            # Architect reviews regression tasks before executors can grab them
-            # Prevents race condition between Architect and Executor
-            log "INFO" "SMOKE_REVIEW: Processing regression tasks..."
+            # Architect triages ALL smoke test findings before executors can grab them
+            log "INFO" "SMOKE_REVIEW: Processing smoke test findings..."
 
             local arch_model
             arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
@@ -779,16 +778,23 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
                 bd_safe create --title="run-smoke-review" --type=task --priority=0 --label=trigger >/dev/null 2>&1 || true
             fi
 
-            # Collect regression task IDs for Architect prompt
-            local regression_tasks regression_prompt
-            regression_tasks=$(bd_safe list --status=open --json 2>/dev/null | jq -r '.[] | select(.labels | index("regression")) | "\(.id): \(.title)"' 2>/dev/null || echo "")
-            regression_prompt="
-REGRESSION TASKS TO REVIEW:
-$regression_tasks
+            # Collect ALL tasks needing triage (smoke label OR regression label)
+            local smoke_tasks regression_tasks triage_prompt
+            smoke_tasks=$(bd_safe list --status=open --json 2>/dev/null | jq -r '.[] | select((.labels // []) | any(. == "smoke" or . == "regression")) | "\(.id): \(.title) [labels: \(.labels | join(", "))]"' 2>/dev/null || echo "")
+            triage_prompt="
+SMOKE TEST FINDINGS TO TRIAGE:
+$smoke_tasks
 
-For each task: bd show <id> --json, then decide action and REMOVE regression label."
+For each task:
+1. bd show <id> --json — read details
+2. If has 'regression' label: this bug was fixed before but returned. Apply regression decision tree.
+3. If only 'smoke' label: this is a NEW finding. Decide:
+   a) Related to project scope → KEEP: set appropriate model (--add-label=model:haiku|sonnet|opus), remove smoke label
+   b) Unrelated to scope → CLOSE: bd close <id> --reason='Out of scope for current iteration'
+   c) Needs to be split → CREATE subtasks, close original, remove smoke label
+4. ALWAYS remove 'smoke' label after processing. ALWAYS remove 'regression' label after processing."
 
-            run_agent_with_mode "architect" ".claude/agents/architect-qa.md" "$arch_model" "smoke_review" "$regression_prompt" "${SMOKE_REVIEW_TIMEOUT:-10m}"
+            run_agent_with_mode "architect" ".claude/agents/architect-qa.md" "$arch_model" "smoke_review" "$triage_prompt" "${SMOKE_REVIEW_TIMEOUT:-10m}"
             ;;
 
         IMPLEMENTATION)

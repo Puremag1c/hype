@@ -209,10 +209,10 @@ reset_stale_tasks() {
             continue
         fi
 
-        # Skip regression tasks - they're waiting for Architect smoke_review
-        local has_regression
-        has_regression=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].labels | index("regression") // empty' 2>/dev/null || echo "")
-        if [ -n "$has_regression" ]; then
+        # Skip smoke/regression tasks - they're waiting for Architect smoke_review
+        local has_smoke_triage
+        has_smoke_triage=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].labels // [] | if (index("regression") or index("smoke")) then "yes" else empty end' 2>/dev/null || echo "")
+        if [ -n "$has_smoke_triage" ]; then
             continue
         fi
 

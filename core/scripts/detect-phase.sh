@@ -96,8 +96,10 @@ P0_BUGS_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] |
   select(.title | test("^run-versioning$") | not)
 ] | length' 2>/dev/null || echo "0")
 
-# Regression tasks (from SMOKE_TEST, need Architect review)
-REGRESSION_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open") | select(.labels[]? == "regression")] | length' 2>/dev/null || echo "0")
+# Smoke tasks needing triage (from SMOKE_TEST, need Architect review)
+SMOKE_TRIAGE_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open") | select((.labels[]? == "smoke") or (.labels[]? == "regression"))] | length' 2>/dev/null || echo "0")
+# Backward compat alias
+REGRESSION_OPEN=$SMOKE_TRIAGE_OPEN
 
 # In-progress task IDs (for show_active_work in hype.sh)
 IN_PROGRESS_IDS=$(echo "$ALL_TASKS_JSON" | jq -c '[.[] | select(.status == "in_progress") | .id]' 2>/dev/null || echo "[]")
@@ -239,9 +241,9 @@ if [ "$HAS_PLAN_REVIEWED" -eq 0 ]; then
     exit 0
 fi
 
-# SMOKE_REVIEW: regression tasks найдены - Architect обрабатывает перед executors
+# SMOKE_REVIEW: smoke/regression tasks найдены - Architect триажит перед executors
 # Предотвращает race condition между Architect и Executor
-if [ "$REGRESSION_OPEN" -gt 0 ]; then
+if [ "$SMOKE_TRIAGE_OPEN" -gt 0 ]; then
     output_json "SMOKE_REVIEW"
     exit 0
 fi

@@ -19,7 +19,7 @@ model: opus
 
 Смотри переменную MODE в контексте:
 - `final_review` — финальная проверка перед релизом
-- `smoke_review` — обработка regression bugs
+- `smoke_review` — триаж всех находок из SMOKE_TEST (новые баги и regression)
 
 ---
 
@@ -149,15 +149,17 @@ echo "FINAL_REVIEW: PASSED"
 
 ## MODE: smoke_review
 
-Вызывается когда SMOKE_TEST нашёл regression — баг который уже был "пофиксен" но вернулся.
+Вызывается когда SMOKE_TEST нашёл проблемы. Задачи бывают двух типов:
+- **smoke** (label `smoke`) — НОВЫЙ баг, найденный впервые
+- **regression** (labels `smoke` + `regression`) — баг который уже был "пофиксен" но вернулся
 
 ### Контекст
 
 В prompt ты получаешь СПИСОК задач:
 ```
-REGRESSION TASKS TO REVIEW:
-TaskID-xxx: Title of first regression
-TaskID-yyy: Title of second regression
+SMOKE TEST FINDINGS TO TRIAGE:
+TaskID-xxx: Title of first finding [labels: smoke]
+TaskID-yyy: Title of regression [labels: smoke, regression]
 ```
 
 **ВАЖНО:** Ты ДОЛЖЕН обработать КАЖДУЮ задачу из списка!
@@ -168,17 +170,23 @@ TaskID-yyy: Title of second regression
 bd show TaskID-xxx --json | jq '.[0]'
 ```
 
+Определи тип задачи по labels:
+- Есть `regression` → это возврат бага (см. решения A-D ниже)
+- Только `smoke` → это новая находка (см. решения E-H ниже)
+
+---
+
+### Решения для REGRESSION задач (smoke + regression)
+
 Ключевые вопросы:
 - Какой был предыдущий фикс?
 - Почему он не сработал?
 - Это та же проблема или новая вариация?
 
-### 2. Прими решение
-
 **A. Scope неясен — добавь контекст:**
 
 ```bash
-bd update $TASK_ID --status=open --remove-label=regression \
+bd update $TASK_ID --status=open --remove-label=regression --remove-label=smoke \
   --description="<оригинальное описание>
 
 ## ВАЖНЫЙ КОНТЕКСТ (добавлено Architect)
@@ -192,7 +200,7 @@ done_when: <чёткий критерий>"
 **B. Модель слабая — эскалируй:**
 
 ```bash
-bd update $TASK_ID --status=open --remove-label=regression \
+bd update $TASK_ID --status=open --remove-label=regression --remove-label=smoke \
   --remove-label=model:sonnet --add-label=model:opus \
   --notes="Escalated to opus: regression indicates sonnet couldn't handle complexity"
 ```
@@ -212,21 +220,72 @@ Regression в $TASK_ID: <описание>
 done_when: Найден root cause, создана задача с конкретным fix"
 
 bd dep add $TASK_ID <new-analysis-task-id>
-bd update $TASK_ID --notes="Blocked: waiting for architecture analysis"
+bd update $TASK_ID --remove-label=smoke --notes="Blocked: waiting for architecture analysis"
 ```
 
 **D. Edge case — понизь приоритет:**
 
 ```bash
-bd update $TASK_ID --priority=2 --remove-label=regression \
+bd update $TASK_ID --priority=2 --remove-label=regression --remove-label=smoke \
   --notes="Downgraded to P2: edge case affecting <1% users."
 ```
+
+---
+
+### Решения для NEW SMOKE задач (только smoke, без regression)
+
+Ключевые вопросы:
+- Эта проблема в scope текущей итерации (SPEC.md)?
+- Какой уровень сложности? Какая модель подойдёт?
+- Нужно ли разбить на подзадачи?
+
+**E. В scope — принять в работу (назначь модель):**
+
+```bash
+bd update $TASK_ID --status=open --remove-label=smoke \
+  --add-label=model:haiku \
+  --notes="Accepted: straightforward fix, haiku-level complexity"
+```
+
+Выбирай модель по сложности:
+- `model:haiku` — простой фикс (опечатка, missing import, CSS)
+- `model:sonnet` — средняя сложность (логика, рефакторинг)
+- `model:opus` — сложная проблема (архитектура, race condition)
+
+**F. Вне scope — закрыть:**
+
+```bash
+bd close $TASK_ID --reason="Out of scope for current iteration. Not in SPEC.md Must Have."
+```
+
+**G. Нужно раздробить — создай подзадачи:**
+
+```bash
+bd create --title="Fix: <конкретная часть 1>" --type=bug --priority=1 \
+  --label=model:sonnet --description="Часть проблемы из $TASK_ID. done_when: ..."
+bd create --title="Fix: <конкретная часть 2>" --type=bug --priority=1 \
+  --label=model:haiku --description="Часть проблемы из $TASK_ID. done_when: ..."
+bd close $TASK_ID --reason="Split into subtasks: <id1>, <id2>"
+```
+
+**H. Ложное срабатывание тестера:**
+
+```bash
+bd close $TASK_ID --reason="False positive: <объяснение почему это не баг>"
+```
+
+---
+
+### 2. ОБЯЗАТЕЛЬНО: удали smoke/regression labels после обработки
+
+Каждая обработанная задача должна выйти из smoke_review БЕЗ label `smoke`.
+Это критично — пока есть открытые задачи с `smoke`, система застрянет в SMOKE_REVIEW.
 
 ### 3. После обработки ВСЕХ задач — закрой trigger
 
 ```bash
 trigger_id=$(bd list --json | jq -r '.[] | select(.title == "run-smoke-review") | .id' | head -1)
-bd close "$trigger_id" --reason="Smoke review complete: processed N regression(s)"
+bd close "$trigger_id" --reason="Smoke review complete: processed N finding(s)"
 ```
 
 ---

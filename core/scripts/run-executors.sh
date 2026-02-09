@@ -36,6 +36,7 @@ mkdir -p "$LOGS_DIR"
 # Uses mkdir for atomic lock acquisition (prevents race conditions between HYPE cycles)
 # Lock is released only after cleanup_worktree completes
 find_free_slot() {
+    mkdir -p "$WORKTREES_DIR"
     local slot=0
     while true; do
         local lock_dir="$WORKTREES_DIR/executor-$slot.lock"
@@ -168,6 +169,7 @@ run_executor() {
 
     if [ "$current_status" != "open" ]; then
         log "INFO" "Task $task_id not open (status: $current_status), skipping"
+        cleanup_worktree "$slot"
         return 0
     fi
 
@@ -175,6 +177,7 @@ run_executor() {
     # Remove needs-review in case this is a retry after timeout
     if ! bd_safe update "$task_id" --status=in_progress --add-label=executor --remove-label=needs-review >/dev/null 2>&1; then
         log "INFO" "Task $task_id claim failed (race condition), skipping"
+        cleanup_worktree "$slot"
         return 0
     fi
 

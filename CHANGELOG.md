@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- **Executor slot allocation fails when .hype-worktrees missing** - `find_free_slot()` used `mkdir` without `-p` to create lock files inside `.hype-worktrees/`, but the parent directory didn't exist yet. `mkdir` silently failed for all 20 slots, blocking all task execution. Now creates parent directory before lock acquisition.
+
+- **Executor lock leak on early returns** - If a task was already claimed or not open, `run_executor()` returned without releasing the slot lock. Locks accumulated across HYPE cycles until all 20 slots were exhausted. Now calls `cleanup_worktree` on all exit paths.
+
 - **Senior executor NO_MERGE detection** - `bd close --reason` writes to `close_reason` field, not `notes`. Senior executor now checks both fields, fixing infinite executor-reopen loops where "No Merge" decisions were never recognized.
 
 - **Reject counter on reopen path** - The "closed but main unchanged" reopen path was the only code path that did not increment `reject:N`, causing tasks to loop 20+ times without ever reaching the troubleshooter. Now increments reject:N and escalates to troubleshooter at reject:4.

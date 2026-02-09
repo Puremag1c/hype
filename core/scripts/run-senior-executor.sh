@@ -117,12 +117,18 @@ preflight_check() {
 get_review_model() {
     local task_json=$1
 
-    # Extract model from task labels (model:opus, model:sonnet, model:haiku)
-    local task_model
+    # Extract model and rejection count from task labels
+    local task_model reject_count
     task_model=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("model:")) | split(":")[1]' 2>/dev/null | head -1)
+    reject_count=$(get_counter_value "$task_json" "reject")
 
-    # Tiered review: opus tasks → opus review, others → sonnet
-    if [ "$task_model" = "opus" ]; then
+    # Escalation-aware tiered review:
+    # reject:0-1 → sonnet review (default)
+    # reject:2+ → match task model (if opus task, opus review)
+    # reject:4 → always opus review regardless of task model
+    if [ "$reject_count" -ge 4 ]; then
+        echo "opus"
+    elif [ "$reject_count" -ge 2 ] && [ "$task_model" = "opus" ]; then
         echo "opus"
     else
         echo "sonnet"
@@ -211,9 +217,9 @@ $task_notes
     fi
 }
 
-# === Handle preflight rejection with review-retry increment ===
+# === Handle preflight rejection with reject:N counter ===
 # Common logic for NO_BRANCH, NO_COMMITS, SECRETS_DETECTED rejections
-# Increments counter and escalates model after 3 failures
+# Escalation ladder: reject:1→retry, reject:2→escalate model, reject:3→further, reject:4→troubleshooter
 
 handle_preflight_rejection() {
     local task_id=$1
@@ -221,48 +227,54 @@ handle_preflight_rejection() {
     local rejection_type=$3
     local rejection_note=$4
 
-    # Get current review-retry counter
-    local review_retry
-    review_retry=$(echo "$task_json" | jq -r '[.[0].labels[]? | select(startswith("review-retry:")) | split(":")[1] | tonumber] | max // 0' 2>/dev/null || echo "0")
-    local prev_retry=$review_retry
-    ((review_retry++))
+    # Get current reject counter (unified)
+    local reject_count
+    reject_count=$(get_counter_value "$task_json" "reject")
+    ((reject_count++))
+
+    # Update counter via helper (removes old, adds new)
+    set_counter_label "$task_id" "reject" "$reject_count"
 
     # Get current model
     local current_model
     current_model=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("model:")) | split(":")[1]' 2>/dev/null | head -1)
     current_model=${current_model:-sonnet}
 
-    if [ "$review_retry" -ge 3 ]; then
-        # Escalation threshold reached
-        if [ "$current_model" = "haiku" ]; then
-            log "WARN" "ESCALATE: $task_id - $rejection_type 3x, haiku → sonnet"
-            bd_safe update "$task_id" --status=open \
-                --remove-label=needs-review --remove-label=executor \
-                --remove-label="review-retry:$prev_retry" --add-label="review-retry:$review_retry" \
-                --remove-label="model:haiku" --add-label="model:sonnet" \
-                --notes="$rejection_note ESCALATED haiku → sonnet after $review_retry attempts."
-        elif [ "$current_model" = "sonnet" ]; then
-            log "WARN" "ESCALATE: $task_id - $rejection_type 3x, sonnet → opus"
-            bd_safe update "$task_id" --status=open \
-                --remove-label=needs-review --remove-label=executor \
-                --remove-label="review-retry:$prev_retry" --add-label="review-retry:$review_retry" \
-                --remove-label="model:sonnet" --add-label="model:opus" \
-                --notes="$rejection_note ESCALATED sonnet → opus after $review_retry attempts."
-        else
-            # Already opus - reset counter and warn
-            log "WARN" "RETRY LIMIT: $task_id - $rejection_type $review_retry attempts (already opus)"
-            bd_safe update "$task_id" --status=open \
-                --remove-label=needs-review --remove-label=executor \
-                --remove-label="review-retry:$prev_retry" --add-label="review-retry:0" \
-                --notes="$rejection_note After $review_retry attempts (opus). Reset counter. Manual review may be needed."
-        fi
-    else
-        # Normal retry with incremented counter
-        log "INFO" "RETRY: $task_id - $rejection_type (attempt $review_retry/3)"
+    # Escalation ladder based on reject count
+    if [ "$reject_count" -ge 4 ]; then
+        # reject:4 → route to troubleshooter
+        log "WARN" "TROUBLESHOOT: $task_id - $rejection_type after $reject_count rejections"
         bd_safe update "$task_id" --status=open \
             --remove-label=needs-review --remove-label=executor \
-            --remove-label="review-retry:$prev_retry" --add-label="review-retry:$review_retry" \
-            --notes="$rejection_note (attempt $review_retry/3)"
+            --add-label=blocked:troubleshoot \
+            --notes="$rejection_note Escalated to troubleshooter after $reject_count rejections."
+    elif [ "$reject_count" -ge 2 ]; then
+        # reject:2-3 → escalate model
+        local next_model="$current_model"
+        if [ "$current_model" = "haiku" ]; then
+            next_model="sonnet"
+        elif [ "$current_model" = "sonnet" ]; then
+            next_model="opus"
+        fi
+
+        if [ "$next_model" != "$current_model" ]; then
+            log "WARN" "ESCALATE: $task_id - $rejection_type ${reject_count}x, $current_model → $next_model"
+            clean_model_label "$task_id" "$next_model"
+            bd_safe update "$task_id" --status=open \
+                --remove-label=needs-review --remove-label=executor \
+                --notes="$rejection_note ESCALATED $current_model → $next_model after $reject_count rejections."
+        else
+            log "WARN" "ESCALATE: $task_id - $rejection_type ${reject_count}x (already opus)"
+            bd_safe update "$task_id" --status=open \
+                --remove-label=needs-review --remove-label=executor \
+                --notes="$rejection_note Rejection $reject_count (already opus)."
+        fi
+    else
+        # reject:1 → normal retry
+        log "INFO" "RETRY: $task_id - $rejection_type (reject:$reject_count)"
+        bd_safe update "$task_id" --status=open \
+            --remove-label=needs-review --remove-label=executor \
+            --notes="$rejection_note (reject:$reject_count)"
     fi
 }
 
@@ -538,54 +550,72 @@ $review_context
             bd_safe update "$task_id" --remove-label=needs-review --remove-label=executor --add-label=reviewed >/dev/null 2>&1 || true
         fi
     elif [ "$task_status" = "open" ]; then
-        # Task returned for rework - cleanup executor label
-        bd_safe update "$task_id" --remove-label=executor >/dev/null 2>&1 || true
+        # Task returned for rework — increment reject:N and apply escalation
+        local reject_count
+        reject_count=$(get_counter_value "$updated_json" "reject")
+        ((reject_count++))
+        set_counter_label "$task_id" "reject" "$reject_count"
+
         # Extract reason from notes
         local notes
         notes=$(echo "$updated_json" | jq -r '.[0].notes // ""' 2>/dev/null | tail -1 | head -c 80)
-        if [ -n "$notes" ]; then
-            log "WARN" "RETURNED: $task_id - $notes"
-        else
-            log "WARN" "RETURNED: $task_id (no reason given)"
-        fi
-    else
-        # Task still in_progress - reviewer didn't take action, retry review
-        local review_retry
-        review_retry=$(echo "$updated_json" | jq -r '.[0].labels[]? | select(startswith("review-retry:")) | split(":")[1]' 2>/dev/null | head -1)
-        review_retry=${review_retry:-0}
-        ((review_retry++))
 
-        if [ "$review_retry" -ge 3 ]; then
-            # Escalate model one level up after 3 failed attempts
+        if [ "$reject_count" -ge 4 ]; then
+            # Route to troubleshooter
+            log "WARN" "TROUBLESHOOT: $task_id - returned for rework $reject_count times"
+            bd_safe update "$task_id" \
+                --add-label=blocked:troubleshoot \
+                --notes="Escalated to troubleshooter: returned for rework $reject_count times. Last: $notes"
+        elif [ "$reject_count" -ge 2 ]; then
+            # Escalate model
             local current_model
             current_model=$(echo "$updated_json" | jq -r '.[0].labels[]? | select(startswith("model:")) | split(":")[1]' 2>/dev/null | head -1)
             current_model=${current_model:-sonnet}
 
-            if [ "$current_model" = "haiku" ]; then
-                log "WARN" "REVIEW ESCALATE: $task_id - haiku → sonnet after 3 attempts"
-                bd_safe update "$task_id" \
-                    --remove-label="review-retry:$((review_retry-1))" \
-                    --remove-label="model:haiku" \
-                    --add-label="model:sonnet" \
-                    --notes="Review escalated haiku → sonnet after 3 failed attempts."
-            elif [ "$current_model" = "sonnet" ]; then
-                log "WARN" "REVIEW ESCALATE: $task_id - sonnet → opus after 3 attempts"
-                bd_safe update "$task_id" \
-                    --remove-label="review-retry:$((review_retry-1))" \
-                    --remove-label="model:sonnet" \
-                    --add-label="model:opus" \
-                    --notes="Review escalated sonnet → opus after 3 failed attempts."
-            else
-                # Already opus - just reset retry counter
-                log "WARN" "REVIEW RETRY: $task_id - opus, resetting retry counter"
-                bd_safe update "$task_id" \
-                    --remove-label="review-retry:$((review_retry-1))" \
-                    --notes="Review retry reset (already opus)."
+            local next_model="$current_model"
+            if [ "$current_model" = "haiku" ]; then next_model="sonnet"
+            elif [ "$current_model" = "sonnet" ]; then next_model="opus"; fi
+
+            if [ "$next_model" != "$current_model" ]; then
+                log "WARN" "REWORK ESCALATE: $task_id - $current_model → $next_model (reject:$reject_count)"
+                clean_model_label "$task_id" "$next_model"
             fi
+            log "WARN" "RETURNED: $task_id - $notes (reject:$reject_count)"
         else
-            log "WARN" "REVIEW RETRY: $task_id - no action taken (attempt $review_retry/3)"
-            bd_safe update "$task_id" --remove-label="review-retry:$((review_retry-1))" --add-label="review-retry:$review_retry" >/dev/null 2>&1 || \
-            bd_safe update "$task_id" --add-label="review-retry:$review_retry" >/dev/null 2>&1
+            log "WARN" "RETURNED: $task_id - ${notes:-no reason given} (reject:$reject_count)"
+        fi
+        bd_safe update "$task_id" --remove-label=executor >/dev/null 2>&1 || true
+    else
+        # Task still in_progress - reviewer didn't take action
+        # Use unified reject:N counter
+        local reject_count
+        reject_count=$(get_counter_value "$updated_json" "reject")
+        ((reject_count++))
+        set_counter_label "$task_id" "reject" "$reject_count"
+
+        if [ "$reject_count" -ge 4 ]; then
+            # Route to troubleshooter
+            log "WARN" "TROUBLESHOOT: $task_id - no review action after $reject_count attempts"
+            bd_safe update "$task_id" \
+                --add-label=blocked:troubleshoot \
+                --notes="Escalated to troubleshooter: reviewer failed to act after $reject_count attempts."
+        elif [ "$reject_count" -ge 2 ]; then
+            # Escalate model
+            local current_model
+            current_model=$(echo "$updated_json" | jq -r '.[0].labels[]? | select(startswith("model:")) | split(":")[1]' 2>/dev/null | head -1)
+            current_model=${current_model:-sonnet}
+
+            local next_model="$current_model"
+            if [ "$current_model" = "haiku" ]; then next_model="sonnet"
+            elif [ "$current_model" = "sonnet" ]; then next_model="opus"; fi
+
+            if [ "$next_model" != "$current_model" ]; then
+                log "WARN" "REVIEW ESCALATE: $task_id - $current_model → $next_model (reject:$reject_count)"
+                clean_model_label "$task_id" "$next_model"
+            fi
+            bd_safe update "$task_id" --notes="Review escalated (reject:$reject_count)."
+        else
+            log "WARN" "REVIEW RETRY: $task_id - no action taken (reject:$reject_count)"
         fi
     fi
 }

@@ -607,6 +607,20 @@ main() {
     local post_cache
     post_cache=$(bd_safe list --status=open --json 2>/dev/null || echo "[]")
 
+    # Post-process regression tasks: increment regress:N counter (script-driven, not LLM)
+    # Testers add "regression" label when reopening/creating regression bugs.
+    # We increment the counter here so it's reliable and not dependent on LLM accuracy.
+    local regression_ids
+    regression_ids=$(echo "$post_cache" | jq -r '.[] | select((.labels // []) | index("regression")) | .id' 2>/dev/null || true)
+    for reg_id in $regression_ids; do
+        local reg_json reg_count
+        reg_json=$(bd_safe show "$reg_id" --json 2>/dev/null || echo "[]")
+        reg_count=$(get_counter_value "$reg_json" "regress")
+        ((reg_count++))
+        set_counter_label "$reg_id" "regress" "$reg_count"
+        log "INFO" "Regression counter: $reg_id → regress:$reg_count"
+    done
+
     # Check completion
     local open_triggers
     open_triggers=$(echo "$post_cache" | jq '[.[] | select(.title | startswith("run-tester-"))] | length' 2>/dev/null || echo "0")

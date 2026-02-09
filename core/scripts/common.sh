@@ -210,9 +210,10 @@ reset_stale_tasks() {
         fi
 
         # Skip smoke/regression tasks - they're waiting for Architect smoke_review
-        local has_smoke_triage
-        has_smoke_triage=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].labels // [] | if (index("regression") or index("smoke")) then "yes" else empty end' 2>/dev/null || echo "")
-        if [ -n "$has_smoke_triage" ]; then
+        # Skip user-escalation tasks - they're waiting for user decision
+        local has_protected_label
+        has_protected_label=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].labels // [] | if (index("regression") or index("smoke") or index("user-escalation")) then "yes" else empty end' 2>/dev/null || echo "")
+        if [ -n "$has_protected_label" ]; then
             continue
         fi
 
@@ -264,12 +265,13 @@ build_retry_context() {
     task_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
     notes=$(echo "$task_json" | jq -r '.[0].notes // ""' 2>/dev/null || echo "")
 
-    # Get all failure counts from labels
+    # Get failure counts from labels (unified reject:N + legacy retry:N)
     retry_count=$(echo "$task_json" | jq -r '[.[0].labels[]? | select(startswith("retry:")) | split(":")[1] | tonumber] | max // 0' 2>/dev/null || echo "0")
-    review_count=$(echo "$task_json" | jq -r '[.[0].labels[]? | select(startswith("review-retry:")) | split(":")[1] | tonumber] | max // 0' 2>/dev/null || echo "0")
+    local reject_count
+    reject_count=$(echo "$task_json" | jq -r '[.[0].labels[]? | select(startswith("reject:")) | split(":")[1] | tonumber] | max // 0' 2>/dev/null || echo "0")
 
     # Total failures = max of all counters
-    total_failures=$((retry_count > review_count ? retry_count : review_count))
+    total_failures=$((retry_count > reject_count ? retry_count : reject_count))
 
     # No failures = no context needed
     if [ "$total_failures" -eq 0 ] || [ -z "$notes" ]; then
@@ -279,8 +281,8 @@ build_retry_context() {
 
     # Build structured context with specific issue type
     local issue_type="general failure"
-    if [ "$review_count" -gt 0 ]; then
-        issue_type="review rejection ($review_count times)"
+    if [ "$reject_count" -gt 0 ]; then
+        issue_type="review rejection ($reject_count times)"
     elif [ "$retry_count" -gt 0 ]; then
         issue_type="execution failure ($retry_count times)"
     fi
@@ -521,6 +523,62 @@ is_audit_task() {
     return 1
 }
 export -f is_audit_task 2>/dev/null || true
+
+# =============================================================================
+# Label Management Helpers
+# =============================================================================
+# Prevent duplicate labels by removing all labels of a type before adding new one.
+# Critical for model escalation and counter management.
+
+# clean_model_label - atomically switch model label
+# Usage: clean_model_label TASK_ID NEW_MODEL
+# Removes all model:* labels, adds model:NEW_MODEL
+clean_model_label() {
+    local task_id="$1"
+    local new_model="$2"
+    local task_json old_labels
+
+    task_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
+    old_labels=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("model:"))' 2>/dev/null || true)
+
+    for label in $old_labels; do
+        bd_safe update "$task_id" --remove-label="$label" >/dev/null 2>&1 || true
+    done
+
+    bd_safe update "$task_id" --add-label="model:$new_model" >/dev/null 2>&1 || true
+}
+export -f clean_model_label 2>/dev/null || true
+
+# set_counter_label - atomically set a counter label (removes old values)
+# Usage: set_counter_label TASK_ID PREFIX VALUE
+# Example: set_counter_label "task-123" "reject" "2"
+# Removes all reject:* labels, adds reject:2
+set_counter_label() {
+    local task_id="$1"
+    local prefix="$2"
+    local value="$3"
+    local task_json old_labels
+
+    task_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
+    old_labels=$(echo "$task_json" | jq -r ".[0].labels[]? | select(startswith(\"$prefix:\"))" 2>/dev/null || true)
+
+    for label in $old_labels; do
+        bd_safe update "$task_id" --remove-label="$label" >/dev/null 2>&1 || true
+    done
+
+    bd_safe update "$task_id" --add-label="$prefix:$value" >/dev/null 2>&1 || true
+}
+export -f set_counter_label 2>/dev/null || true
+
+# get_counter_value - read current counter value from task JSON
+# Usage: get_counter_value "$task_json" "reject"
+# Returns: integer (0 if no counter found)
+get_counter_value() {
+    local task_json="$1"
+    local prefix="$2"
+    echo "$task_json" | jq -r "[.[0].labels[]? | select(startswith(\"$prefix:\")) | split(\":\")[1] | tonumber] | max // 0" 2>/dev/null || echo "0"
+}
+export -f get_counter_value 2>/dev/null || true
 
 # =============================================================================
 # Milestone Management Functions

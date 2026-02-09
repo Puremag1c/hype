@@ -64,9 +64,10 @@ bd create --title="Clarify requirements for <task_id>" --type=task --priority=1 
 
 **blocked:escalation-limit:**
 ```bash
-# Закрой как невозможную
-bd close <task_id> --reason="Escalation limit reached, closing as unresolvable"
-# Создай альтернативную задачу если нужно
+# Route to Troubleshooter for deep diagnosis
+bd update <task_id> --remove-label=blocked:escalation-limit \
+  --add-label=blocked:troubleshoot \
+  --notes="Manager: routed to Troubleshooter for persistent failure resolution"
 ```
 
 ## Алгоритм для retry limit задач

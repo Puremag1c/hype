@@ -393,6 +393,18 @@ check_and_create_done_milestone() {
     latest_log=$(ls -t "$LOGS_DIR"/architect-*.log 2>/dev/null | head -1)
 
     if [ -n "$latest_log" ] && grep -q "FINAL_REVIEW: PASSED" "$latest_log" 2>/dev/null; then
+        # Safety: verify no open/in_progress tasks remain before marking DONE
+        local remaining_tasks
+        remaining_tasks=$(bd_safe list --json --limit 0 2>/dev/null | \
+            jq '[.[] | select(.status == "open" or .status == "in_progress") |
+                select((.labels // []) | any(test("^milestone:")) | not) |
+                select((.labels // []) | index("trigger") | not)] | length' 2>/dev/null || echo "0")
+
+        if [ "$remaining_tasks" -gt 0 ]; then
+            log "WARN" "FINAL_REVIEW passed but $remaining_tasks task(s) still open, deferring DONE milestone"
+            return 0
+        fi
+
         log "INFO" "Final review passed, creating project-done milestone"
         ensure_milestone "milestone:project-done" "Project complete"
 
@@ -401,17 +413,65 @@ check_and_create_done_milestone() {
     fi
 }
 
+# === Route blocked:troubleshoot tasks to Architect Troubleshooter ===
+
+check_and_route_troubleshoot() {
+    local bd_cache
+    bd_cache=$(bd_safe list --json 2>/dev/null || echo "[]")
+
+    # Find tasks with blocked:troubleshoot label
+    local troubleshoot_ids
+    troubleshoot_ids=$(echo "$bd_cache" | jq -r '.[] | select(.labels[]? == "blocked:troubleshoot") | .id' 2>/dev/null || true)
+
+    if [ -z "$troubleshoot_ids" ]; then
+        return 0
+    fi
+
+    local troubleshooter_file=".claude/agents/architect-troubleshooter.md"
+    if [ ! -f "$troubleshooter_file" ]; then
+        log "WARN" "architect-troubleshooter.md not found, skipping troubleshoot routing"
+        return 0
+    fi
+
+    local troubleshooter_prompt
+    troubleshooter_prompt=$(cat "$troubleshooter_file")
+
+    for task_id in $troubleshoot_ids; do
+        log "INFO" "Routing $task_id to Troubleshooter..."
+
+        local task_json
+        task_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
+
+        local output_file="$LOGS_DIR/troubleshooter-$task_id.log"
+        local full_prompt="$troubleshooter_prompt
+
+---
+TASK_ID: $task_id
+TASK: $task_json
+PROJECT_ROOT: $PROJECT_DIR"
+
+        local ts_model
+        ts_model=$(map_model "${MODEL_ARCHITECT:-opus}")
+        printf '%s' "$full_prompt" | timeout_cmd "${REVIEW_TIMEOUT:-5m}" claude --print --model "$ts_model" > "$output_file" 2>&1 || true
+
+        log "INFO" "Troubleshooter completed for $task_id (see $output_file)"
+    done
+}
+
 # === Check for problems and consult Manager ===
 # Manager is called ONLY for problem resolution, not for phase coordination
 
 check_problems_and_consult_manager() {
+    # First: route troubleshoot tasks to dedicated Troubleshooter agent
+    check_and_route_troubleshoot
+
     # Cache bd list once (v1.9.0 optimization - was 4 calls, now 1)
     local bd_cache
     bd_cache=$(bd_safe list --json 2>/dev/null || echo "[]")
 
-    # Count blocked tasks (from cache)
+    # Count blocked tasks EXCLUDING troubleshoot (handled above)
     local blocked_count
-    blocked_count=$(echo "$bd_cache" | jq '[.[] | select(.labels[]? | startswith("blocked:"))] | length' 2>/dev/null || echo "0")
+    blocked_count=$(echo "$bd_cache" | jq '[.[] | select(.labels[]? | startswith("blocked:")) | select(.labels[]? == "blocked:troubleshoot" | not)] | length' 2>/dev/null || echo "0")
 
     # Count tasks at retry limit (from cache)
     local retry_limit_count
@@ -764,6 +824,45 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
                 bd_safe create --title="run-plan-review" --type=task --priority=0 --label=trigger >/dev/null 2>&1 || true
             fi
             run_agent_with_mode "architect" ".claude/agents/architect-reviewer.md" "$arch_model" "plan_review" "" "${PLAN_REVIEW_TIMEOUT:-10m}"
+            ;;
+
+        USER_REVIEW)
+            # Tasks escalated to user — generate non-technical report and stop daemon
+            log "INFO" "USER_REVIEW: Tasks require human decision, generating report..."
+
+            local user_tasks
+            user_tasks=$(bd_safe list --status=open --json 2>/dev/null | \
+                jq -r '.[] | select((.labels // []) | index("user-escalation")) | "\(.id): \(.title)\n  Notes: \(.notes // "none")"' 2>/dev/null || echo "")
+
+            # Run tech-writer-review agent if available
+            local tw_review_file=".claude/agents/tech-writer-review.md"
+            if [ -f "$tw_review_file" ]; then
+                local tw_prompt
+                tw_prompt=$(cat "$tw_review_file")
+                local output_file="$LOGS_DIR/user-review-$(date +%s).log"
+                local tw_model
+                tw_model=$(map_model "${MODEL_TECH_WRITER:-sonnet}")
+
+                local full_prompt="$tw_prompt
+
+---
+MODE: user_review
+PROJECT_ROOT: $PROJECT_DIR
+
+TASKS REQUIRING USER DECISION:
+$user_tasks"
+
+                printf '%s' "$full_prompt" | timeout_cmd "${REVIEW_TIMEOUT:-5m}" claude --print --model "$tw_model" > "$output_file" 2>&1 || true
+                log "INFO" "User review report generated (see $output_file)"
+            fi
+
+            # Stop daemon loop — user must act
+            log "WARN" "USER_REVIEW: Daemon stopping. Resolve user-escalation tasks manually, then restart."
+            log "WARN" "Tasks needing attention:"
+            echo "$user_tasks" | while IFS= read -r line; do
+                [ -n "$line" ] && log "WARN" "  $line"
+            done
+            return 0
             ;;
 
         SMOKE_REVIEW)

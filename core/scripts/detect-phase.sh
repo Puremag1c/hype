@@ -241,6 +241,14 @@ if [ "$HAS_PLAN_REVIEWED" -eq 0 ]; then
     exit 0
 fi
 
+# USER_REVIEW: tasks with user-escalation label need human decision
+# Takes priority over SMOKE_REVIEW and IMPLEMENTATION — daemon stops until user acts
+USER_ESCALATION_COUNT=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open") | select((.labels // []) | index("user-escalation"))] | length' 2>/dev/null || echo "0")
+if [ "$USER_ESCALATION_COUNT" -gt 0 ]; then
+    output_json "USER_REVIEW"
+    exit 0
+fi
+
 # SMOKE_REVIEW: smoke/regression tasks найдены - Architect триажит перед executors
 # Предотвращает race condition между Architect и Executor
 if [ "$SMOKE_TRIAGE_OPEN" -gt 0 ]; then

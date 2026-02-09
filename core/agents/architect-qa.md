@@ -111,11 +111,31 @@ go test ./...   # Go
 2. Проверь результат
 3. Если не работает — запиши что сломано
 
-#### 3.5 Если что-то не работает
+#### 3.5 Если что-то не работает (3-step regression-aware protocol)
 
+**ОБЯЗАТЕЛЬНО для каждого найденного бага:**
+
+**Шаг 1: Проверь открытые задачи**
+```bash
+bd list --status=open --json | jq '.[] | select(.title | test("<ключевое слово>"; "i")) | {id, title, labels}'
+```
+Если нашёл похожую → она уже трекается, НЕ создавай дубликат. Перейди к следующей проблеме.
+
+**Шаг 2: Проверь закрытые задачи (regression detection)**
+```bash
+bd list --status=closed --json | jq '.[] | select(.title | test("<ключевое слово>"; "i")) | {id, title}'
+```
+Если нашёл похожую закрытую → это РЕГРЕССИЯ:
+```bash
+bd update <closed_id> --status=open --add-label=regression --add-label=smoke \
+  --notes="Regression detected during final review: <что вернулось>"
+echo "FINAL_REVIEW: NEEDS_FIXES"
+```
+
+**Шаг 3: Создай новый баг (только если шаги 1-2 не нашли)**
 ```bash
 bd create --title="Fix: <что не работает>" --type=bug --priority=0 \
-  --description="Обнаружено при final review. <детали проблемы>"
+  --label=smoke --description="Обнаружено при final review. <детали проблемы>"
 echo "FINAL_REVIEW: NEEDS_FIXES"
 ```
 
@@ -135,10 +155,8 @@ git status --porcelain | grep '^??'
 **Версионирование выполняется автоматически** — HYPE вызовет Versioner после PASSED.
 
 **Если найдены проблемы:**
-```bash
-bd create --title="Fix: <описание проблемы>" --type=bug --priority=0
-echo "FINAL_REVIEW: NEEDS_FIXES"
-```
+Используй 3-step протокол из секции 3.5 выше (check open → check closed → create new).
+Все баги ОБЯЗАТЕЛЬНО получают `--label=smoke`.
 
 **Если всё ок:**
 ```bash

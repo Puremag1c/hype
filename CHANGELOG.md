@@ -1,5 +1,39 @@
 # Changelog
 
+## [2.1.0] - 2026-02-09
+
+### Added
+
+- **Unified rejection counter (reject:N)** - Replaces fragmented `review-retry:N` with a single `reject:N` counter across all review/rework paths. Counter is script-driven for reliability.
+
+- **Model escalation ladder** - Automatic model escalation on persistent failures: reject:1 retry, reject:2-3 escalate model (haiku->sonnet->opus), reject:4 route to Troubleshooter.
+
+- **Architect Troubleshooter agent** - New agent (`architect-troubleshooter.md`) for tasks that exhaust the normal escalation ladder (4+ rejections). Decision tree: REFORMULATE / SCOPE REDUCTION / REMOVE FROM SCOPE / ESCALATE TO USER. Max 2 reformulations via `reformulated` label.
+
+- **USER_REVIEW phase** - New phase triggered by `user-escalation` label. Generates non-technical report via `tech-writer-review.md` agent, then stops the daemon until user acts. Prevents infinite loops on tasks requiring human decision.
+
+- **Regression counter (regress:N)** - Script-incremented counter in `run-testers.sh` for tracking regression cycles. Reliable alternative to LLM-driven counters.
+
+- **Regression-aware bug creation in final_review** - 3-step protocol: check open tasks, check closed tasks (reopen as regression), create new only if neither exists. All bugs get `smoke` label.
+
+- **Label management helpers** - `clean_model_label()`, `set_counter_label()`, `get_counter_value()` in common.sh for atomic label updates (removes old value before setting new).
+
+- **Smoke triage gate for ALL smoke bugs** - All tester-created bugs get `smoke` label, all regression reopens get `smoke` + `regression` labels. Architect must triage before executors can grab them.
+
+### Changed
+
+- **Manager routes to Troubleshooter** - `blocked:escalation-limit` tasks now routed to Troubleshooter instead of being closed as unresolvable.
+
+- **DONE milestone safety check** - `check_and_create_done_milestone()` now verifies no open/in_progress tasks remain before creating project-done milestone.
+
+- **Escalation-aware review model** - `get_review_model()` now considers reject:N: 0-1 uses sonnet, 2+ matches task model, 4+ always opus.
+
+- **Stale task protection** - `reset_stale_tasks()` now skips tasks with `user-escalation` label in addition to smoke/regression.
+
+- **Executor task filtering** - `get_ready_tasks()` now excludes `user-escalation` labeled tasks from executor queue.
+
+---
+
 ## [2.0.21] - 2026-02-09
 
 ### Fixed

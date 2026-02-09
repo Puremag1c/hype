@@ -102,16 +102,31 @@ TASKS=$(bd list --status=closed --json | jq -r '.[] | select(.issue_type == "tas
 <старый контент CHANGELOG.md>
 ```
 
-### 7. Обнови другие файлы с версией
+### 7. Обнови ВСЕ файлы с версией
 
-Проверь и обнови если нужно:
+**КРИТИЧНО**: Это главная задача. Версия должна быть синхронизирована везде.
 
-```bash
-# Найди файлы с версией
-grep -r "$(cat VERSION | sed 's/\./\\./g')" --include="*.md" --include="*.json" 2>/dev/null | grep -v CHANGELOG | head -5
-```
+**Чеклист:**
 
-Обнови найденные файлы (PROJECT.md, README.md, package.json и т.д.)
+- [ ] Прочитать старую версию: `git show HEAD:VERSION`
+- [ ] Найти ВСЕ файлы со старой версией:
+  ```bash
+  grep -rn "X.Y.Z" --include="*.md" --include="*.json" --include="*.toml" --include="*.yaml" . | grep -v CHANGELOG | grep -v node_modules
+  ```
+- [ ] Обновить КАЖДЫЙ найденный файл
+- [ ] Проверить эти файлы даже если grep не нашёл:
+  - PROJECT.md
+  - README.md
+  - package.json
+  - pyproject.toml
+  - Cargo.toml
+  - mix.exs
+- [ ] Финальная проверка — старая версия НЕ должна остаться:
+  ```bash
+  grep -rn "X.Y.Z" --include="*.md" --include="*.json" --include="*.toml" . | grep -v CHANGELOG
+  ```
+
+**НЕ переходи к шагу 8 пока чеклист не пройден.**
 
 ### 8. Закоммить
 

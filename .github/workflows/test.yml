@@ -39,7 +39,7 @@ jobs:
       - name: Install beads
         run: |
           git clone --depth 1 https://github.com/steveyegge/beads.git /tmp/beads
-          cd /tmp/beads/cmd/bd && go build -o $HOME/go/bin/bd .
+          cd /tmp/beads/cmd/bd && CGO_ENABLED=0 go build -o $HOME/go/bin/bd .
           echo "$HOME/go/bin" >> $GITHUB_PATH
       - name: Install bats + parallel (macOS)
         if: runner.os == 'macOS'
@@ -65,7 +65,7 @@ jobs:
       - name: Install beads
         run: |
           git clone --depth 1 https://github.com/steveyegge/beads.git /tmp/beads
-          cd /tmp/beads/cmd/bd && go build -o $HOME/go/bin/bd .
+          cd /tmp/beads/cmd/bd && CGO_ENABLED=0 go build -o $HOME/go/bin/bd .
           echo "$HOME/go/bin" >> $GITHUB_PATH
       - name: Install bats + parallel (macOS)
         if: runner.os == 'macOS'

@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.0.21] - 2026-02-09
+
+### Fixed
+
+- **Self-healing reopens tasks closed with valid "No Merge" decision** - When senior executor correctly closes a task without merging (code already in main via parent task), self-healing was treating this as an error and reopening, causing an infinite loop. Added `NO_MERGE:` prefix convention in task notes; script now checks for this before reopening.
+
+---
+
 ## [2.0.20] - 2026-02-09
 
 ### Fixed

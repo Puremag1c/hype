@@ -13,6 +13,20 @@ BD_LOCK_FILE="${BD_LOCK_FILE:-/tmp/hype-bd.lock}"
 # Prevents daemon explosion from parallel bd calls overwhelming the socket
 # Uses mkdir-based locking (works on macOS and Linux, no external deps)
 bd_safe() {
+    # Check for daemon explosion before any operation
+    # If too many bd processes, kill all and restart fresh
+    local daemon_count
+    daemon_count=$(pgrep -x bd 2>/dev/null | wc -l | tr -d ' ')
+
+    if [ "$daemon_count" -gt 10 ]; then
+        >&2 echo "WARN: Beads daemon explosion detected ($daemon_count processes). Killing all and restarting."
+        pkill -9 -x bd 2>/dev/null || true
+        sleep 2
+        # Restart daemon (will start fresh on next bd command automatically)
+        bd daemon start >/dev/null 2>&1 || true
+        sleep 1
+    fi
+
     local lock_dir="/tmp/hype-bd.lock.d"
     local lock_timeout=30
     local waited=0

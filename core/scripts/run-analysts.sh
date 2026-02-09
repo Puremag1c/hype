@@ -107,6 +107,16 @@ $spec_content"
     run_claude_with_progress "$full_prompt" "$analyst_model" "$ANALYST_TIMEOUT" "$output_file" "ANALYST $analyst" "$LOGS_DIR" || exit_code=$?
 
     if [ $exit_code -ne 0 ]; then
+        # Check if trigger was already closed before reset
+        # (agent may have closed it right before timeout killed the process)
+        local current_status
+        current_status=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].status // "unknown"' 2>/dev/null || echo "unknown")
+
+        if [ "$current_status" = "closed" ]; then
+            log "INFO" "Analyst $analyst timeout, but trigger already closed"
+            return 0
+        fi
+
         if [ $exit_code -eq 124 ]; then
             log "WARN" "Analyst $analyst timeout"
             bd_safe update "$task_id" --status=open --notes="Timeout at $(date '+%Y-%m-%d %H:%M:%S')" >/dev/null 2>&1

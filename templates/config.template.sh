@@ -28,7 +28,8 @@ REVIEW_TIMEOUT="5m"
 PLANNING_TIMEOUT="15m"
 
 # Таймаут для каждого analyst агента
-ANALYST_TIMEOUT="10m"
+# NOTE: Increased from 10m to handle slow bd operations under load
+ANALYST_TIMEOUT="15m"
 
 # Таймаут для PLAN_REVIEW (architect ревьюит добавления analysts)
 PLAN_REVIEW_TIMEOUT="10m"

@@ -277,8 +277,19 @@ $retry_context}"
 
     # Fallback: ensure labels are updated even if agent didn't do it
     # Agent should call: bd update --remove-label=executor --add-label=needs-review
-    # But we ensure it as safety net
-    bd_safe update "$task_id" --remove-label=executor --add-label=needs-review >/dev/null 2>&1 || true
+    # But we ensure it as safety net (with retry for beads sync contention)
+    local attempt=0
+    while [ $attempt -lt 3 ]; do
+        if bd_safe update "$task_id" --remove-label=executor --add-label=needs-review >/dev/null 2>&1; then
+            break
+        fi
+        ((attempt++))
+        log "WARN" "Failed to set needs-review on $task_id (attempt $attempt/3), retrying..."
+        sleep 2
+    done
+    if [ $attempt -ge 3 ]; then
+        log "ERROR" "STUCK: $task_id completed but failed to set needs-review after 3 attempts"
+    fi
 }
 
 # === Run auditor for analysis tasks ===
@@ -411,8 +422,19 @@ Audit task $task_id failed after 3 attempts (timeout/error).
 
     log "INFO" "Auditor completed for $task_id"
 
-    # Ensure needs-review is set
-    bd_safe update "$task_id" --remove-label=executor --add-label=needs-review >/dev/null 2>&1 || true
+    # Ensure needs-review is set (with retry for beads sync contention)
+    local attempt=0
+    while [ $attempt -lt 3 ]; do
+        if bd_safe update "$task_id" --remove-label=executor --add-label=needs-review >/dev/null 2>&1; then
+            break
+        fi
+        ((attempt++))
+        log "WARN" "Failed to set needs-review on $task_id (attempt $attempt/3), retrying..."
+        sleep 2
+    done
+    if [ $attempt -ge 3 ]; then
+        log "ERROR" "STUCK: $task_id completed but failed to set needs-review after 3 attempts"
+    fi
 }
 
 # === Main ===

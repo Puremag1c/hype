@@ -1,12 +1,14 @@
 # Changelog
 
-## [2.1.2] - 2026-02-09
+## [2.1.3] - 2026-02-09
 
 ### Fixed
 
 - **Executor slot allocation fails when .hype-worktrees missing** - `find_free_slot()` used `mkdir` without `-p` to create lock files inside `.hype-worktrees/`, but the parent directory didn't exist yet. `mkdir` silently failed for all 20 slots, blocking all task execution. Now creates parent directory before lock acquisition.
 
 - **Executor lock leak on early returns** - If a task was already claimed or not open, `run_executor()` returned without releasing the slot lock. Locks accumulated across HYPE cycles until all 20 slots were exhausted. Now calls `cleanup_worktree` on all exit paths.
+
+- **Needs-review label lost on beads sync contention** - When multiple executors completed simultaneously during beads sync (git fetch), the fallback `bd_safe update --add-label=needs-review` silently failed. Tasks stayed `in_progress` without `needs-review`, invisible to senior executor. Now retries 3 times with 2s delay and logs errors instead of swallowing them.
 
 - **Senior executor NO_MERGE detection** - `bd close --reason` writes to `close_reason` field, not `notes`. Senior executor now checks both fields, fixing infinite executor-reopen loops where "No Merge" decisions were never recognized.
 

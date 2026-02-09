@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.1.2] - 2026-02-09
+
+### Fixed
+
+- **Senior executor NO_MERGE detection** - `bd close --reason` writes to `close_reason` field, not `notes`. Senior executor now checks both fields, fixing infinite executor-reopen loops where "No Merge" decisions were never recognized.
+
+- **Reject counter on reopen path** - The "closed but main unchanged" reopen path was the only code path that did not increment `reject:N`, causing tasks to loop 20+ times without ever reaching the troubleshooter. Now increments reject:N and escalates to troubleshooter at reject:4.
+
+---
+
 ## [2.1.1] - 2026-02-09
 
 ### Added

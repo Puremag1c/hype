@@ -6,6 +6,10 @@
 
 - **Backpressure always showed all slots free** - `count_active_executors()` counted by beads `executor` label, but labels were unreliable due to sync lag and race conditions between parallel subshells. Tasks ran `in_progress` without the label, so backpressure count was always 0. Now counts by lock files which perfectly track executor lifetime (created at slot allocation, removed at cleanup).
 
+- **detect-phase.sh reduced from 2 bd calls to 1** - Eliminated redundant `bd list --status=closed` call. Closed task count is now derived from the `--all` query via jq. Reduces daemon load by ~1 op per HYPE cycle.
+
+- **Adaptive backoff on slow daemon** - If beads daemon takes >2s to respond, HYPE doubles the iteration delay (up to 60s) to reduce load. Prevents daemon overload spiral where high query rate causes slowdown which triggers more retries. Delay resets to normal when daemon recovers.
+
 ---
 
 ## [2.1.4] - 2026-02-09

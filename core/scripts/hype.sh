@@ -1254,12 +1254,29 @@ main() {
 
     local cycle=0
     local max_cycles="${MAX_CYCLES:-1000}"
+    local current_delay="${ITERATION_DELAY}"
+    local base_delay="${ITERATION_DELAY}"
 
     while [ $cycle -lt "$max_cycles" ]; do
         ((cycle++))
 
-        # 1. Check beads daemon (every iteration, fast ~10-50ms)
+        # 1. Check beads daemon with adaptive backoff
+        # If daemon is slow, increase delay to reduce load instead of hammering it
+        local health_start health_end health_elapsed
+        health_start=$(date +%s)
         check_beads
+        health_end=$(date +%s)
+        health_elapsed=$((health_end - health_start))
+
+        if [ "$health_elapsed" -gt 2 ]; then
+            # Daemon is slow — double the delay (max 60s)
+            current_delay=$((current_delay * 2))
+            [ "$current_delay" -gt 60 ] && current_delay=60
+            log "WARN" "Daemon slow (${health_elapsed}s), backing off to ${current_delay}s delay"
+        else
+            # Daemon healthy — restore base delay
+            current_delay="$base_delay"
+        fi
 
         # 2. Load config (allows hot reload)
         load_config
@@ -1357,9 +1374,9 @@ main() {
         # 9. Cleanup stale worktrees (orphaned from crashed executors)
         cleanup_stale_worktrees
 
-        # 10. Pause before next iteration
-        log "INFO" "Pause ${ITERATION_DELAY}s..."
-        sleep "$ITERATION_DELAY"
+        # 10. Pause before next iteration (adaptive delay)
+        log "INFO" "Pause ${current_delay}s..."
+        sleep "$current_delay"
     done
 
     log "WARN" "Max cycles reached ($max_cycles)"

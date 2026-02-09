@@ -556,6 +556,47 @@ check_stale_tasks() {
     fi
 }
 
+# === Self-healing: stuck tasks without needs-review ===
+# Executor completed but fallback bd_safe update failed (e.g. beads sync contention)
+# Task stays in_progress without executor or needs-review labels — stuck forever
+# Fix: add needs-review if stuck > 2 minutes
+
+heal_stuck_tasks() {
+    local threshold=120  # 2 minutes
+    local now
+    now=$(date +%s)
+
+    local in_progress_json
+    in_progress_json=$(bd_safe list --status=in_progress --json 2>/dev/null || echo "[]")
+
+    local stuck_ids
+    stuck_ids=$(echo "$in_progress_json" | jq -r '.[] | select(
+        ((.labels // []) | index("executor") | not) and
+        ((.labels // []) | index("needs-review") | not) and
+        ((.labels // []) | any(test("^blocked:")) | not)
+    ) | .id' 2>/dev/null || true)
+
+    for task_id in $stuck_ids; do
+        local updated_at task_age
+        updated_at=$(echo "$in_progress_json" | jq -r ".[] | select(.id == \"$task_id\") | .updated_at // \"\"" 2>/dev/null)
+
+        if [ -z "$updated_at" ]; then
+            continue
+        fi
+
+        # Parse ISO timestamp to epoch (cross-platform)
+        local task_epoch
+        task_epoch=$(date -jf "%Y-%m-%dT%H:%M:%S" "$(echo "$updated_at" | cut -c1-19)" +%s 2>/dev/null || \
+                     date -d "$updated_at" +%s 2>/dev/null || echo "0")
+        task_age=$((now - task_epoch))
+
+        if [ "$task_age" -gt "$threshold" ]; then
+            log "WARN" "HEAL: $task_id stuck in_progress without executor/needs-review for ${task_age}s, adding needs-review"
+            bd_safe update "$task_id" --add-label=needs-review >/dev/null 2>&1 || true
+        fi
+    done
+}
+
 # === Stale worktrees cleanup ===
 # Remove worktrees older than 15 minutes (executor crashed or orphaned)
 
@@ -1310,10 +1351,13 @@ main() {
         # 7. Reset stale in_progress tasks (executor crashed without timeout)
         check_stale_tasks
 
-        # 8. Cleanup stale worktrees (orphaned from crashed executors)
+        # 8. Heal stuck tasks (completed but needs-review label lost)
+        heal_stuck_tasks
+
+        # 9. Cleanup stale worktrees (orphaned from crashed executors)
         cleanup_stale_worktrees
 
-        # 9. Pause before next iteration
+        # 10. Pause before next iteration
         log "INFO" "Pause ${ITERATION_DELAY}s..."
         sleep "$ITERATION_DELAY"
     done

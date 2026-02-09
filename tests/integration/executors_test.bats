@@ -179,32 +179,31 @@ cleanup_worktree() {
 # =============================================================================
 
 count_active_executors() {
-    local cache=${1:-""}
-
-    if [ -n "$cache" ]; then
-        echo "$cache" | jq '[.[] | select(.labels[]? == "executor")] | length' 2>/dev/null || echo "0"
-    else
-        bd list --status=in_progress --json 2>/dev/null | \
-            jq '[.[] | select(.labels[]? == "executor")] | length' 2>/dev/null || echo "0"
-    fi
+    local count=0
+    for lock in "$WORKTREES_DIR"/executor-*.lock; do
+        [ -d "$lock" ] && ((count++))
+    done
+    echo "$count"
 }
 
-@test "count_active_executors: returns 0 for empty cache" {
-    local cache='[]'
-    run count_active_executors "$cache"
+@test "count_active_executors: returns 0 for empty worktrees" {
+    run count_active_executors
     [[ "$output" == "0" ]]
 }
 
-@test "count_active_executors: counts tasks with executor label" {
-    local cache='[{"id":"t1","status":"in_progress","labels":["executor"]},{"id":"t2","status":"in_progress","labels":["executor"]},{"id":"t3","status":"in_progress","labels":[]}]'
-    run count_active_executors "$cache"
+@test "count_active_executors: counts lock directories" {
+    mkdir -p "$WORKTREES_DIR/executor-0.lock"
+    mkdir -p "$WORKTREES_DIR/executor-1.lock"
+    run count_active_executors
     [[ "$output" == "2" ]]
+    rmdir "$WORKTREES_DIR/executor-0.lock" "$WORKTREES_DIR/executor-1.lock"
 }
 
-@test "count_active_executors: handles missing labels" {
-    local cache='[{"id":"t1","status":"in_progress"}]'
-    run count_active_executors "$cache"
+@test "count_active_executors: ignores non-lock items" {
+    mkdir -p "$WORKTREES_DIR/executor-0"
+    run count_active_executors
     [[ "$output" == "0" ]]
+    rmdir "$WORKTREES_DIR/executor-0"
 }
 
 # =============================================================================
@@ -323,20 +322,22 @@ count_active_executors() {
 
 @test "backpressure: MAX_PARALLEL limits concurrent tasks" {
     MAX_PARALLEL=2
-    local cache='[{"id":"t1","labels":["executor"]},{"id":"t2","labels":["executor"]}]'
+    mkdir -p "$WORKTREES_DIR/executor-0.lock" "$WORKTREES_DIR/executor-1.lock"
 
-    local active=$(count_active_executors "$cache")
+    local active=$(count_active_executors)
 
     # With 2 active and MAX_PARALLEL=2, should not start more
     [[ "$active" -ge "$MAX_PARALLEL" ]]
+    rmdir "$WORKTREES_DIR/executor-0.lock" "$WORKTREES_DIR/executor-1.lock"
 }
 
 @test "backpressure: allows new task when under limit" {
     MAX_PARALLEL=3
-    local cache='[{"id":"t1","labels":["executor"]}]'
+    mkdir -p "$WORKTREES_DIR/executor-0.lock"
 
-    local active=$(count_active_executors "$cache")
+    local active=$(count_active_executors)
     local available=$((MAX_PARALLEL - active))
 
     [[ "$available" -gt 0 ]]
+    rmdir "$WORKTREES_DIR/executor-0.lock"
 }

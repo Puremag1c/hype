@@ -8,6 +8,8 @@
 
 - **Executor lock leak on early returns** - If a task was already claimed or not open, `run_executor()` returned without releasing the slot lock. Locks accumulated across HYPE cycles until all 20 slots were exhausted. Now calls `cleanup_worktree` on all exit paths.
 
+- **Backpressure always showed all slots free** - `count_active_executors()` counted by beads `executor` label, but labels were unreliable due to sync lag and race conditions between parallel subshells. Tasks ran `in_progress` without the label, so backpressure count was always 0. Now counts by lock files which perfectly track executor lifetime (created at slot allocation, removed at cleanup).
+
 - **Needs-review label lost on beads sync contention** - When multiple executors completed simultaneously during beads sync (git fetch), the fallback `bd_safe update --add-label=needs-review` silently failed. Tasks stayed `in_progress` without `needs-review`, invisible to senior executor. Now retries 3 times with 2s delay, and self-healing in main loop auto-adds `needs-review` to tasks stuck > 2 minutes without executor or needs-review labels.
 
 - **Senior executor NO_MERGE detection** - `bd close --reason` writes to `close_reason` field, not `notes`. Senior executor now checks both fields, fixing infinite executor-reopen loops where "No Merge" decisions were never recognized.

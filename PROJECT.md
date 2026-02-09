@@ -30,7 +30,7 @@
 hype/
 ├── bin/hype                 # CLI (init, start, status, update, delete, doctor)
 ├── core/
-│   ├── agents/              # Промпты агентов (24 шт)
+│   ├── agents/              # Промпты агентов (26 шт)
 │   │   ├── manager.md           # Координатор фаз (Sonnet)
 │   │   ├── tech-writer.md       # Сбор требований (Opus)
 │   │   ├── architect-planner.md # Создание плана из SPEC (Opus)
@@ -42,6 +42,8 @@ hype/
 │   │   ├── auditor.md           # Аудит задач с label:audit (Sonnet→Opus)
 │   │   ├── analyzer.md          # Deep analysis кода (Opus)
 │   │   ├── versioner.md         # VERSION + CHANGELOG (Haiku)
+│   │   ├── architect-troubleshooter.md # Persistent failure resolution (Opus)
+│   │   ├── tech-writer-review.md  # Non-technical user report (Sonnet)
 │   │   ├── analyst-*.md         # 5 аналитиков (Sonnet)
 │   │   └── tester-*.md          # 6 тестеров (по типу проекта)
 │   ├── scripts/             # Bash скрипты (14 шт)
@@ -67,7 +69,8 @@ hype/
 ```
 INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST → FINAL_REVIEW → DONE
                                               ↑                 ↓
-                                              └── SMOKE_REVIEW ←┘ (если есть regression)
+                                              └── SMOKE_REVIEW ←┘ (smoke/regression tasks)
+                                         USER_REVIEW ← (user-escalation → daemon stops)
 ```
 
 | Фаза | Агент | Что происходит |
@@ -78,7 +81,8 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 | PLAN_REVIEW | Architect-Reviewer | Ревью добавлений от Analysts |
 | IMPLEMENTATION | Executors + Auditor | Параллельная реализация + аудит задач |
 | SMOKE_TEST | Testers ×6 | Параллельная проверка (по типу проекта) |
-| SMOKE_REVIEW | Architect-QA | Обработка regression bugs |
+| SMOKE_REVIEW | Architect-QA | Триаж smoke test находок (smoke + regression) |
+| USER_REVIEW | Tech-Writer-Review | Отчёт для пользователя, daemon stops |
 | FINAL_REVIEW | Architect-QA | Проверка целостности |
 | VERSIONING | Versioner | Обновление VERSION + CHANGELOG |
 | DONE | — | Проект завершён |
@@ -96,7 +100,11 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 
 **Hard gate:** P0 bugs блокируют milestone:smoke-test-done → возврат в IMPLEMENTATION
 
-**Regression detection:** Если баг был закрыт, но вернулся — testers reopenят его с `regression` label. Architect-QA анализирует регрессии: эскалирует модель, отправляет аналитикам, или понижает приоритет.
+**Smoke triage:** ВСЕ баги из SMOKE_TEST получают label `smoke`. Regression reopens получают `smoke` + `regression`. Architect-QA триажит каждый баг в SMOKE_REVIEW перед тем как executors смогут его взять.
+
+**Regression counter:** `regress:N` — script-driven счётчик в `run-testers.sh`. Отслеживает сколько раз баг возвращался.
+
+**Escalation ladder:** reject:1→retry, reject:2-3→escalate model (haiku→sonnet→opus), reject:4→Troubleshooter. Troubleshooter: reformulate / split / remove / escalate to user.
 
 ### Deep Analysis (INIT)
 
@@ -114,7 +122,7 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 - **Изоляция** — каждый агент работает со своими данными
 - **Простые команды** — одна операция = одна команда bd
 - **Идемпотентность** — повторный запуск даёт тот же результат
-- **Таймауты** — 10 мин на задачу, 3 retry до эскалации
+- **Таймауты** — 10 мин на задачу, escalation ladder до Troubleshooter
 
 ### Git workflow
 - Executor: работает в ветке `task/beads-xxx`, WIP commit перед rebase
@@ -156,36 +164,23 @@ startup_timeout: 30          # Секунды на запуск сервера
 - gh — GitHub CLI (для PR workflow)
 - gitleaks — secret detection (авто-установка при наличии GitHub)
 
+## v2.1.0: Review Escalation & Model Switching (завершено)
+
+- **Unified reject:N counter** — один счётчик отказов для всех review/rework путей
+- **Model escalation ladder** — автоматическая эскалация: reject:1→retry, reject:2-3→upgrade model, reject:4→Troubleshooter
+- **Architect Troubleshooter** — новый агент для persistent failures (reformulate / split / remove / escalate to user)
+- **USER_REVIEW phase** — daemon stops, tech-writer-review генерирует отчёт для пользователя
+- **Regression counter regress:N** — script-driven, отслеживает regression cycles
+- **Smoke triage gate** — все баги из SMOKE_TEST проходят через Architect review
+- **Regression-aware final_review** — 3-step протокол (check open → check closed → create new)
+
 ## v2.0.0: Testing Infrastructure (завершено)
 
-**Doctor** — диагностический инструмент архитектора внутри целевого проекта.
+- **Doctor** — диагностика проблем, doctor-log для архитектора
+- **6 параллельных тестеров** — functional, backend, visual, api, cli, regression
+- **SMOKE_TEST/SMOKE_REVIEW** — hard gate на P0 bugs
 
-```bash
-hype doctor          # Интерактивная диагностика
-hype doctor --report # Только создать doctor-log
-```
-
-**Назначение:**
-Когда у пользователя проблема с HYPE — Doctor собирает информацию и формирует структурированный отчёт (doctor-log). Пользователь передаёт этот отчёт архитектору HYPE, который понимает проблему и может её исправить.
-
-**Workflow:**
-1. Пользователь запускает `hype doctor`
-2. Doctor спрашивает "что беспокоит"
-3. Doctor собирает данные: bd stats, логи, процессы, фазу
-4. Doctor формирует doctor-log с диагнозом
-5. Пользователь передаёт doctor-log архитектору HYPE
-6. (Опционально) Doctor предлагает runtime-фиксы для простых проблем
-
-**Принципы:**
-- ВСЕГДА создаёт doctor-log (главный результат)
-- НЕ правит код — ни HYPE, ни проекта
-- Runtime-фиксы через bd только с подтверждением (stuck tasks, orphaned labels)
-
-**Знания Doctor:**
-- `docs/architecture.md` — как работает HYPE
-- `docs/troubleshooting.md` — известные проблемы и решения
-
-## Планируется (после 2.0.0)
+## Планируется
 
 - OS Notifications (macOS/Linux)
 - Webhook уведомления (Telegram, Slack)

@@ -683,6 +683,125 @@ start_command: .venv/bin/python -m chatfilter.main
 
 ---
 
+### PROBLEM: Task stuck in blocked:troubleshoot
+
+**Симптомы:**
+- Задача с label `blocked:troubleshoot`
+- Не подхватывается executors
+- Была отклонена 4+ раз
+
+**Причина:**
+Задача исчерпала escalation ladder (reject:4+). Troubleshooter должен был обработать её.
+
+**Диагностика:**
+```bash
+bd list --json | jq '.[] | select(.labels[]? == "blocked:troubleshoot") | {id, title, labels}'
+ls -t logs/troubleshooter-*.log | head -3
+```
+
+**Решение (runtime-fix):**
+```bash
+# Вариант 1: Вручную переформулировать
+bd update <id> --status=open --remove-label=blocked:troubleshoot \
+  --add-label=reformulated --title="<новый подход>" --description="<новое описание>"
+
+# Вариант 2: Закрыть как нерешаемую
+bd close <id> --reason="Manual: removed from scope"
+
+# Вариант 3: Пересбросить на troubleshooter
+# (troubleshooter вызывается автоматически при следующем цикле)
+```
+
+---
+
+### PROBLEM: USER_REVIEW phase — daemon stopped
+
+**Симптомы:**
+- Фаза `USER_REVIEW`
+- HYPE daemon останавливается с сообщением "Daemon stopping"
+- Задачи с `user-escalation` label
+
+**Причина:**
+Troubleshooter решил что задача требует решения пользователя (label `user-escalation`). Это штатное поведение — daemon останавливается чтобы пользователь принял решение.
+
+**Диагностика:**
+```bash
+bd list --status=open --json | jq '.[] | select((.labels // []) | index("user-escalation"))'
+cat .hype/evidence/user-review-report.md 2>/dev/null
+```
+
+**Решение (runtime-fix):**
+```bash
+# Прочитать отчёт
+cat .hype/evidence/user-review-report.md
+
+# Для каждой задачи выбрать действие:
+bd close <id> --reason="User decision: skip this feature"
+# или
+bd update <id> --status=open --remove-label=user-escalation --description="<уточнённое описание>"
+
+# Перезапустить HYPE
+hype
+```
+
+---
+
+### PROBLEM: Infinite regression loop (regress:N keeps growing)
+
+**Симптомы:**
+- Один и тот же баг возвращается после каждого SMOKE_TEST
+- `regress:N` растёт (3+)
+- Цикл: fix → test → same bug → fix
+
+**Причина:**
+1. Executor фиксит симптом, не причину
+2. Код из старого пакета (см. "Testers see OLD code")
+3. Задача слишком сложная для модели
+
+**Диагностика:**
+```bash
+bd list --json | jq '.[] | select(.labels[]? | startswith("regress:")) | {id, title, labels}'
+```
+
+**Решение (runtime-fix):**
+```bash
+# Если regress:3+ — эскалировать вручную
+bd update <id> --add-label=model:opus --notes="Manual escalation: persistent regression"
+
+# Или закрыть и создать более точную задачу
+bd close <id> --reason="Persistent regression, reformulating"
+bd create --title="<более точное описание проблемы>" --type=bug --priority=1 --label=model:opus
+```
+
+---
+
+### PROBLEM: reformulated task fails again
+
+**Симптомы:**
+- Задача с labels `reformulated` + `blocked:troubleshoot`
+- Troubleshooter уже переформулировал, но опять reject:4
+
+**Причина:**
+Задача не решается автоматически даже после переформулировки.
+
+**Диагностика:**
+```bash
+bd show <id> --json | jq '.[0] | {title, labels, notes}'
+```
+
+**Решение:**
+Troubleshooter при 2-й неудаче с `reformulated` может только:
+- Уменьшить scope (split)
+- Убрать из scope (close)
+- Эскалировать к user (`user-escalation`)
+
+Если Troubleshooter не запустился — вручную:
+```bash
+bd close <id> --reason="Unresolvable after reformulation"
+```
+
+---
+
 ## Формат doctor-log
 
 ```markdown

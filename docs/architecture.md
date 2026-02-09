@@ -17,14 +17,14 @@ hype.sh (bash loop с lock file)
     │   ├─► IMPLEMENTATION: run-executors.sh + run-senior-executor.sh
     │   ├─► SMOKE_TEST: run-testers.sh → Testers × 6
     │   ├─► SMOKE_REVIEW: Architect-QA (Opus)
+    │   ├─► USER_REVIEW: Tech-Writer-Review (Sonnet) → daemon stops
     │   ├─► FINAL_REVIEW: Architect-QA (Opus)
     │   ├─► VERSIONING: Versioner (Haiku)
     │   └─► BLOCKED_CYCLES: Architect-Ops (Sonnet)
     │
-    └─► Manager (Sonnet) — ТОЛЬКО при проблемах:
-        ├─► Blocked tasks
-        ├─► Retry limit exceeded
-        └─► Эскалации
+    ├─► Troubleshooter (Opus) — при blocked:troubleshoot (reject:4+)
+    │
+    └─► Manager (Sonnet) — при прочих blocked/retry-limit
 ```
 
 **Ключевой принцип:** Bash вызывает bash (механика). LLM используется только для решений.
@@ -34,7 +34,8 @@ hype.sh (bash loop с lock file)
 ```
 INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST → FINAL_REVIEW → VERSIONING → DONE
                                               ↑                  ↓
-                                              └── SMOKE_REVIEW ←─┘ (если есть regression)
+                                              └── SMOKE_REVIEW ←─┘ (smoke/regression tasks)
+                                         USER_REVIEW ← (user-escalation label → daemon stops)
 ```
 
 | Фаза | Условие перехода | Агент | Действие |
@@ -45,7 +46,8 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 | PLAN_REVIEW | milestone:analysts-done | Architect-Reviewer | Ревьюит добавления Analysts |
 | IMPLEMENTATION | milestone:plan-reviewed | Executors + Auditor | Реализуют задачи + аудит |
 | SMOKE_TEST | все задачи closed | Testers ×6 | Параллельная проверка работоспособности |
-| SMOKE_REVIEW | regression tasks найдены | Architect-QA | Обработка regression bugs |
+| SMOKE_REVIEW | smoke/regression tasks найдены | Architect-QA | Триаж всех smoke test находок |
+| USER_REVIEW | user-escalation label | Tech-Writer-Review | Генерирует отчёт, daemon stops |
 | FINAL_REVIEW | milestone:smoke-test-done | Architect-QA | Проверяет целостность |
 | VERSIONING | FINAL_REVIEW: PASSED | Versioner | Обновляет VERSION + CHANGELOG |
 | DONE | milestone:project-done | — | Проект завершён |
@@ -116,6 +118,20 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
   - Определяет тип изменений (major/minor/patch)
   - Обновляет VERSION файл
   - Добавляет запись в CHANGELOG.md
+
+### Architect Troubleshooter (Opus)
+- **Роль:** Разрешение persistent failures (reject:4+)
+- **Когда:** Задача получает label `blocked:troubleshoot`
+- **Решения:**
+  - REFORMULATE — переписать задачу с другим подходом (label `reformulated`, макс 2 раза)
+  - SCOPE REDUCTION — разбить на более простые задачи
+  - REMOVE FROM SCOPE — закрыть как нерешаемую
+  - ESCALATE TO USER — label `user-escalation`, daemon stops
+
+### Tech Writer Review (Sonnet)
+- **Роль:** Генерация non-technical отчёта для пользователя
+- **Когда:** Фаза USER_REVIEW (задачи с `user-escalation` label)
+- **Выход:** `.hype/evidence/user-review-report.md`
 
 ### Testers (SMOKE_TEST фаза)
 - **Роль:** Проверка работоспособности после IMPLEMENTATION
@@ -263,8 +279,15 @@ bd daemon start
 - `model:haiku/sonnet/opus` — какая модель выполняет
 - `added-by:analyst-*` — кто добавил задачу
 - `milestone:*` — маркер завершения фазы
-- `retry:N` — счётчик повторных попыток
-- `blocked:*` — причина блокировки
+- `retry:N` — счётчик timeout/failure при execution
+- `reject:N` — unified счётчик отказов review (escalation ladder: 1→retry, 2-3→escalate model, 4→troubleshooter)
+- `regress:N` — счётчик regression cycles (script-driven)
+- `smoke` — баг из SMOKE_TEST, ждёт тriage от Architect
+- `regression` — баг который вернулся после fix
+- `reformulated` — задача переформулирована Troubleshooter (макс 2 раза)
+- `user-escalation` — требует решения пользователя (trigger USER_REVIEW)
+- `blocked:troubleshoot` — исчерпан escalation ladder, ждёт Troubleshooter
+- `blocked:*` — прочие причины блокировки
 
 ### Dependencies
 
@@ -280,10 +303,12 @@ bd dep cycles  # Проверка циклов
 - Atomic через `set -C` (noclobber)
 - Автоочистка stale lock
 
-### Retry logic
-- 3 попытки на задачу
-- Счётчик в label `retry:N`
-- После лимита — эскалация к Architect
+### Retry & escalation logic
+- Execution failures: `retry:N` (timeout, crash)
+- Review rejections: `reject:N` (unified counter)
+- Escalation ladder: reject:1→retry, reject:2-3→escalate model (haiku→sonnet→opus), reject:4→Troubleshooter
+- Troubleshooter: reformulate / split / remove / escalate to user
+- Max 2 reformulations (label `reformulated`), then only reduce/remove/user
 
 ### Graceful shutdown
 - `trap SIGINT SIGTERM`

@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.1.1] - 2026-02-09
+
+### Added
+
+- **CHANGELOG injection into architect prompts** - Last 3 version entries from CHANGELOG.md are now injected into all architect agent prompts (planner, reviewer, QA, ops) and senior-executor review prompts. Prevents reintroduction of recently removed entities/patterns. Includes explicit instruction: "If something was removed or changed recently, do NOT reintroduce it."
+
+### Fixed
+
+- **Documentation gaps for v2.1** - Updated PROJECT.md (phase diagram, agent count 26, v2.1 section), architecture.md (USER_REVIEW phase, Troubleshooter agent, new labels), troubleshooting.md (4 new problem entries for blocked:troubleshoot, USER_REVIEW, regress:N loop, reformulated failure).
+
+---
+
 ## [2.1.0] - 2026-02-09
 
 ### Added

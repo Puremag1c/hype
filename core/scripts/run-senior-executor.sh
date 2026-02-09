@@ -550,8 +550,23 @@ $changelog_context
                 log "SUCCESS" "APPROVED (no merge needed): $task_id"
                 bd_safe update "$task_id" --remove-label=needs-review --remove-label=executor --add-label=reviewed >/dev/null 2>&1 || true
             else
-                log "WARN" "Task $task_id closed but main unchanged, reopening"
-                bd_safe update "$task_id" --status=open --remove-label=executor --notes="Auto-reopened: closed without merge to main"
+                # Increment reject:N to prevent infinite reopen loops
+                local reject_count
+                reject_count=$(get_counter_value "$updated_json" "reject")
+                ((reject_count++))
+                set_counter_label "$task_id" "reject" "$reject_count"
+
+                if [ "$reject_count" -ge 4 ]; then
+                    log "WARN" "TROUBLESHOOT: $task_id - closed without merge $reject_count times"
+                    bd_safe update "$task_id" --status=open \
+                        --remove-label=executor \
+                        --add-label=blocked:troubleshoot \
+                        --notes="Auto-reopened: closed without merge to main. Escalated to troubleshooter (reject:$reject_count)."
+                else
+                    log "WARN" "Task $task_id closed but main unchanged, reopening (reject:$reject_count)"
+                    bd_safe update "$task_id" --status=open --remove-label=executor \
+                        --notes="Auto-reopened: closed without merge to main (reject:$reject_count)"
+                fi
             fi
         else
             log "SUCCESS" "APPROVED: $task_id (merged)"

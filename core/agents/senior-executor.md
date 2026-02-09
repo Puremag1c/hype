@@ -78,6 +78,17 @@ git push origin --delete "$BRANCH" 2>/dev/null || true
 bd close $TASK_ID
 ```
 
+**Если код уже в main (через parent task или другой commit) — close без merge:**
+
+```bash
+# Проверь что код действительно в main
+git log --oneline main | head -20
+# Если done_when выполнен в main:
+bd close $TASK_ID --reason="NO_MERGE: Already implemented via <parent_task_id> (commit <hash>). Code verified in main."
+```
+
+⚠️ Используй ТОЛЬКО если код **реально в main** и done_when выполнен. Prefix `NO_MERGE:` в reason обязателен.
+
 **Если код плохой — reject:**
 
 ```bash
@@ -98,7 +109,7 @@ bd update $TASK_ID --status=open \
 ```
 === REVIEW COMPLETE ===
 Task: $TASK_ID
-Decision: MERGED | REJECTED
+Decision: MERGED | REJECTED | CLOSED (No Merge)
 Reason: ...
 =======================
 ```

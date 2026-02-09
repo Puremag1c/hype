@@ -523,8 +523,16 @@ $review_context
     if [ "$task_status" = "closed" ]; then
         # Verify merge actually happened by checking if main changed
         if [ "$main_before" != "unknown" ] && [ "$main_before" = "$main_after" ]; then
-            log "WARN" "Task $task_id closed but main unchanged, reopening"
-            bd_safe update "$task_id" --status=open --remove-label=executor --notes="Auto-reopened: closed without merge to main"
+            # Check if senior executor intentionally closed without merge (code already in main)
+            local close_notes
+            close_notes=$(echo "$updated_json" | jq -r '.[0].notes // ""' 2>/dev/null)
+            if echo "$close_notes" | grep -q "NO_MERGE:"; then
+                log "SUCCESS" "APPROVED (no merge needed): $task_id"
+                bd_safe update "$task_id" --remove-label=needs-review --remove-label=executor --add-label=reviewed >/dev/null 2>&1 || true
+            else
+                log "WARN" "Task $task_id closed but main unchanged, reopening"
+                bd_safe update "$task_id" --status=open --remove-label=executor --notes="Auto-reopened: closed without merge to main"
+            fi
         else
             log "SUCCESS" "APPROVED: $task_id (merged)"
             bd_safe update "$task_id" --remove-label=needs-review --remove-label=executor --add-label=reviewed >/dev/null 2>&1 || true

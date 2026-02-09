@@ -485,6 +485,10 @@ If approved, merge and mark the task as complete with bd close."
     # Run senior executor (with tool use enabled)
     local output_file="$LOGS_DIR/senior-executor-$task_id.log"
 
+    # Inject CHANGELOG for review context (prevents approving reintroduction of removed code)
+    local changelog_context
+    changelog_context=$(get_changelog_context 3)
+
     local full_prompt="$agent_prompt
 
 ---
@@ -494,7 +498,9 @@ ACTION: Review and merge if ready
 
 ## PRE-COMPUTED CONTEXT (no need to run git commands)
 $review_context
-
+${changelog_context:+
+$changelog_context
+}
 ## YOUR JOB
 1. Review the diff above
 2. Check if it matches done_when criteria

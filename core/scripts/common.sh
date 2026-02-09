@@ -492,6 +492,43 @@ map_model() {
 }
 export -f map_model 2>/dev/null || true
 
+# get_changelog_context - извлекает последние N версий из CHANGELOG.md
+# Использование: get_changelog_context [N] [CHANGELOG_PATH]
+# По умолчанию: 3 версии, ./CHANGELOG.md
+# Возвращает: текст с последними записями changelog + ссылку на файл
+get_changelog_context() {
+    local count="${1:-3}"
+    local changelog="${2:-CHANGELOG.md}"
+
+    if [ ! -f "$changelog" ]; then
+        echo ""
+        return 0
+    fi
+
+    # Extract last N version blocks (each starts with "## [")
+    local result
+    result=$(awk -v n="$count" '
+        /^## \[/ { block_num++; if (block_num > n) exit }
+        block_num >= 1 { print }
+    ' "$changelog")
+
+    if [ -z "$result" ]; then
+        echo ""
+        return 0
+    fi
+
+    cat <<EOF
+## Recent Changes (from CHANGELOG.md)
+
+IMPORTANT: Review this history before making architectural decisions.
+If something was removed or changed recently, do NOT reintroduce it.
+Full history: $changelog
+
+$result
+EOF
+}
+export -f get_changelog_context 2>/dev/null || true
+
 # is_audit_task - определяет audit-задачи (не требуют code changes)
 # Использование: is_audit_task "$task_json"
 # Возвращает: 0 если audit, 1 если code task

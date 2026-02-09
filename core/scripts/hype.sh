@@ -345,13 +345,21 @@ run_agent_with_mode() {
 
     local output_file="$LOGS_DIR/${agent_name}-$(date +%s).log"
 
+    # Inject CHANGELOG context for architect agents (prevents reintroducing removed entities)
+    local changelog_context=""
+    if [[ "$agent_name" == "architect" ]]; then
+        changelog_context=$(get_changelog_context 3)
+    fi
+
     # Build full prompt with mode and context
     local full_prompt="$agent_prompt
 
 ---
 MODE: $mode
 PROJECT_ROOT: $PROJECT_DIR
-$extra_context"
+${changelog_context:+
+$changelog_context
+}$extra_context"
 
     # Map agent name to short label for progress logging
     local label

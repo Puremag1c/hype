@@ -1254,8 +1254,8 @@ main() {
 
     local cycle=0
     local max_cycles="${MAX_CYCLES:-1000}"
-    local current_delay="${ITERATION_DELAY}"
-    local base_delay="${ITERATION_DELAY}"
+    local current_delay="${ITERATION_DELAY:-10}"
+    local base_delay="${ITERATION_DELAY:-10}"
 
     while [ $cycle -lt "$max_cycles" ]; do
         ((cycle++))
@@ -1280,6 +1280,7 @@ main() {
 
         # 2. Load config (allows hot reload)
         load_config
+        base_delay="${ITERATION_DELAY:-10}"
 
         # 3. Detect current phase (returns JSON with all metadata)
         local phase_json phase

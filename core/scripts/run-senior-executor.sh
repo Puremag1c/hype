@@ -542,9 +542,11 @@ $changelog_context
         # Verify merge actually happened by checking if main changed
         if [ "$main_before" != "unknown" ] && [ "$main_before" = "$main_after" ]; then
             # Check if senior executor intentionally closed without merge (code already in main)
-            local close_notes
+            # NOTE: bd close --reason writes to close_reason field, NOT notes
+            local close_notes close_reason
             close_notes=$(echo "$updated_json" | jq -r '.[0].notes // ""' 2>/dev/null)
-            if echo "$close_notes" | grep -q "NO_MERGE:"; then
+            close_reason=$(echo "$updated_json" | jq -r '.[0].close_reason // ""' 2>/dev/null)
+            if echo "$close_notes" | grep -q "NO_MERGE:" || echo "$close_reason" | grep -q "NO_MERGE:"; then
                 log "SUCCESS" "APPROVED (no merge needed): $task_id"
                 bd_safe update "$task_id" --remove-label=needs-review --remove-label=executor --add-label=reviewed >/dev/null 2>&1 || true
             else

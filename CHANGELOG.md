@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.0.19] - 2026-02-09
+
+### Fixed
+
+- **Beads daemon explosion protection** - Added detection in `bd_safe`: if >10 bd processes detected, kills all and restarts daemon. Prevents SQLite lock contention from parallel analyst operations.
+
+- **Analyst timeout too short** - Increased `ANALYST_TIMEOUT` from 10m to 15m in config template. Analysts creating 4-6 tasks each need more time when bd operations are slow.
+
+- **Trigger reset race condition** - `run-analysts.sh` now checks trigger status before resetting to open on timeout. If agent closed trigger before SIGTERM, skip the reset.
+
+---
+
 ## [2.0.18] - 2026-02-08
 
 ### Fixed

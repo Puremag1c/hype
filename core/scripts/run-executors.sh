@@ -32,18 +32,37 @@ mkdir -p "$LOGS_DIR"
 # === Worktree management ===
 # Изоляция executors через git worktrees (избегает HEAD conflicts и beads import storms)
 
-# Track allocated slots in current run to prevent race conditions
-# Initialized in main(), incremented after each allocation
-NEXT_SLOT=0
-
+# find_free_slot - allocates a slot with lock-based protection
+# Uses mkdir for atomic lock acquisition (prevents race conditions between HYPE cycles)
+# Lock is released only after cleanup_worktree completes
 find_free_slot() {
-    # Skip existing worktrees (from previous runs or stale)
-    while [ -d "$WORKTREES_DIR/executor-$NEXT_SLOT" ]; do
-        ((NEXT_SLOT++))
+    local slot=0
+    while true; do
+        local lock_dir="$WORKTREES_DIR/executor-$slot.lock"
+
+        # Check for stale lock (older than 30 minutes = crashed executor)
+        if [ -d "$lock_dir" ]; then
+            local lock_age
+            lock_age=$(( $(date +%s) - $(stat -f %m "$lock_dir" 2>/dev/null || stat -c %Y "$lock_dir" 2>/dev/null || echo 0) ))
+            if [ "$lock_age" -gt 1800 ]; then
+                rmdir "$lock_dir" 2>/dev/null || true
+            fi
+        fi
+
+        # Try to acquire lock via mkdir (atomic)
+        if mkdir "$lock_dir" 2>/dev/null; then
+            echo "$slot"
+            return 0
+        fi
+
+        ((slot++))
+
+        # Safety: don't loop forever
+        if [ "$slot" -gt 20 ]; then
+            >&2 echo "ERROR: No free slots found after checking 20 slots"
+            return 1
+        fi
     done
-    local slot=$NEXT_SLOT
-    ((NEXT_SLOT++))  # Reserve this slot for current caller
-    echo "$slot"
 }
 
 create_worktree() {
@@ -74,10 +93,15 @@ create_worktree() {
 cleanup_worktree() {
     local slot=$1
     local worktree_path="$WORKTREES_DIR/executor-$slot"
+    local lock_dir="$WORKTREES_DIR/executor-$slot.lock"
 
     if [ -d "$worktree_path" ]; then
         git worktree remove --force "$worktree_path" 2>/dev/null || rm -rf "$worktree_path"
     fi
+
+    # Release lock AFTER worktree is fully cleaned up
+    # This prevents race condition where new executor gets slot before cleanup completes
+    rmdir "$lock_dir" 2>/dev/null || true
 }
 
 log() {
@@ -426,8 +450,7 @@ main() {
     # Start executors in parallel (up to available slots)
     # Non-blocking: launch and return immediately (streaming architecture)
     # Each executor gets its own slot number for worktree isolation
-    # Reset slot counter for this run (prevents race condition)
-    NEXT_SLOT=0
+    # Slots are allocated via lock files (find_free_slot) to prevent race conditions
     local started=0
     local skipped=0
     for task_id in $tasks; do
@@ -458,7 +481,12 @@ main() {
             # Auditor: no worktree, no slot (doesn't create branches)
             ( run_auditor "$task_id" ) &
         else
-            local slot=$(find_free_slot)
+            local slot
+            slot=$(find_free_slot) || {
+                log "ERROR" "Failed to allocate slot for $task_id, skipping"
+                ((skipped++)) || true
+                continue
+            }
             log "TASK_START" "$task_id \"$task_title\" (slot $slot, $model)"
             # Executor: uses worktree for isolation
             ( run_executor "$slot" "$task_id" ) &

@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.0.20] - 2026-02-09
+
+### Fixed
+
+- **Executor slot allocation race condition** - Replaced counter-based slot allocation with lock-based approach using `mkdir` (atomic). Lock is released only after `cleanup_worktree` completes, preventing new executor from getting a slot that's still being cleaned up.
+
+- **Stale lock detection** - Locks older than 30 minutes are automatically removed (crashed executor recovery).
+
+---
+
 ## [2.0.19] - 2026-02-09
 
 ### Fixed

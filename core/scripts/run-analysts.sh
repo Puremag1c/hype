@@ -88,12 +88,27 @@ run_analyst() {
     local spec_content
     spec_content=$(cat "$PROJECT_DIR/SPEC.md" 2>/dev/null || echo "SPEC.md not found")
 
+    # Calculate plan size (exclude milestones, triggers, analyst tasks)
+    local plan_size max_tasks
+    plan_size=$(echo "$bd_cache" | jq '[.[] | select(.title | test("^run-|^milestone:") | not)] | length' 2>/dev/null || echo "5")
+    if [ "$plan_size" -le 10 ]; then
+        max_tasks=2
+    elif [ "$plan_size" -le 25 ]; then
+        max_tasks=3
+    else
+        max_tasks=5
+    fi
+
     local full_prompt="$analyst_prompt
 
 ---
 ANALYST: $analyst
 TRIGGER_TASK: $task_id
 PROJECT_ROOT: $PROJECT_DIR
+
+## TASK BUDGET: $max_tasks
+Current plan has $plan_size tasks. You may create **at most $max_tasks tasks**.
+Only P0-P1 gaps that would block MVP. Skip nice-to-haves.
 
 ## SCOPE (SPEC.md):
 $spec_content"

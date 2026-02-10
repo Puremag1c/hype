@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.2.1] - 2026-02-10
+
+### Fixed
+
+- **Port secret scanning to v2.2 review pipeline** — `preflight_check()` in `run-reviewers.sh` now scans diffs for credential patterns (API keys, passwords, secrets, .env) and returns `SECRETS_WARNING`. Adds `secrets-warning` label and falls through to Claude review with security warning context. Previously this feature existed only in the deleted `run-senior-executor.sh`.
+
+- **Port circuit breaker to v2.2 review pipeline** — When a reformulated task fails preflight with the same reason (`last-reject:{TYPE}` matches), routes to `user-escalation` instead of looping through troubleshooter indefinitely. Tracks rejection reason via `last-reject:` label for cross-cycle detection.
+
+- **Handle git push failure in merge queue** — `run-merge-queue.sh` previously exited silently on push failure, leaving task as `approved` forever. Now increments `reject:N`, removes `approved` label, returns task to executor with notes. Escalates to troubleshooter at `reject:4`.
+
+- **Recovery for approved tasks stuck >10min** — `heal_stuck_tasks()` previously only logged a warning for stuck approved tasks. Now recovers after 10 minutes: removes `approved`, increments `reject:N`, returns to executor. Warns at 5 min, recovers at 10 min.
+
+- **Raise bd_safe daemon explosion threshold from 10 to 30** — With `MAX_PARALLEL_EXECUTORS=10` + reviewers + merge queue, legitimate bd process queue easily exceeded the old threshold. Prevents false kills of healthy parallel bd operations.
+
+- **Optimize reset_stale_tasks** — Replaced N×`bd show` calls (one per in_progress task) with single `bd list --json --limit 0` + jq filter in memory. Also filters out `reviewing` and `approved` labels (v2.2 pipeline states).
+
+### Changed
+
+- **Versioner discovers version source in target project** — Instead of blindly writing to `VERSION` file, versioner now scans for `package.json`, `pyproject.toml`, `Cargo.toml`, `mix.exs`, etc. and updates version where it's actually defined.
+
+### Removed
+
+- **Deleted `run-senior-executor.sh` and `senior-executor.md`** — Fully replaced by v2.2 parallel review pipeline (`run-reviewers.sh` + `run-merge-queue.sh`). All features ported. Updated `hype.sh` log parser to use `reviewer-*.log`. Removed 3 legacy tests, repointed 8 tests to `run-reviewers.sh`. 135 tests pass.
+
+---
+
 ## [2.2.0] - 2026-02-10
 
 ### Added

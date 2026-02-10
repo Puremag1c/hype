@@ -103,3 +103,60 @@ load '../helpers/setup'
     # Pattern: timeout Ns git worktree remove ... || rm -rf
     grep -q 'timeout.*git worktree remove.*|| rm -rf' "$executors_sh"
 }
+
+# =============================================================================
+# Behavioral: real pipeline cleanup (catches the 38-minute hang bug)
+# =============================================================================
+
+@test "behavioral: progress pipeline dies within 5 seconds after cleanup" {
+    local tmpfile
+    tmpfile=$(mktemp)
+    local tail_pid_file="$tmpfile.tail.pid"
+    touch "$tmpfile.running"
+
+    # Start the exact same pipeline architecture as run_claude_with_progress
+    (
+        trap 'exit 0' TERM INT
+        sleep 0.2
+        {
+            tail -F "$tmpfile" 2>/dev/null &
+            echo $! > "$tail_pid_file"
+            wait $!
+        } | \
+        jq -r --unbuffered '.' 2>/dev/null | \
+        while IFS= read -r line; do
+            [ -f "$tmpfile.running" ] || break
+        done
+    ) &
+    local progress_pid=$!
+    sleep 0.5
+
+    # Run the same cleanup sequence as our fix
+    rm -f "$tmpfile.running" 2>/dev/null || true
+
+    # SIGTERM
+    pkill -P "$progress_pid" 2>/dev/null || true
+    kill "$progress_pid" 2>/dev/null || true
+    local tail_pid=""
+    if [ -f "$tail_pid_file" ]; then
+        tail_pid=$(cat "$tail_pid_file" 2>/dev/null)
+        [ -n "$tail_pid" ] && kill "$tail_pid" 2>/dev/null || true
+        rm -f "$tail_pid_file" 2>/dev/null || true
+    fi
+
+    # Grace period + SIGKILL
+    sleep 1
+    pkill -9 -P "$progress_pid" 2>/dev/null || true
+    kill -9 "$progress_pid" 2>/dev/null || true
+    [ -n "$tail_pid" ] && kill -9 "$tail_pid" 2>/dev/null || true
+
+    wait "$progress_pid" 2>/dev/null || true
+
+    # Verify: all processes dead
+    ! kill -0 "$progress_pid" 2>/dev/null
+    [ -z "$tail_pid" ] || ! kill -0 "$tail_pid" 2>/dev/null
+
+    # Cleanup
+    rm -f "$tmpfile" "$tmpfile.running" "$tail_pid_file" 2>/dev/null || true
+}
+

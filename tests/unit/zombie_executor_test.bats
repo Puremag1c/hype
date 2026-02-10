@@ -3,6 +3,7 @@
 # Unit tests for v2.1.10 zombie executor fix:
 # - Executor checks task status before post-execution modifications
 # - Prevents zombie executor from reopening closed tasks
+# - Review "no action" path re-adds needs-review label
 
 load '../helpers/setup'
 
@@ -82,4 +83,28 @@ load '../helpers/setup'
 
     # But the guard check comes first (verified in earlier test)
     # This means: closed task → guard returns → timeout handler never runs
+}
+
+# =============================================================================
+# Review "no action" path: re-add needs-review
+# =============================================================================
+
+@test "review: reject:1 'no action' path re-adds needs-review" {
+    local senior_sh="$SCRIPTS_DIR/run-senior-executor.sh"
+
+    # The "no action taken" branch should add needs-review back
+    local block
+    block=$(sed -n '/REVIEW RETRY.*no action taken/,/fi$/p' "$senior_sh" | head -5)
+
+    echo "$block" | grep -q 'add-label=needs-review'
+}
+
+@test "review: reject:2-3 escalation path re-adds needs-review" {
+    local senior_sh="$SCRIPTS_DIR/run-senior-executor.sh"
+
+    # The model escalation branch (in the "no action" else block) should add needs-review
+    local block
+    block=$(sed -n '/Review escalated.*reject/p' "$senior_sh")
+
+    echo "$block" | grep -q 'add-label=needs-review'
 }

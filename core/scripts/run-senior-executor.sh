@@ -675,9 +675,12 @@ $changelog_context
                 log "WARN" "REVIEW ESCALATE: $task_id - $current_model → $next_model (reject:$reject_count)"
                 clean_model_label "$task_id" "$next_model"
             fi
-            bd_safe update "$task_id" --notes="Review escalated (reject:$reject_count)."
+            # Re-add needs-review (Claude may have removed it during failed review)
+            bd_safe update "$task_id" --add-label=needs-review --notes="Review escalated (reject:$reject_count)." >/dev/null 2>&1 || true
         else
             log "WARN" "REVIEW RETRY: $task_id - no action taken (reject:$reject_count)"
+            # Re-add needs-review (Claude may have removed it during failed review)
+            bd_safe update "$task_id" --add-label=needs-review >/dev/null 2>&1 || true
         fi
     fi
 }

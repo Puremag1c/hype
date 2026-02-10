@@ -6,6 +6,8 @@
 
 - **Zombie executor can't reopen closed tasks** — When an executor times out while the senior executor has already reviewed and closed the task, the timeout handler previously ran `bd_safe update --status=open` which reopened the closed task. Now `run_executor()` and `run_auditor()` check task status after `run_claude_with_progress` returns: if the task is already closed, post-processing is skipped entirely. Prevents race condition between parallel executor and senior executor review.
 
+- **Review "no action" path re-adds `needs-review` label** — When the Claude reviewer removes the `needs-review` label during review but doesn't complete (no close, no status change), the task got stuck: `in_progress` without `needs-review` or `executor`, invisible to both `get_review_tasks()` and `get_ready_tasks()`. Now both the retry path (reject:1) and escalation path (reject:2-3) explicitly re-add `needs-review` to ensure the task remains in the review queue.
+
 ---
 
 ## [2.1.9] - 2026-02-10

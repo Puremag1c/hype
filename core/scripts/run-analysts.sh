@@ -141,7 +141,7 @@ main() {
 
     # Cache bd list at start (v1.9.0 optimization)
     local bd_cache
-    bd_cache=$(bd_safe list --json 2>/dev/null || echo "[]")
+    bd_cache=$(bd_safe list --json --limit 0 2>/dev/null || echo "[]")
 
     # Check that all trigger tasks exist (using cache)
     local missing=0
@@ -167,7 +167,7 @@ main() {
 
     # Check completion status (milestone created by HYPE)
     local open_triggers
-    open_triggers=$(bd_safe list --status=open --json 2>/dev/null | jq '[.[] | select(.title | startswith("run-analyst-"))] | length' 2>/dev/null || echo "0")
+    open_triggers=$(bd_safe list --status=open --json --limit 0 2>/dev/null | jq '[.[] | select(.title | startswith("run-analyst-"))] | length' 2>/dev/null || echo "0")
 
     if [ "$open_triggers" -eq 0 ]; then
         log "INFO" "All analysts completed"

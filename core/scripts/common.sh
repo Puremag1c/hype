@@ -201,7 +201,7 @@ reset_stale_tasks() {
     local log_prefix="${2:-stale}"
     local reset_count=0
 
-    for task_id in $(bd_safe list --status=in_progress --json 2>/dev/null | jq -r '.[].id' 2>/dev/null || true); do
+    for task_id in $(bd_safe list --status=in_progress --json --limit 0 2>/dev/null | jq -r '.[].id' 2>/dev/null || true); do
         # Skip tasks waiting for review - they're not stale, just queued
         local has_needs_review
         has_needs_review=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].labels | index("needs-review") // empty' 2>/dev/null || echo "")
@@ -759,7 +759,7 @@ cleanup_iteration() {
     # Check for in_progress tasks
     local in_progress_count
     local in_progress_tasks
-    in_progress_tasks=$(bd_safe list --status=in_progress --json 2>/dev/null || echo "[]")
+    in_progress_tasks=$(bd_safe list --status=in_progress --json --limit 0 2>/dev/null || echo "[]")
     in_progress_count=$(echo "$in_progress_tasks" | jq 'length')
 
     if [[ "$in_progress_count" -gt 0 ]]; then

@@ -436,7 +436,7 @@ create_analyst_triggers() {
 
     for analyst in "${analysts[@]}"; do
         local trigger_title="run-analyst-$analyst"
-        if ! bd_safe list --json 2>/dev/null | jq -e ".[] | select(.title == \"$trigger_title\")" > /dev/null 2>&1; then
+        if ! bd_safe list --json --limit 0 2>/dev/null | jq -e ".[] | select(.title == \"$trigger_title\")" > /dev/null 2>&1; then
             bd_safe create --title="$trigger_title" --type=task --priority=1 --label=trigger >/dev/null 2>&1 || true
             log "INFO" "Created trigger: $trigger_title"
         fi
@@ -475,7 +475,7 @@ check_and_create_done_milestone() {
 
 check_and_route_troubleshoot() {
     local bd_cache
-    bd_cache=$(bd_safe list --json 2>/dev/null || echo "[]")
+    bd_cache=$(bd_safe list --json --limit 0 2>/dev/null || echo "[]")
 
     # Find tasks with blocked:troubleshoot label
     local troubleshoot_ids
@@ -536,7 +536,7 @@ check_problems_and_consult_manager() {
 
     # Cache bd list once (v1.9.0 optimization - was 4 calls, now 1)
     local bd_cache
-    bd_cache=$(bd_safe list --json 2>/dev/null || echo "[]")
+    bd_cache=$(bd_safe list --json --limit 0 2>/dev/null || echo "[]")
 
     # Count blocked tasks EXCLUDING troubleshoot (handled above)
     local blocked_count
@@ -628,7 +628,7 @@ heal_stuck_tasks() {
     now=$(date +%s)
 
     local in_progress_json
-    in_progress_json=$(bd_safe list --status=in_progress --json 2>/dev/null || echo "[]")
+    in_progress_json=$(bd_safe list --status=in_progress --json --limit 0 2>/dev/null || echo "[]")
 
     local stuck_ids
     stuck_ids=$(echo "$in_progress_json" | jq -r '.[] | select(
@@ -759,9 +759,9 @@ generate_iteration_stats() {
 
     # Get task stats from beads
     local total closed blocked
-    total=$(bd_safe list --json 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
-    closed=$(bd_safe list --status=closed --json 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
-    blocked=$(bd_safe list --json 2>/dev/null | jq '[.[] | select(.labels[]? | startswith("blocked:"))] | length' 2>/dev/null || echo "0")
+    total=$(bd_safe list --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+    closed=$(bd_safe list --status=closed --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+    blocked=$(bd_safe list --json --limit 0 2>/dev/null | jq '[.[] | select(.labels[]? | startswith("blocked:"))] | length' 2>/dev/null || echo "0")
 
     # Count agent runs from logs
     local manager_runs architect_runs executor_runs analyst_runs senior_runs
@@ -778,7 +778,7 @@ generate_iteration_stats() {
 
     # Get blocked tasks details
     local blocked_details
-    blocked_details=$(bd_safe list --json 2>/dev/null | jq -r '.[] | select(.labels[]? | startswith("blocked:")) | "- `\(.id)`: \(.title)"' 2>/dev/null || echo "- none")
+    blocked_details=$(bd_safe list --json --limit 0 2>/dev/null | jq -r '.[] | select(.labels[]? | startswith("blocked:")) | "- `\(.id)`: \(.title)"' 2>/dev/null || echo "- none")
 
     # Generate report
     cat > "$stats_file" << EOF
@@ -930,7 +930,7 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             local arch_model
             arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
             # Create trigger task if not exists
-            if ! bd_safe list --json 2>/dev/null | jq -e '.[] | select(.title == "run-plan-review")' > /dev/null 2>&1; then
+            if ! bd_safe list --json --limit 0 2>/dev/null | jq -e '.[] | select(.title == "run-plan-review")' > /dev/null 2>&1; then
                 bd_safe create --title="run-plan-review" --type=task --priority=0 --label=trigger >/dev/null 2>&1 || true
             fi
             run_agent_with_mode "architect" ".claude/agents/architect-reviewer.md" "$arch_model" "plan_review" "" "${PLAN_REVIEW_TIMEOUT:-10m}"
@@ -941,7 +941,7 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             log "INFO" "USER_REVIEW: Tasks require human decision, generating report..."
 
             local user_tasks
-            user_tasks=$(bd_safe list --status=open --json 2>/dev/null | \
+            user_tasks=$(bd_safe list --status=open --json --limit 0 2>/dev/null | \
                 jq -r '.[] | select((.labels // []) | index("user-escalation")) | "\(.id): \(.title)\n  Notes: \(.notes // "none")"' 2>/dev/null || echo "")
 
             # Run tech-writer-review agent if available
@@ -983,13 +983,13 @@ $user_tasks"
             arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
 
             # Create trigger task if not exists
-            if ! bd_safe list --json 2>/dev/null | jq -e '.[] | select(.title == "run-smoke-review")' > /dev/null 2>&1; then
+            if ! bd_safe list --json --limit 0 2>/dev/null | jq -e '.[] | select(.title == "run-smoke-review")' > /dev/null 2>&1; then
                 bd_safe create --title="run-smoke-review" --type=task --priority=0 --label=trigger >/dev/null 2>&1 || true
             fi
 
             # Collect ALL tasks needing triage (smoke label OR regression label)
             local smoke_tasks regression_tasks triage_prompt
-            smoke_tasks=$(bd_safe list --status=open --json 2>/dev/null | jq -r '.[] | select((.labels // []) | any(. == "smoke" or . == "regression")) | "\(.id): \(.title) [labels: \(.labels | join(", "))]"' 2>/dev/null || echo "")
+            smoke_tasks=$(bd_safe list --status=open --json --limit 0 2>/dev/null | jq -r '.[] | select((.labels // []) | any(. == "smoke" or . == "regression")) | "\(.id): \(.title) [labels: \(.labels | join(", "))]"' 2>/dev/null || echo "")
             triage_prompt="
 SMOKE TEST FINDINGS TO TRIAGE:
 $smoke_tasks
@@ -1057,7 +1057,7 @@ For each task:
                     fi
                     # Agent ran but didn't write PASSED - might have created tasks
                     local open_count
-                    open_count=$(bd_safe list --status=open --json 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+                    open_count=$(bd_safe list --status=open --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
                     if [ "$open_count" -gt 0 ]; then
                         log "INFO" "FINAL_REVIEW: Architect created $open_count task(s), returning to IMPLEMENTATION"
                         # Invalidate smoke-test-done milestone — need to re-test after fix
@@ -1104,7 +1104,7 @@ For each task:
             if [ "$final_review_success" = false ]; then
                 local latest_log open_count
                 latest_log=$(ls -t "$LOGS_DIR"/architect-*.log 2>/dev/null | head -1)
-                open_count=$(bd_safe list --status=open --json 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+                open_count=$(bd_safe list --status=open --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
 
                 if [ "$open_count" -eq 0 ] && { [ -z "$latest_log" ] || ! grep -q "FINAL_REVIEW: PASSED" "$latest_log" 2>/dev/null; }; then
                     log "WARN" "FINAL_REVIEW incomplete after $final_review_attempt attempts, creating blocker"
@@ -1144,7 +1144,7 @@ For each task:
             log "INFO" "Attempt $blocked_count/3 to fix cycles..."
 
             # Create P0 task for Architect (if not exists)
-            if ! bd_safe list --json 2>/dev/null | jq -e '.[] | select(.title == "Fix dependency cycles")' > /dev/null 2>&1; then
+            if ! bd_safe list --json --limit 0 2>/dev/null | jq -e '.[] | select(.title == "Fix dependency cycles")' > /dev/null 2>&1; then
                 bd_safe create --title="Fix dependency cycles" --type=task --priority=0 \
                     --description="bd dep cycles detected circular dependencies. Fix before IMPLEMENTATION can proceed.
 

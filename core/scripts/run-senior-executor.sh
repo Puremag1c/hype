@@ -55,7 +55,7 @@ log() {
 get_review_tasks() {
     # Tasks with label=needs-review (executor label irrelevant - needs-review means executor finished)
     # Exclude milestone tasks (they should never be in review queue)
-    bd_safe list --status=in_progress --json 2>/dev/null | \
+    bd_safe list --status=in_progress --json --limit 0 2>/dev/null | \
         jq -r '.[] | select(.labels | index("needs-review")) | select((.labels // []) | any(test("^milestone:")) | not) | .id' 2>/dev/null || true
 }
 

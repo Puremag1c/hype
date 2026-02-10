@@ -72,7 +72,7 @@ gather_context() {
     # In-progress tasks
     context+="## In-Progress Tasks\n"
     context+="\`\`\`\n"
-    context+=$(bd_safe list --status=in_progress --json 2>/dev/null | jq -r '.[] | "\(.id): \(.title) (updated: \(.updated_at))"' 2>/dev/null || echo "none")
+    context+=$(bd_safe list --status=in_progress --json --limit 0 2>/dev/null | jq -r '.[] | "\(.id): \(.title) (updated: \(.updated_at))"' 2>/dev/null || echo "none")
     context+="\n\`\`\`\n\n"
 
     # Blocked tasks

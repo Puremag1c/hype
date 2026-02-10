@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.1.9] - 2026-02-10
+
+### Fixed
+
+- **Zombie tester triggers closed on timeout/failure** — `run_tester()` now uses `bd_safe close` instead of `bd_safe update --status=open` when a tester times out or fails. Previously, for sequential Playwright testers (functional, visual), the EXIT trap cleanup didn't fire on `return` (only on subshell exit), leaving trigger tasks as open zombies that polluted `bd ready` during IMPLEMENTATION phase.
+
+- **All `bd list --json` calls use `--limit 0`** — Beads default limit is 50 results. In projects with >50 tasks, this caused trigger existence checks to fail (creating duplicates) and stat counts to be wrong. Fixed across all scripts: `hype.sh`, `run-testers.sh`, `run-analysts.sh`, `run-senior-executor.sh`, `common.sh`, `close-completed-parents.sh`, `doctor.sh`.
+
+---
+
 ## [2.1.8] - 2026-02-10
 
 ### Fixed

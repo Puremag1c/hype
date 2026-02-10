@@ -214,11 +214,14 @@ $spec_content"
     if [ $exit_code -ne 0 ]; then
         if [ $exit_code -eq 124 ]; then
             log "WARN" "Tester $tester timeout"
-            bd_safe update "$task_id" --status=open --notes="Timeout at $(date '+%Y-%m-%d %H:%M:%S')" >/dev/null 2>&1
+            bd_safe close "$task_id" --reason="Timeout at $(date '+%Y-%m-%d %H:%M:%S')" >/dev/null 2>&1 || true
         else
             log "ERROR" "Tester $tester failed (exit: $exit_code)"
-            bd_safe update "$task_id" --status=open --notes="Failed (exit: $exit_code)" >/dev/null 2>&1
+            bd_safe close "$task_id" --reason="Failed (exit: $exit_code)" >/dev/null 2>&1 || true
         fi
+        # Clear trap — trigger already closed, prevent double-close
+        trap - EXIT INT TERM
+        task_id=""
         return 0
     fi
 
@@ -550,14 +553,15 @@ main() {
     log "INFO" "SMOKE TEST: $testers"
 
     # Cache bd list at start (v1.9.0 optimization)
+    # --limit 0: unlimited (default 50 can miss triggers in large projects)
     local bd_cache
-    bd_cache=$(bd_safe list --json 2>/dev/null || echo "[]")
+    bd_cache=$(bd_safe list --json --limit 0 2>/dev/null || echo "[]")
 
     # Create trigger tasks (pass cache)
     create_tester_triggers "$testers" "$bd_cache"
 
     # Refresh cache after creating triggers
-    bd_cache=$(bd_safe list --json 2>/dev/null || echo "[]")
+    bd_cache=$(bd_safe list --json --limit 0 2>/dev/null || echo "[]")
 
     # Check that triggers exist (using cache)
     local missing=0
@@ -605,7 +609,7 @@ main() {
 
     # Refresh cache for post-test checks (single bd call instead of 3)
     local post_cache
-    post_cache=$(bd_safe list --status=open --json 2>/dev/null || echo "[]")
+    post_cache=$(bd_safe list --status=open --json --limit 0 2>/dev/null || echo "[]")
 
     # Post-process regression tasks: increment regress:N counter (script-driven, not LLM)
     # Testers add "regression" label when reopening/creating regression bugs.

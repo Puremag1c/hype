@@ -20,7 +20,7 @@ close_completed_features() {
 
     # Получаем все open features
     local features
-    features=$(bd_safe list --type=feature --status=open --json 2>/dev/null || echo "[]")
+    features=$(bd_safe list --type=feature --status=open --json --limit 0 2>/dev/null || echo "[]")
 
     # Проверяем каждую feature
     for feature_id in $(echo "$features" | jq -r '.[].id' 2>/dev/null); do

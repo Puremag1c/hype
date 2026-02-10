@@ -1268,14 +1268,10 @@ main() {
         health_end=$(date +%s)
         health_elapsed=$((health_end - health_start))
 
-        if [ "$health_elapsed" -gt 2 ]; then
-            # Daemon is slow — double the delay (max 60s)
-            current_delay=$((current_delay * 2))
-            [ "$current_delay" -gt 60 ] && current_delay=60
+        local prev_delay="$current_delay"
+        current_delay=$(calculate_backoff_delay "$current_delay" "$health_elapsed" "$base_delay")
+        if [ "$current_delay" -ne "$prev_delay" ] && [ "$current_delay" -gt "$base_delay" ]; then
             log "WARN" "Daemon slow (${health_elapsed}s), backing off to ${current_delay}s delay"
-        else
-            # Daemon healthy — restore base delay
-            current_delay="$base_delay"
         fi
 
         # 2. Load config (allows hot reload)

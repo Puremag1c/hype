@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.6] - 2026-02-09
+
+### Improved
+
+- **Adaptive backoff extracted into testable function** - `calculate_backoff_delay()` moved from inline logic in hype.sh to common.sh. Covered by 6 unit tests: healthy reset, slow doubling, progressive 10→20→40→60, cap at 60s, boundary at 2s.
+
+---
+
 ## [2.1.5] - 2026-02-09
 
 ### Fixed

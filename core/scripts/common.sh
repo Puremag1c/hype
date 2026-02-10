@@ -529,6 +529,25 @@ EOF
 }
 export -f get_changelog_context 2>/dev/null || true
 
+# calculate_backoff_delay - adaptive delay based on daemon health
+# If daemon is slow (>2s), doubles current delay (max 60s)
+# If daemon is healthy, restores base delay
+# Usage: calculate_backoff_delay current_delay health_elapsed base_delay
+calculate_backoff_delay() {
+    local current_delay=$1
+    local health_elapsed=$2
+    local base_delay=$3
+
+    if [ "$health_elapsed" -gt 2 ]; then
+        local new_delay=$((current_delay * 2))
+        [ "$new_delay" -gt 60 ] && new_delay=60
+        echo "$new_delay"
+    else
+        echo "$base_delay"
+    fi
+}
+export -f calculate_backoff_delay 2>/dev/null || true
+
 # is_audit_task - определяет audit-задачи (не требуют code changes)
 # Использование: is_audit_task "$task_json"
 # Возвращает: 0 если audit, 1 если code task

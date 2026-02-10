@@ -364,3 +364,45 @@ load '../helpers/mock_bd'
     run is_audit_task "$task_json"
     [[ "$status" -eq 0 ]]
 }
+
+# =============================================================================
+# calculate_backoff_delay tests
+# =============================================================================
+
+@test "calculate_backoff_delay: healthy daemon returns base delay" {
+    run calculate_backoff_delay 20 1 10
+    [[ "$output" == "10" ]]
+}
+
+@test "calculate_backoff_delay: slow daemon doubles delay" {
+    run calculate_backoff_delay 10 3 10
+    [[ "$output" == "20" ]]
+}
+
+@test "calculate_backoff_delay: progressive doubling" {
+    # 10 → 20
+    local d=$(calculate_backoff_delay 10 5 10)
+    [[ "$d" == "20" ]]
+    # 20 → 40
+    d=$(calculate_backoff_delay 20 5 10)
+    [[ "$d" == "40" ]]
+    # 40 → 60 (capped)
+    d=$(calculate_backoff_delay 40 5 10)
+    [[ "$d" == "60" ]]
+}
+
+@test "calculate_backoff_delay: caps at 60 seconds" {
+    run calculate_backoff_delay 60 10 10
+    [[ "$output" == "60" ]]
+}
+
+@test "calculate_backoff_delay: resets to base when healthy" {
+    # Was backed off to 40, now healthy → back to base
+    run calculate_backoff_delay 40 1 10
+    [[ "$output" == "10" ]]
+}
+
+@test "calculate_backoff_delay: boundary at exactly 2s is healthy" {
+    run calculate_backoff_delay 20 2 10
+    [[ "$output" == "10" ]]
+}

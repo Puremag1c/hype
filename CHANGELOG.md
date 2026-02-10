@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.2.0] - 2026-02-10
+
+### Added
+
+- **Parallel Review Pipeline** — Replaced sequential `run-senior-executor.sh` with parallel `run-reviewers.sh` + sequential `run-merge-queue.sh`. Up to `MAX_PARALLEL_REVIEWERS` (default 3) concurrent code reviews. Each reviewer: atomic claim via mkdir lock + bd label → preflight check → build context (diff, commits, executor log, secrets warning) → Claude review → handle result (approve/reject/no-merge).
+
+- **Merge Queue** — `run-merge-queue.sh` processes one approved task per call: fetch → squash merge → push → verify main changed → close task → cleanup branch. Handles merge conflicts (abort, increment reject:N, return to executor) and audit tasks (close without merge).
+
+- **Reviewer agent prompt** — `core/agents/reviewer.md` — review-only prompt. Does NOT merge (explicit prohibition). Approve: add `approved` label. Reject: set status=open + notes. No-merge: close with reason.
+
+- **Label state machine** — `needs-review` → `reviewing` → `approved` → `reviewed` (closed). New utilities in common.sh: `claim_for_review()`, `approve_task()`, `reject_from_review()`, `try_claim_for_review()`, `release_review_lock()`.
+
+- **detect-phase.sh** — Tracks `reviewing` and `approved` counts in JSON output (`stats.reviewing`, `stats.approved`). Tasks with these labels are in_progress, blocking phase transition as expected.
+
+- **Self-healing for review pipeline** — `heal_stuck_tasks()` extended: `reviewing` >3 min without reviewer lock → return to `needs-review`; `approved` >5 min → log warning (merge queue may be stuck).
+
+- **Doctor diagnostics** — `gather_context()` now collects reviewer slots (`reviewer-N.lock`), review locks (`review-TASK_ID.lock`), and lists reviewing/approved tasks.
+
+- **Troubleshooting guide** — 5 new patterns: stuck reviewing, stuck approved, merge conflict loop, reviewer-executor thrashing, orphaned reviewer slot.
+
+- **146 tests** — 130 unit + 16 E2E. New test files: `reviewers_test.bats` (15), `review_labels_test.bats` (18), `hype_v22_test.bats` (10), plus 4 new E2E tests for review pipeline.
+
+---
+
 ## [2.1.12] - 2026-02-10
 
 ### Fixed

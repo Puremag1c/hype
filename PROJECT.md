@@ -6,7 +6,7 @@
 
 Запустите `hype init` в любом проекте, опишите что хотите словами — система сама создаст план, распределит задачи между агентами и выдаст готовый результат.
 
-**Версия:** 2.1.12
+**Версия:** 2.2.0
 
 ## Целевая аудитория
 
@@ -168,7 +168,7 @@ startup_timeout: 30          # Секунды на запуск сервера
 - gh — GitHub CLI (для PR workflow)
 - gitleaks — secret detection (авто-установка при наличии GitHub)
 
-## v2.2.0: Parallel Review Pipeline (в разработке)
+## v2.2.0: Parallel Review Pipeline (завершено)
 
 - **Parallel Reviewers** — `run-reviewers.sh` запускает до `MAX_PARALLEL_REVIEWERS` ревьюеров одновременно
 - **Merge Queue** — `run-merge-queue.sh` последовательно мержит approved задачи (squash merge)

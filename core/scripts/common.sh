@@ -648,6 +648,39 @@ get_counter_value() {
 export -f get_counter_value 2>/dev/null || true
 
 # =============================================================================
+# Review Label Utilities (v2.2)
+# =============================================================================
+# Atomic label transitions for the parallel review pipeline.
+# Labels: needs-review → reviewing → approved (or back to needs-review on reject)
+
+# claim_for_review - atomically claim a task for review
+# Usage: claim_for_review TASK_ID
+# Transitions: needs-review → reviewing
+claim_for_review() {
+    local task_id="$1"
+    bd_safe update "$task_id" --remove-label=needs-review --add-label=reviewing >/dev/null 2>&1
+}
+export -f claim_for_review 2>/dev/null || true
+
+# approve_task - mark a reviewed task as approved (ready for merge)
+# Usage: approve_task TASK_ID
+# Transitions: reviewing → approved
+approve_task() {
+    local task_id="$1"
+    bd_safe update "$task_id" --remove-label=reviewing --add-label=approved >/dev/null 2>&1
+}
+export -f approve_task 2>/dev/null || true
+
+# reject_from_review - return a task to the review queue after rejection
+# Usage: reject_from_review TASK_ID
+# Transitions: reviewing → needs-review (task stays in_progress for re-work by executor)
+reject_from_review() {
+    local task_id="$1"
+    bd_safe update "$task_id" --remove-label=reviewing --add-label=needs-review --status=open --remove-label=executor >/dev/null 2>&1
+}
+export -f reject_from_review 2>/dev/null || true
+
+# =============================================================================
 # Milestone Management Functions
 # =============================================================================
 # Milestones are marker tasks with labels like "milestone:planning-done"

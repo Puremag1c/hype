@@ -115,7 +115,7 @@ bd list --status=in_progress --json | jq '.[] | {id, title, updated_at}'
 bd update <id> --status=open --remove-label=executor
 ```
 
-**Note:** HYPE автоматически сбрасывает stale tasks через `check_stale_tasks()` (default 10 min).
+**Note:** HYPE автоматически сбрасывает stale tasks через `check_stale_tasks()` (default 10 min). Дополнительно, `heal_stuck_tasks()` (2.1.4+) добавляет `needs-review` к tasks stuck >2 min без executor/needs-review labels.
 
 ---
 
@@ -433,6 +433,125 @@ cat .hype/config.sh | grep MAX_PARALLEL
 
 **Решение:**
 Подождать пока текущие executors завершатся. HYPE контролирует через backpressure.
+
+---
+
+### PROBLEM: All executor slots always free (backpressure 0)
+
+**Fixed in:** 2.1.5
+
+**Симптомы:**
+- Backpressure log показывает "0/N active" при работающих executors
+- Больше параллельных executors чем MAX_PARALLEL_EXECUTORS
+- Daemon перегружен от бесконечного claim loop
+
+**Причина:**
+`count_active_executors()` считала по beads label `executor`, но labels ненадёжны из-за sync lag и race conditions. Tasks были in_progress без label → backpressure всегда 0 → бесконечный claim.
+
+**Решение:**
+Обновиться до 2.1.5+. `count_active_executors()` теперь считает по lock files (`executor-N.lock` в `.hype-worktrees/`), которые точно отражают время жизни executor.
+
+---
+
+### PROBLEM: Executor slots exhausted (.hype-worktrees missing)
+
+**Fixed in:** 2.1.4
+
+**Симптомы:**
+- Ни один executor не запускается
+- В логах: "No free slots"
+- `.hype-worktrees/` директории не существует
+
+**Причина:**
+`find_free_slot()` использовала `mkdir` без `-p` для создания lock files внутри `.hype-worktrees/`. Если parent директория не существует, все 20 слотов fail silently.
+
+**Решение:**
+Обновиться до 2.1.4+. `find_free_slot()` теперь создаёт parent директорию через `mkdir -p`.
+
+---
+
+### PROBLEM: Needs-review label lost after executor completion
+
+**Fixed in:** 2.1.4
+
+**Симптомы:**
+- Задача в `in_progress` без `executor` и без `needs-review` labels
+- Senior executor не видит завершённую задачу
+- Задача "зависает" без обработки
+
+**Причина:**
+Когда несколько executors завершались одновременно во время beads sync (git fetch), `bd_safe update --add-label=needs-review` silently failed через `|| true`.
+
+**Решение:**
+Обновиться до 2.1.4+. Completion path теперь retry 3 раза с 2s delay. Плюс self-healing в main loop: `heal_stuck_tasks()` автоматически добавляет `needs-review` к задачам stuck >2 минут без executor/needs-review labels.
+
+---
+
+### PROBLEM: Executor lock leak on early return
+
+**Fixed in:** 2.1.4
+
+**Симптомы:**
+- Слоты executor'ов заканчиваются со временем
+- Lock файлы остаются в `.hype-worktrees/` без процесса
+- `ls .hype-worktrees/*.lock` показывает orphaned locks
+
+**Причина:**
+`run_executor()` имел два early return (task not open, claim failed) без вызова `cleanup_worktree`. Locks накапливались через циклы HYPE.
+
+**Решение:**
+Обновиться до 2.1.4+. Все exit paths теперь вызывают `cleanup_worktree`.
+
+---
+
+### PROBLEM: NO_MERGE decision not detected (infinite reopen loop)
+
+**Fixed in:** 2.1.2
+
+**Симптомы:**
+- Задача с "No Merge" решением от senior executor переоткрывается снова и снова
+- Бесконечный цикл: executor → senior → "No Merge" → reopen → executor
+- Задача не закрывается
+
+**Причина:**
+`bd close --reason` записывает в поле `close_reason`, не в `notes`. Senior executor проверял только `notes`, не видел "No Merge" решение, и переоткрывал задачу.
+
+**Решение:**
+Обновиться до 2.1.2+. Senior executor теперь проверяет оба поля: `notes` и `close_reason`.
+
+---
+
+### PROBLEM: Reject counter not incremented on reopen (20+ retries)
+
+**Fixed in:** 2.1.2
+
+**Симптомы:**
+- Задача циклит 20+ раз без эскалации к troubleshooter
+- `reject:N` label не растёт
+- Задача переоткрывается через "closed but main unchanged" path
+
+**Причина:**
+Reopen path "closed but main unchanged" был единственным code path без инкремента `reject:N`. Задача никогда не достигала reject:4 для эскалации.
+
+**Решение:**
+Обновиться до 2.1.2+. Reopen path теперь инкрементирует `reject:N` и эскалирует на troubleshooter при reject:4.
+
+---
+
+### PROBLEM: Daemon overload from claim loop
+
+**Fixed in:** 2.1.5
+
+**Симптомы:**
+- Beads daemon медленный (>5s на запрос)
+- CPU высокий от bd процессов
+- В логах: много rapid-fire bd calls
+
+**Причина:**
+Cascading failure: backpressure bug (always 0) → infinite claim loop → daemon перегружен → slow responses → timeout/retry → ещё больше нагрузки.
+
+**Решение:**
+Обновиться до 2.1.5+. Root cause (backpressure) исправлен. Дополнительно: adaptive backoff удваивает iteration delay при slow daemon (>2s), cap 60s. detect-phase.sh оптимизирован с 2 bd calls до 1.
 
 ---
 

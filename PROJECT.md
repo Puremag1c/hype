@@ -127,7 +127,7 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 ### Git workflow
 - Executor: работает в ветке `task/beads-xxx`, WIP commit перед rebase
 - Senior Executor: squash merge через PR, cleanup веток
-- Backpressure: лимит параллельных PR через `MAX_PARALLEL_EXECUTORS`
+- Backpressure: лимит параллельных executors через lock files в `.hype-worktrees/`
 
 ## Конфигурация проекта
 

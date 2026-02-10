@@ -150,12 +150,12 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 | Скрипт | Назначение |
 |--------|------------|
 | `hype.sh` | Главный цикл с lock file |
-| `detect-phase.sh` | Определение текущей фазы (JSON output с кэшированными данными) |
+| `detect-phase.sh` | Определение текущей фазы (1 bd call, всё через jq, JSON output) |
 | `run-analysts.sh` | Параллельный запуск 5 Analysts |
 | `run-executors.sh` | Параллельный запуск Executors с backpressure |
 | `run-senior-executor.sh` | Code review и merge |
 | `run-testers.sh` | Параллельный запуск Testers (SMOKE_TEST) |
-| `common.sh` | Общие функции (timeout, reset_stale_tasks, milestones) |
+| `common.sh` | Общие функции (bd_safe, timeout, milestones, backoff, audit detection) |
 | `log.sh` | Хелпер для логирования |
 | `notify.sh` | Уведомления (macOS, Linux, WSL) |
 | `analyze-project.sh` | Анализ структуры проекта |
@@ -303,6 +303,23 @@ bd dep cycles  # Проверка циклов
 - Atomic через `set -C` (noclobber)
 - Автоочистка stale lock
 
+### bd_safe сериализация
+- Все bd вызовы через `bd_safe()` обёртку
+- Global lock через `mkdir /tmp/hype-bd.lock.d` (atomic)
+- Предотвращает daemon explosion от параллельных bd вызовов
+
+### Self-healing (heal_stuck_tasks)
+- Запускается в каждой итерации main loop
+- Находит `in_progress` задачи без `executor` и `needs-review` labels
+- Если задача stuck >2 минут → автоматически добавляет `needs-review`
+- Закрывает gap когда executor завершился но label не поставился (beads sync race)
+
+### Adaptive backoff
+- Если beads daemon отвечает >2s → удваивает iteration delay (max 60s)
+- Предотвращает overload spiral: медленный daemon → больше запросов → ещё медленнее
+- При recovery → сброс к базовому `ITERATION_DELAY`
+- Функция `calculate_backoff_delay()` в common.sh
+
 ### Retry & escalation logic
 - Execution failures: `retry:N` (timeout, crash)
 - Review rejections: `reject:N` (unified counter)
@@ -310,13 +327,17 @@ bd dep cycles  # Проверка циклов
 - Troubleshooter: reformulate / split / remove / escalate to user
 - Max 2 reformulations (label `reformulated`), then only reduce/remove/user
 
+### Needs-review retry
+- При завершении executor — 3 попытки с 2s delay для `--add-label=needs-review`
+- Если все 3 fail → логирует ERROR, self-healing подхватит через 2 минуты
+
 ### Graceful shutdown
 - `trap SIGINT SIGTERM`
 - Reset stale tasks (>5min in_progress)
 - Cleanup lock file
 
 ### Config validation
-- Проверка при каждой итерации
+- Проверка при каждой итерации (hot reload)
 - Integers, booleans, timeouts
 - Fail fast при ошибках
 
@@ -339,7 +360,8 @@ main
 ## Backpressure
 
 - Лимит = `MAX_PARALLEL_EXECUTORS`
-- Считаем через beads (не gh pr list)
+- Считаем через lock files в `.hype-worktrees/executor-N.lock` (не beads labels — labels ненадёжны из-за sync lag)
+- Lock создаётся при `find_free_slot()` (mkdir atomic), удаляется при `cleanup_worktree()`
 - Работает без GitHub
 
 ## Логирование

@@ -656,6 +656,54 @@ heal_stuck_tasks() {
             bd_safe update "$task_id" --add-label=needs-review >/dev/null 2>&1 || true
         fi
     done
+
+    # v2.2: Heal tasks stuck in reviewing (reviewer crashed, >3 min)
+    local reviewing_threshold=180
+    local reviewing_ids
+    reviewing_ids=$(echo "$in_progress_json" | jq -r '.[] | select(
+        ((.labels // []) | index("reviewing"))
+    ) | .id' 2>/dev/null || true)
+
+    for task_id in $reviewing_ids; do
+        local updated_at task_age
+        updated_at=$(echo "$in_progress_json" | jq -r ".[] | select(.id == \"$task_id\") | .updated_at // \"\"" 2>/dev/null)
+        [ -z "$updated_at" ] && continue
+
+        local task_epoch
+        task_epoch=$(date -jf "%Y-%m-%dT%H:%M:%S" "$(echo "$updated_at" | cut -c1-19)" +%s 2>/dev/null || \
+                     date -d "$updated_at" +%s 2>/dev/null || echo "0")
+        task_age=$((now - task_epoch))
+
+        if [ "$task_age" -gt "$reviewing_threshold" ]; then
+            # Check if a reviewer lock exists (reviewer still running)
+            if [ ! -d "$PROJECT_DIR/.hype-worktrees/review-$task_id.lock" ]; then
+                log "WARN" "HEAL: $task_id stuck in reviewing for ${task_age}s without active reviewer, returning to queue"
+                bd_safe update "$task_id" --remove-label=reviewing --add-label=needs-review >/dev/null 2>&1 || true
+            fi
+        fi
+    done
+
+    # v2.2: Warn about tasks stuck in approved (merge queue not running, >5 min)
+    local approved_threshold=300
+    local approved_ids
+    approved_ids=$(echo "$in_progress_json" | jq -r '.[] | select(
+        ((.labels // []) | index("approved"))
+    ) | .id' 2>/dev/null || true)
+
+    for task_id in $approved_ids; do
+        local updated_at task_age
+        updated_at=$(echo "$in_progress_json" | jq -r ".[] | select(.id == \"$task_id\") | .updated_at // \"\"" 2>/dev/null)
+        [ -z "$updated_at" ] && continue
+
+        local task_epoch
+        task_epoch=$(date -jf "%Y-%m-%dT%H:%M:%S" "$(echo "$updated_at" | cut -c1-19)" +%s 2>/dev/null || \
+                     date -d "$updated_at" +%s 2>/dev/null || echo "0")
+        task_age=$((now - task_epoch))
+
+        if [ "$task_age" -gt "$approved_threshold" ]; then
+            log "WARN" "HEAL: $task_id approved but not merged for ${task_age}s — merge queue may be stuck"
+        fi
+    done
 }
 
 # === Stale worktrees cleanup ===
@@ -1007,12 +1055,13 @@ For each task:
             ;;
 
         IMPLEMENTATION)
-            # Streaming: launch executors (non-blocking) + process one review
+            # Streaming: launch executors + reviewers + merge queue (all non-blocking)
             # Note: regression tasks are handled in SMOKE_REVIEW phase before reaching here
             log "INFO" "IMPLEMENTATION: Streaming cycle..."
 
             ./scripts/run-executors.sh
-            ./scripts/run-senior-executor.sh
+            ./scripts/run-reviewers.sh
+            ./scripts/run-merge-queue.sh
             ;;
 
         SMOKE_TEST)

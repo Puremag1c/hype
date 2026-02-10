@@ -97,6 +97,10 @@ REGRESSION_OPEN=$SMOKE_TRIAGE_OPEN
 # In-progress task IDs (for show_active_work in hype.sh)
 IN_PROGRESS_IDS=$(echo "$ALL_TASKS_JSON" | jq -c '[.[] | select(.status == "in_progress") | .id]' 2>/dev/null || echo "[]")
 
+# Review pipeline counts (v2.2: tasks in reviewing/approved are in_progress but tracked separately)
+REVIEWING=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "in_progress") | select((.labels // []) | index("reviewing"))] | length' 2>/dev/null || echo "0")
+APPROVED=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "in_progress") | select((.labels // []) | index("approved"))] | length' 2>/dev/null || echo "0")
+
 # Progress percentage (TOTAL from ALL_TASKS doesn't include closed, so calculate real total)
 REAL_TOTAL=$((OPEN + IN_PROGRESS + CLOSED))
 if [ "$REAL_TOTAL" -gt 0 ]; then
@@ -130,6 +134,7 @@ if [ "${CLAUDEV_DEBUG:-false}" = "true" ]; then
     >&2 echo "Tasks: total=$TOTAL, open=$OPEN, in_progress=$IN_PROGRESS, closed=$CLOSED"
     >&2 echo "Milestones: planning=$HAS_PLANNING_DONE, analysts=$HAS_ANALYSTS_DONE, reviewed=$HAS_PLAN_REVIEWED, smoke=$HAS_SMOKE_TEST_DONE, done=$HAS_PROJECT_DONE"
     >&2 echo "Triggers: total=$TRIGGERS_OPEN (analyst=$ANALYST_TRIGGERS_OPEN, tester=$TESTER_TRIGGERS_OPEN, plan_review=$PLAN_REVIEW_OPEN)"
+    >&2 echo "Review pipeline: reviewing=$REVIEWING, approved=$APPROVED"
     >&2 echo "P0 bugs open: $P0_BUGS_OPEN, regressions: $REGRESSION_OPEN"
     >&2 echo "==========================="
 fi
@@ -143,6 +148,8 @@ output_json() {
         --argjson open "$OPEN" \
         --argjson in_progress "$IN_PROGRESS" \
         --argjson closed "$CLOSED" \
+        --argjson reviewing "$REVIEWING" \
+        --argjson approved "$APPROVED" \
         --argjson progress_pct "$PROGRESS_PCT" \
         --argjson in_progress_ids "$IN_PROGRESS_IDS" \
         --argjson regression_count "$REGRESSION_OPEN" \
@@ -153,7 +160,9 @@ output_json() {
                 total: $total,
                 open: $open,
                 in_progress: $in_progress,
-                closed: $closed
+                closed: $closed,
+                reviewing: $reviewing,
+                approved: $approved
             },
             progress_pct: $progress_pct,
             in_progress_ids: $in_progress_ids,

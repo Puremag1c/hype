@@ -66,4 +66,125 @@ load '../helpers/setup'
     grep -q 'export -f claim_for_review' "$common_sh"
     grep -q 'export -f approve_task' "$common_sh"
     grep -q 'export -f reject_from_review' "$common_sh"
+    grep -q 'export -f try_claim_for_review' "$common_sh"
+    grep -q 'export -f release_review_lock' "$common_sh"
+}
+
+# =============================================================================
+# try_claim_for_review (atomic lock-based claim)
+# =============================================================================
+
+@test "try_claim_for_review: uses mkdir for atomic lock" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    local fn_block
+    fn_block=$(sed -n '/^try_claim_for_review()/,/^}/p' "$common_sh")
+
+    echo "$fn_block" | grep -q 'mkdir'
+    echo "$fn_block" | grep -q 'review-.*lock'
+}
+
+@test "try_claim_for_review: calls claim_for_review on success" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    local fn_block
+    fn_block=$(sed -n '/^try_claim_for_review()/,/^}/p' "$common_sh")
+
+    echo "$fn_block" | grep -q 'claim_for_review'
+}
+
+@test "try_claim_for_review: releases lock on bd failure" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    local fn_block
+    fn_block=$(sed -n '/^try_claim_for_review()/,/^}/p' "$common_sh")
+
+    echo "$fn_block" | grep -q 'rmdir'
+}
+
+# =============================================================================
+# detect-phase.sh: reviewing/approved counts
+# =============================================================================
+
+@test "detect-phase: tracks reviewing count" {
+    local detect_sh="$SCRIPTS_DIR/detect-phase.sh"
+
+    grep -q 'REVIEWING=' "$detect_sh"
+    grep -q '"reviewing"' "$detect_sh"
+}
+
+@test "detect-phase: tracks approved count" {
+    local detect_sh="$SCRIPTS_DIR/detect-phase.sh"
+
+    grep -q 'APPROVED=' "$detect_sh"
+    grep -q '"approved"' "$detect_sh"
+}
+
+@test "detect-phase: includes reviewing/approved in JSON output" {
+    local detect_sh="$SCRIPTS_DIR/detect-phase.sh"
+
+    grep -q 'reviewing.*REVIEWING' "$detect_sh"
+    grep -q 'approved.*APPROVED' "$detect_sh"
+}
+
+# =============================================================================
+# run-merge-queue.sh: structure tests
+# =============================================================================
+
+@test "merge queue: handles audit tasks without merge" {
+    local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
+
+    grep -q 'is_audit_task' "$merge_sh"
+    grep -q 'closing without merge' "$merge_sh"
+}
+
+@test "merge queue: handles merge conflicts" {
+    local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
+
+    local conflict_block
+    conflict_block=$(sed -n '/merge --abort/,/return 0/p' "$merge_sh" | head -20)
+
+    echo "$conflict_block" | grep -q 'reject_count'
+    echo "$conflict_block" | grep -q 'remove-label=approved'
+    echo "$conflict_block" | grep -q 'status=open'
+}
+
+@test "merge queue: verifies main changed after merge" {
+    local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
+
+    grep -q 'main_before.*main_after' "$merge_sh"
+}
+
+@test "merge queue: escalates to troubleshooter on persistent conflicts" {
+    local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
+
+    grep -q 'blocked:troubleshoot' "$merge_sh"
+}
+
+@test "merge queue: uses --limit 0 for bd list" {
+    local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
+
+    local missing
+    missing=$(grep 'bd_safe list.*--json' "$merge_sh" | grep -cv '\-\-limit 0' || true)
+    [ "$missing" -eq 0 ]
+}
+
+# =============================================================================
+# reviewer.md: prompt structure
+# =============================================================================
+
+@test "reviewer prompt: does NOT contain merge/push instructions (only prohibition)" {
+    local reviewer_md="$SCRIPTS_DIR/../agents/reviewer.md"
+
+    # Should NOT have merge/push as instructions (code blocks)
+    ! grep -q '^git merge --squash' "$reviewer_md"
+    ! grep -q '^git push origin' "$reviewer_md"
+    # But SHOULD have the prohibition rule
+    grep -q 'НЕ делай git merge' "$reviewer_md"
+}
+
+@test "reviewer prompt: uses approve label (not bd close for approve)" {
+    local reviewer_md="$SCRIPTS_DIR/../agents/reviewer.md"
+
+    grep -q 'add-label=approved' "$reviewer_md"
 }

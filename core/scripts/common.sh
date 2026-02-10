@@ -673,12 +673,46 @@ export -f approve_task 2>/dev/null || true
 
 # reject_from_review - return a task to the review queue after rejection
 # Usage: reject_from_review TASK_ID
-# Transitions: reviewing → needs-review (task stays in_progress for re-work by executor)
+# Transitions: reviewing → needs-review (task reopened for re-work by executor)
 reject_from_review() {
     local task_id="$1"
     bd_safe update "$task_id" --remove-label=reviewing --add-label=needs-review --status=open --remove-label=executor >/dev/null 2>&1
 }
 export -f reject_from_review 2>/dev/null || true
+
+# try_claim_for_review - atomically claim a task for review using lock file
+# Usage: try_claim_for_review TASK_ID WORKTREES_DIR
+# Returns: 0 if claimed, 1 if already claimed by another reviewer
+# Lock: mkdir WORKTREES_DIR/review-TASK_ID.lock (atomic on all filesystems)
+try_claim_for_review() {
+    local task_id="$1"
+    local worktrees_dir="$2"
+    local lock_dir="$worktrees_dir/review-$task_id.lock"
+
+    # Atomic mkdir — fails if another reviewer already claimed
+    if ! mkdir "$lock_dir" 2>/dev/null; then
+        return 1
+    fi
+
+    # Lock acquired — transition labels
+    if ! claim_for_review "$task_id"; then
+        # bd update failed — release lock
+        rmdir "$lock_dir" 2>/dev/null || true
+        return 1
+    fi
+
+    return 0
+}
+export -f try_claim_for_review 2>/dev/null || true
+
+# release_review_lock - release a review claim lock
+# Usage: release_review_lock TASK_ID WORKTREES_DIR
+release_review_lock() {
+    local task_id="$1"
+    local worktrees_dir="$2"
+    rmdir "$worktrees_dir/review-$task_id.lock" 2>/dev/null || true
+}
+export -f release_review_lock 2>/dev/null || true
 
 # =============================================================================
 # Milestone Management Functions

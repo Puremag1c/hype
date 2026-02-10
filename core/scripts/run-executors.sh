@@ -240,6 +240,15 @@ $retry_context}"
     # Always cleanup worktree (success or failure)
     cleanup_worktree "$slot"
 
+    # Guard: check if task was already handled by senior executor during our run.
+    # Without this, a zombie executor timeout reopens a task that senior already closed.
+    local post_status
+    post_status=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].status // "unknown"' 2>/dev/null)
+    if [ "$post_status" = "closed" ]; then
+        log "INFO" "Task $task_id already closed (reviewed during executor run), skipping post-processing"
+        return 0
+    fi
+
     if [ $exit_code -ne 0 ]; then
         if [ $exit_code -eq 124 ]; then
             log "WARN" "Executor timeout for $task_id"
@@ -344,6 +353,14 @@ PROJECT_ROOT: $PROJECT_DIR"
     # Use || to prevent set -e from killing script on timeout/failure
     local exit_code=0
     run_claude_with_progress "$full_prompt" "$model" "$audit_timeout" "$output_file" "AUDIT" "$LOGS_DIR" "$PROJECT_DIR" || exit_code=$?
+
+    # Guard: check if task was already handled during our run
+    local post_status
+    post_status=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].status // "unknown"' 2>/dev/null)
+    if [ "$post_status" = "closed" ]; then
+        log "INFO" "Task $task_id already closed (reviewed during auditor run), skipping post-processing"
+        return 0
+    fi
 
     if [ $exit_code -ne 0 ]; then
         if [ $exit_code -eq 124 ]; then

@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.10] - 2026-02-10
+
+### Fixed
+
+- **Zombie executor can't reopen closed tasks** — When an executor times out while the senior executor has already reviewed and closed the task, the timeout handler previously ran `bd_safe update --status=open` which reopened the closed task. Now `run_executor()` and `run_auditor()` check task status after `run_claude_with_progress` returns: if the task is already closed, post-processing is skipped entirely. Prevents race condition between parallel executor and senior executor review.
+
+---
+
 ## [2.1.9] - 2026-02-10
 
 ### Fixed

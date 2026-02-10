@@ -73,7 +73,7 @@ create_worktree() {
 
     # Cleanup if exists (stale from crash)
     if [ -d "$worktree_path" ]; then
-        git worktree remove --force "$worktree_path" 2>/dev/null || rm -rf "$worktree_path"
+        timeout 30s git worktree remove --force "$worktree_path" 2>/dev/null || rm -rf "$worktree_path"
     fi
 
     mkdir -p "$WORKTREES_DIR"
@@ -97,7 +97,7 @@ cleanup_worktree() {
     local lock_dir="$WORKTREES_DIR/executor-$slot.lock"
 
     if [ -d "$worktree_path" ]; then
-        git worktree remove --force "$worktree_path" 2>/dev/null || rm -rf "$worktree_path"
+        timeout 30s git worktree remove --force "$worktree_path" 2>/dev/null || rm -rf "$worktree_path"
     fi
 
     # Release lock AFTER worktree is fully cleaned up

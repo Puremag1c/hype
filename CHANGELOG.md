@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.1.11] - 2026-02-10
+
+### Fixed
+
+- **Progress cleanup SIGKILL escalation** — `run_claude_with_progress()` cleanup hung indefinitely at `wait "$progress_pid"` because `tail -F` and `jq` processes (grandchildren of the progress subshell) ignored SIGTERM in pipeline context. After Claude finishes, the executor process was stuck for 30+ minutes until `TASK_TIMEOUT` killed it — wasting an executor slot and API quota. Now both the inline cleanup and `_cleanup_progress` trap send SIGTERM, wait 1 second grace period, then SIGKILL remaining processes (`kill -9`, `pkill -9 -P`). The `wait` now returns immediately.
+
+- **Resilient stream file handling** — `cp: .log.stream: No such file or directory` errors when a competing process already moved/deleted the stream file. Now checks `[ -f "$raw_output" ]` before `jq`/`cp` conversion, and the `cp` fallback suppresses errors.
+
+- **Timeout on `git worktree remove`** — `cleanup_worktree()` now wraps `git worktree remove --force` with `timeout 30s`. Falls back to `rm -rf` on timeout. Prevents indefinite hang on locked worktrees.
+
+---
+
 ## [2.1.10] - 2026-02-10
 
 ### Fixed

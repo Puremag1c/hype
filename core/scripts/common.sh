@@ -349,19 +349,23 @@ run_claude_with_progress() {
         rm -f "$running_marker" 2>/dev/null || true
 
         if [ -n "$progress_pid" ]; then
-            # Kill progress subshell and its children
+            # SIGTERM first (graceful)
             pkill -P "$progress_pid" 2>/dev/null || true
             kill "$progress_pid" 2>/dev/null || true
 
             # Kill tail by saved PID (more reliable than pkill -f)
+            local tail_pid=""
             if [ -f "$tail_pid_file" ]; then
-                local tail_pid
                 tail_pid=$(cat "$tail_pid_file" 2>/dev/null)
-                if [ -n "$tail_pid" ]; then
-                    kill "$tail_pid" 2>/dev/null || true
-                fi
+                [ -n "$tail_pid" ] && kill "$tail_pid" 2>/dev/null || true
                 rm -f "$tail_pid_file" 2>/dev/null || true
             fi
+
+            # Grace period then SIGKILL (tail -F / jq ignore SIGTERM in pipeline)
+            sleep 1
+            pkill -9 -P "$progress_pid" 2>/dev/null || true
+            kill -9 "$progress_pid" 2>/dev/null || true
+            [ -n "$tail_pid" ] && kill -9 "$tail_pid" 2>/dev/null || true
 
             wait "$progress_pid" 2>/dev/null || true
         fi
@@ -414,23 +418,30 @@ run_claude_with_progress() {
     rm -f "$running_marker" 2>/dev/null || true
 
     # Cleanup progress extractor (explicit, trap handles abnormal exit)
+    # SIGTERM first (graceful)
     pkill -P "$progress_pid" 2>/dev/null || true
     kill "$progress_pid" 2>/dev/null || true
 
     # Kill tail by saved PID
+    local tail_pid=""
     if [ -f "$tail_pid_file" ]; then
-        local tail_pid
         tail_pid=$(cat "$tail_pid_file" 2>/dev/null)
-        if [ -n "$tail_pid" ]; then
-            kill "$tail_pid" 2>/dev/null || true
-        fi
+        [ -n "$tail_pid" ] && kill "$tail_pid" 2>/dev/null || true
         rm -f "$tail_pid_file" 2>/dev/null || true
     fi
+
+    # Grace period then SIGKILL (tail -F / jq ignore SIGTERM in pipeline)
+    sleep 1
+    pkill -9 -P "$progress_pid" 2>/dev/null || true
+    kill -9 "$progress_pid" 2>/dev/null || true
+    [ -n "$tail_pid" ] && kill -9 "$tail_pid" 2>/dev/null || true
 
     wait "$progress_pid" 2>/dev/null || true
 
     # Convert stream-json to readable log (extract assistant text messages)
-    jq -r 'select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text' "$raw_output" 2>/dev/null > "$output_file" || cp "$raw_output" "$output_file"
+    if [ -f "$raw_output" ]; then
+        jq -r 'select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text' "$raw_output" 2>/dev/null > "$output_file" || cp "$raw_output" "$output_file" 2>/dev/null || true
+    fi
     rm -f "$raw_output"
 
     # Clear trap before returning

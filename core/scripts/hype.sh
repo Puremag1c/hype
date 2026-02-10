@@ -513,6 +513,17 @@ PROJECT_ROOT: $PROJECT_DIR"
         printf '%s' "$full_prompt" | timeout_cmd "${REVIEW_TIMEOUT:-5m}" claude --print --model "$ts_model" > "$output_file" 2>&1 || true
 
         log "INFO" "Troubleshooter completed for $task_id (see $output_file)"
+
+        # Post-troubleshooter: reset reject:N if task was reformulated (fresh escalation ladder)
+        local updated_json updated_status has_reformulated
+        updated_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
+        updated_status=$(echo "$updated_json" | jq -r '.[0].status // "unknown"' 2>/dev/null || echo "unknown")
+        has_reformulated=$(echo "$updated_json" | jq -r '[.[0].labels[]? | select(. == "reformulated")] | length' 2>/dev/null || echo "0")
+
+        if [ "$updated_status" = "open" ] && [ "$has_reformulated" != "0" ]; then
+            set_counter_label "$task_id" "reject" 0
+            log "INFO" "Reset reject:N for reformulated task $task_id (fresh escalation ladder)"
+        fi
     done
 }
 

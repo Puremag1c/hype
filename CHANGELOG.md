@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.1.8] - 2026-02-10
+
+### Fixed
+
+- **Soft secret scanner (grep → warning, not reject)** — `preflight_check()` no longer hard-rejects tasks with credential-like strings. Returns `SECRETS_WARNING` instead of `SECRETS_DETECTED`. Adds `secrets-warning` label and falls through to Claude review. Reviewer gets a `SECURITY WARNING` section in context and decides: real secret = REJECT, test data = proceed. Fixes infinite troubleshooter loop on auth test files (ChatFilter-gk4dw case).
+
+- **Circuit breaker for troubleshooter same-reason loop** — When a task reaches `reject:4` after being reformulated by the troubleshooter, and the rejection reason is the same as before reformulation (`last-reject:{TYPE}` label), the system now routes directly to `user-escalation` instead of cycling through the troubleshooter again. Prevents infinite reformulation loops.
+
+- **Reset reject:N after troubleshooter reformulation** — After the troubleshooter reformulates a task (adds `reformulated` label), `hype.sh` now resets the `reject:N` counter to 0. Gives the reformulated task a fresh escalation ladder instead of immediately hitting `reject:4` threshold again.
+
+---
+
 ## [2.1.7] - 2026-02-10
 
 ### Fixed

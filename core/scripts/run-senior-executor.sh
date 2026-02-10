@@ -103,9 +103,9 @@ preflight_check() {
         return 0
     fi
 
-    # Check 3: Secrets in diff?
+    # Check 3: Secrets in diff? (soft warning — reviewer decides)
     if git diff "origin/main..origin/$branch_name" 2>/dev/null | grep -qiE "(sk-[a-zA-Z0-9]{20,}|api_key\s*=|password\s*=|secret\s*=|\.env)"; then
-        echo "SECRETS_DETECTED"
+        echo "SECRETS_WARNING"
         return 0
     fi
 
@@ -218,8 +218,9 @@ $task_notes
 }
 
 # === Handle preflight rejection with reject:N counter ===
-# Common logic for NO_BRANCH, NO_COMMITS, SECRETS_DETECTED rejections
+# Common logic for NO_BRANCH, NO_COMMITS rejections
 # Escalation ladder: reject:1→retry, reject:2→escalate model, reject:3→further, reject:4→troubleshooter
+# Circuit breaker: reformulated + same rejection reason → user-escalation (not troubleshooter)
 
 handle_preflight_rejection() {
     local task_id=$1
@@ -242,6 +243,29 @@ handle_preflight_rejection() {
 
     # Escalation ladder based on reject count
     if [ "$reject_count" -ge 4 ]; then
+        # Circuit breaker: if task was already reformulated AND same rejection reason → user-escalation
+        local has_reformulated last_reject_reason
+        has_reformulated=$(echo "$task_json" | jq -r '[.[0].labels[]? | select(. == "reformulated")] | length' 2>/dev/null || echo "0")
+        last_reject_reason=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("last-reject:")) | split(":")[1]' 2>/dev/null | head -1)
+
+        if [ "$has_reformulated" != "0" ] && [ "$last_reject_reason" = "$rejection_type" ]; then
+            # CIRCUIT BREAKER: same reason after reformulation → escalate to user
+            log "WARN" "CIRCUIT BREAKER: $task_id - $rejection_type after reformulation (same reason). Escalating to user."
+            bd_safe update "$task_id" --status=open \
+                --remove-label=needs-review --remove-label=executor \
+                --remove-label=blocked:troubleshoot \
+                --add-label=user-escalation \
+                --notes="Circuit breaker: $rejection_type persists after reformulation. Automated resolution impossible — escalating to user."
+            return
+        fi
+
+        # Track rejection reason for circuit breaker detection on next cycle
+        # Remove old last-reject:* label, add new one
+        if [ -n "$last_reject_reason" ]; then
+            bd_safe update "$task_id" --remove-label="last-reject:$last_reject_reason" >/dev/null 2>&1 || true
+        fi
+        bd_safe update "$task_id" --add-label="last-reject:$rejection_type" >/dev/null 2>&1 || true
+
         # reject:4 → route to troubleshooter
         log "WARN" "TROUBLESHOOT: $task_id - $rejection_type after $reject_count rejections"
         bd_safe update "$task_id" --status=open \
@@ -305,11 +329,23 @@ build_review_context() {
         executor_log=$(tail -50 "$executor_log_file" 2>/dev/null || true)
     fi
 
+    # Security warning section (if secrets scanner flagged this task)
+    local secrets_warning=""
+    if echo "$task_json" | jq -r '.[0].labels[]?' 2>/dev/null | grep -q "^secrets-warning$"; then
+        secrets_warning="### ⚠ SECURITY WARNING
+The automated secret scanner flagged potential credentials in this diff.
+**Your job**: Determine if these are REAL secrets (API keys, passwords, tokens) or TEST DATA (mock credentials, fixtures, test constants).
+- Real secrets → REJECT the task. Explain what must be removed.
+- Test data / mock credentials → safe to proceed, ignore the warning."
+    fi
+
     cat <<EOF
 ## Task: $task_title
 ID: $task_id
 Branch: $branch_name
-
+${secrets_warning:+
+$secrets_warning
+}
 ### Done When
 $done_when
 
@@ -369,10 +405,13 @@ process_review() {
                 "Review rejected: No commits found. Please implement the task."
             return 0
             ;;
-        SECRETS_DETECTED)
-            handle_preflight_rejection "$task_id" "$task_json" "SECRETS_DETECTED" \
-                "SECURITY: Potential secrets detected in diff. Remove sensitive data and resubmit."
-            return 0
+        SECRETS_WARNING)
+            # Soft warning: add label, let Claude reviewer decide (not hard reject)
+            bd_safe update "$task_id" --add-label=secrets-warning >/dev/null 2>&1 || true
+            log "WARN" "SECRETS WARNING: $task_id - potential secrets in diff, reviewer will decide"
+            # Re-fetch task_json so build_review_context sees the new label
+            task_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
+            # Fall through to Claude review (no return)
             ;;
         NO_FINDINGS)
             log "WARN" "REJECT: $task_id - audit task has no findings in notes"

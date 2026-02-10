@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.12] - 2026-02-10
+
+### Fixed
+
+- **Analyst task budget — proportional to plan size** — Analysts created 50 tasks on a 5-task plan (10x bloat), forcing Architect-Reviewer to waste API reviewing and closing 30 of them. Now `run-analysts.sh` calculates plan size and injects `TASK BUDGET` into each analyst prompt: ≤10 plan tasks → max 2 per analyst, ≤25 → max 3, >25 → max 5. Also tightened all 5 analyst prompts: "Be decisive" replaced with strict P0-P1 criteria, related issues must be grouped into one task, P2+ explicitly forbidden. For a 5-task plan: max 10 analyst additions instead of 50.
+
+---
+
 ## [2.1.11] - 2026-02-10
 
 ### Fixed

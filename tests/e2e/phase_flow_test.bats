@@ -283,6 +283,74 @@ EOF
     [[ "$progress2" -ge "$progress1" ]]
 }
 
+# =============================================================================
+# v2.2: Review Pipeline Stats
+# =============================================================================
+
+@test "E2E: reviewing count in detect-phase output" {
+    touch "$E2E_TMPDIR/SPEC.md"
+    create_milestone "milestone:planning-done" "P"
+    create_milestone "milestone:analysts-done" "A"
+    create_milestone "milestone:plan-reviewed" "R"
+
+    # Create task in reviewing state
+    cd "$E2E_TMPDIR"
+    local id=$(bd create --title="Review me" --type=task --priority=1 2>&1 | grep "Created issue:" | sed 's/.*Created issue: //' | awk '{print $1}')
+    bd update "$id" --status=in_progress --add-label=reviewing
+
+    local json=$("$DETECT_PHASE")
+    local reviewing=$(echo "$json" | jq '.stats.reviewing')
+
+    [[ "$reviewing" -ge 1 ]]
+}
+
+@test "E2E: approved count in detect-phase output" {
+    touch "$E2E_TMPDIR/SPEC.md"
+    create_milestone "milestone:planning-done" "P"
+    create_milestone "milestone:analysts-done" "A"
+    create_milestone "milestone:plan-reviewed" "R"
+
+    # Create task in approved state
+    cd "$E2E_TMPDIR"
+    local id=$(bd create --title="Approved task" --type=task --priority=1 2>&1 | grep "Created issue:" | sed 's/.*Created issue: //' | awk '{print $1}')
+    bd update "$id" --status=in_progress --add-label=approved
+
+    local json=$("$DETECT_PHASE")
+    local approved=$(echo "$json" | jq '.stats.approved')
+
+    [[ "$approved" -ge 1 ]]
+}
+
+@test "E2E: reviewing task keeps IMPLEMENTATION phase" {
+    touch "$E2E_TMPDIR/SPEC.md"
+    create_milestone "milestone:planning-done" "P"
+    create_milestone "milestone:analysts-done" "A"
+    create_milestone "milestone:plan-reviewed" "R"
+
+    # Task being reviewed (in_progress + reviewing) blocks phase transition
+    cd "$E2E_TMPDIR"
+    local id=$(bd create --title="Under review" --type=task --priority=1 2>&1 | grep "Created issue:" | sed 's/.*Created issue: //' | awk '{print $1}')
+    bd update "$id" --status=in_progress --add-label=reviewing
+
+    local phase=$(get_phase)
+    [[ "$phase" == "IMPLEMENTATION" ]]
+}
+
+@test "E2E: approved task keeps IMPLEMENTATION phase" {
+    touch "$E2E_TMPDIR/SPEC.md"
+    create_milestone "milestone:planning-done" "P"
+    create_milestone "milestone:analysts-done" "A"
+    create_milestone "milestone:plan-reviewed" "R"
+
+    # Task approved but not merged (in_progress + approved) blocks phase transition
+    cd "$E2E_TMPDIR"
+    local id=$(bd create --title="Awaiting merge" --type=task --priority=1 2>&1 | grep "Created issue:" | sed 's/.*Created issue: //' | awk '{print $1}')
+    bd update "$id" --status=in_progress --add-label=approved
+
+    local phase=$(get_phase)
+    [[ "$phase" == "IMPLEMENTATION" ]]
+}
+
 @test "E2E: regression_count reflects open regression tasks" {
     touch "$E2E_TMPDIR/SPEC.md"
     create_milestone "milestone:planning-done" "P"

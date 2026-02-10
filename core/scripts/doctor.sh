@@ -119,6 +119,22 @@ gather_context() {
     context+=$(ls -la .hype-worktrees/ 2>/dev/null || echo "no worktrees directory")
     context+="\n\`\`\`\n\n"
 
+    # v2.2: Reviewer slots and review pipeline state
+    context+="## Review Pipeline (v2.2)\n"
+    context+="\`\`\`\n"
+    context+="Reviewer slots:\n"
+    context+=$(ls -la .hype-worktrees/reviewer-*.lock 2>/dev/null || echo "no active reviewers")
+    context+="\n"
+    context+="Review locks:\n"
+    context+=$(ls -la .hype-worktrees/review-*.lock 2>/dev/null || echo "no review locks")
+    context+="\n\n"
+    context+="Reviewing tasks:\n"
+    context+=$(bd_safe list --status=in_progress --json --limit 0 2>/dev/null | jq -r '.[] | select((.labels // []) | index("reviewing")) | "\(.id): \(.title) (updated: \(.updated_at))"' 2>/dev/null || echo "none")
+    context+="\n\n"
+    context+="Approved tasks:\n"
+    context+=$(bd_safe list --status=in_progress --json --limit 0 2>/dev/null | jq -r '.[] | select((.labels // []) | index("approved")) | "\(.id): \(.title) (updated: \(.updated_at))"' 2>/dev/null || echo "none")
+    context+="\n\`\`\`\n\n"
+
     # Recent logs
     context+="## Recent Logs (last 30 lines)\n"
     context+="\`\`\`\n"

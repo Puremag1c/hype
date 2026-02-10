@@ -38,7 +38,8 @@ hype/
 │   │   ├── architect-qa.md      # Final review + regression (Opus)
 │   │   ├── architect-ops.md     # Conflicts, cycles (Sonnet)
 │   │   ├── executor.md          # Реализация задач (по label)
-│   │   ├── senior-executor.md   # Code review + merge (tiered)
+│   │   ├── reviewer.md            # Code review only (v2.2)
+│   │   ├── senior-executor.md   # Code review + merge (legacy)
 │   │   ├── auditor.md           # Аудит задач с label:audit (Sonnet→Opus)
 │   │   ├── analyzer.md          # Deep analysis кода (Opus)
 │   │   ├── versioner.md         # VERSION + CHANGELOG (Haiku)
@@ -52,7 +53,9 @@ hype/
 │   │   ├── common.sh            # Shared functions
 │   │   ├── run-analysts.sh      # Параллельный запуск аналитиков
 │   │   ├── run-executors.sh     # Параллельный запуск исполнителей
-│   │   ├── run-senior-executor.sh # Review + merge workflow
+│   │   ├── run-reviewers.sh       # Parallel code review (v2.2)
+│   │   ├── run-merge-queue.sh    # Sequential merge queue (v2.2)
+│   │   ├── run-senior-executor.sh # Review + merge (legacy)
 │   │   ├── run-testers.sh       # Параллельный запуск тестеров
 │   │   └── ...
 │   └── commands/            # Slash-команды (/start, /status)
@@ -79,7 +82,7 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 | PLANNING | Architect-Planner | Создаёт задачи в beads, расставляет deps |
 | HELPERS | Analysts ×5 | Параллельный аудит плана |
 | PLAN_REVIEW | Architect-Reviewer | Ревью добавлений от Analysts |
-| IMPLEMENTATION | Executors + Auditor | Параллельная реализация + аудит задач |
+| IMPLEMENTATION | Executors + Reviewers + Merge Queue | Параллельная реализация + review + merge (v2.2) |
 | SMOKE_TEST | Testers ×6 | Параллельная проверка (по типу проекта) |
 | SMOKE_REVIEW | Architect-QA | Триаж smoke test находок (smoke + regression) |
 | USER_REVIEW | Tech-Writer-Review | Отчёт для пользователя, daemon stops |
@@ -126,8 +129,9 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 
 ### Git workflow
 - Executor: работает в ветке `task/beads-xxx`, WIP commit перед rebase
-- Senior Executor: squash merge через PR, cleanup веток
-- Backpressure: лимит параллельных executors через lock files в `.hype-worktrees/`
+- Reviewer: проверяет diff (parallel, lock-based backpressure, v2.2)
+- Merge Queue: squash merge approved задач (sequential, v2.2)
+- Backpressure: лимит параллельных executors/reviewers через lock files в `.hype-worktrees/`
 
 ## Конфигурация проекта
 
@@ -163,6 +167,17 @@ startup_timeout: 30          # Секунды на запуск сервера
 **Опциональные:**
 - gh — GitHub CLI (для PR workflow)
 - gitleaks — secret detection (авто-установка при наличии GitHub)
+
+## v2.2.0: Parallel Review Pipeline (в разработке)
+
+- **Parallel Reviewers** — `run-reviewers.sh` запускает до `MAX_PARALLEL_REVIEWERS` ревьюеров одновременно
+- **Merge Queue** — `run-merge-queue.sh` последовательно мержит approved задачи (squash merge)
+- **Reviewer agent** — `reviewer.md` — review-only промпт (без merge/push)
+- **Label state machine** — `needs-review` → `reviewing` → `approved` → `reviewed` (closed)
+- **Atomic claims** — `try_claim_for_review()` через mkdir lock + bd label
+- **Self-healing** — reviewing stuck >3min → return to queue; approved stuck >5min → warning
+- **detect-phase.sh** — отслеживает reviewing/approved counts в JSON output
+- **Doctor** — собирает reviewer slots, review locks, reviewing/approved tasks
 
 ## v2.1.0: Review Escalation & Model Switching (завершено)
 

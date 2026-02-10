@@ -14,7 +14,7 @@ hype.sh (bash loop с lock file)
     │   ├─► PLANNING: Architect-Planner (Opus)
     │   ├─► HELPERS: run-analysts.sh → Analysts (Sonnet × 5)
     │   ├─► PLAN_REVIEW: Architect-Reviewer (Opus)
-    │   ├─► IMPLEMENTATION: run-executors.sh + run-senior-executor.sh
+    │   ├─► IMPLEMENTATION: run-executors.sh + run-reviewers.sh + run-merge-queue.sh
     │   ├─► SMOKE_TEST: run-testers.sh → Testers × 6
     │   ├─► SMOKE_REVIEW: Architect-QA (Opus)
     │   ├─► USER_REVIEW: Tech-Writer-Review (Sonnet) → daemon stops
@@ -97,13 +97,28 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
   3. Rebase на main
   4. Push и пометить `needs-review`
 
-### Senior Executor (tiered)
-- **Роль:** Quality gate перед main
-- **Модель:** opus задачи → opus review, остальные → sonnet
-- **Задачи:**
-  - Code review
-  - Проверка на secrets
-  - Merge через PR (или local merge)
+### Reviewer (v2.2, parallel)
+- **Роль:** Code review (без merge)
+- **Модель:** sonnet по умолчанию, opus при reject:2+ или reject:4
+- **Управление:** `run-reviewers.sh`, до `MAX_PARALLEL_REVIEWERS` параллельно
+- **Workflow:**
+  1. Atomic claim: `try_claim_for_review()` (mkdir lock + label)
+  2. Preflight: проверка ветки и коммитов
+  3. Build context: diff, commits, executor log, secrets warning
+  4. Claude review с `reviewer.md` промптом
+  5. Результат: approve (label) / reject (status=open) / no-merge (close)
+- **Backpressure:** Lock-based (`reviewer-N.lock`), stale cleanup >20 min
+- **Escalation:** reject:1→retry, reject:2-3→model, reject:4→troubleshooter
+
+### Merge Queue (v2.2, sequential)
+- **Роль:** Squash merge approved задач в main
+- **Управление:** `run-merge-queue.sh`, одна задача за вызов (sequential, safe)
+- **Workflow:**
+  1. Fetch, merge --squash, commit, push
+  2. Verify main changed (detect empty squash)
+  3. Close task, cleanup remote branch
+- **Конфликты:** Abort merge, increment reject:N, return to executor
+- **Audit tasks:** Close without merge
 
 ### Auditor (Sonnet → Opus)
 - **Роль:** Аудит задач с label `audit`
@@ -153,7 +168,9 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 | `detect-phase.sh` | Определение текущей фазы (1 bd call, всё через jq, JSON output) |
 | `run-analysts.sh` | Параллельный запуск 5 Analysts |
 | `run-executors.sh` | Параллельный запуск Executors с backpressure |
-| `run-senior-executor.sh` | Code review и merge |
+| `run-reviewers.sh` | Параллельный запуск Reviewers с backpressure (v2.2) |
+| `run-merge-queue.sh` | Sequential merge approved задач (v2.2) |
+| `run-senior-executor.sh` | Code review и merge (legacy, заменён в v2.2) |
 | `run-testers.sh` | Параллельный запуск Testers (SMOKE_TEST) |
 | `common.sh` | Общие функции (bd_safe, timeout, milestones, backoff, audit detection) |
 | `log.sh` | Хелпер для логирования |
@@ -271,7 +288,9 @@ bd daemon start
 
 - `open` — задача создана, ждёт исполнителя
 - `in_progress` — Executor работает
-- `in_progress` + `needs-review` — ждёт Senior Executor
+- `in_progress` + `needs-review` — ждёт Reviewer (v2.2)
+- `in_progress` + `reviewing` — Reviewer работает (v2.2)
+- `in_progress` + `approved` — ждёт Merge Queue (v2.2)
 - `closed` — завершено
 
 ### Labels
@@ -286,6 +305,9 @@ bd daemon start
 - `regression` — баг который вернулся после fix
 - `reformulated` — задача переформулирована Troubleshooter (макс 2 раза)
 - `user-escalation` — требует решения пользователя (trigger USER_REVIEW)
+- `reviewing` — Reviewer работает над этой задачей (v2.2)
+- `approved` — задача одобрена, ждёт merge queue (v2.2)
+- `reviewed` — задача замержена и закрыта (v2.2)
 - `blocked:troubleshoot` — исчерпан escalation ladder, ждёт Troubleshooter
 - `blocked:*` — прочие причины блокировки
 
@@ -313,6 +335,8 @@ bd dep cycles  # Проверка циклов
 - Находит `in_progress` задачи без `executor` и `needs-review` labels
 - Если задача stuck >2 минут → автоматически добавляет `needs-review`
 - Закрывает gap когда executor завершился но label не поставился (beads sync race)
+- **v2.2:** Reviewing healing — задачи с `reviewing` >3 мин без reviewer lock → возврат в `needs-review`
+- **v2.2:** Approved warning — задачи с `approved` >5 мин → лог предупреждение (merge queue stuck)
 
 ### Zombie daemon recovery (v2.1.7+)
 - `check_beads()` → 3x soft restart → `hard_kill_beads_daemon()`
@@ -361,8 +385,9 @@ main
 1. Executor создаёт ветку от main
 2. Работает, коммитит
 3. Rebase на main (при конфликте — эскалация)
-4. Push с `--force-with-lease`
-5. Senior Executor мержит через PR
+4. Push с `--force-with-lease`, добавляет `needs-review`
+5. Reviewer проверяет diff (parallel, v2.2) → approve / reject
+6. Merge Queue мержит approved задачи (sequential, v2.2)
 
 ## Backpressure
 

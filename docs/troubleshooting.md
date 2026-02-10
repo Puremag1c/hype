@@ -954,6 +954,164 @@ bd close <id> --reason="Unresolvable after reformulation"
 
 ---
 
+## Review Pipeline проблемы (v2.2)
+
+### PROBLEM: Task stuck in reviewing
+
+**Симптомы:**
+- Задача в `in_progress` с label `reviewing` > 5 минут
+- Reviewer не работает (нет процесса, лог не растёт)
+- Lock файл `review-<task_id>.lock` может отсутствовать
+
+**Причина:**
+Reviewer crash или timeout без cleanup. Lock файл удалён, но label `reviewing` остался.
+
+**Диагностика:**
+```bash
+bd list --status=in_progress --json --limit 0 | jq '.[] | select((.labels // []) | index("reviewing")) | {id, title, updated_at}'
+ls -la .hype-worktrees/review-*.lock
+ls -la .hype-worktrees/reviewer-*.lock
+```
+
+**Решение (runtime-fix):**
+```bash
+bd update <id> --remove-label=reviewing --add-label=needs-review
+```
+
+**Auto-recovery (v2.2+):**
+`heal_stuck_tasks()` автоматически обнаруживает задачи stuck в `reviewing` >3 минут без активного reviewer lock. Возвращает в `needs-review`.
+
+---
+
+### PROBLEM: Task stuck in approved (merge queue not picking up)
+
+**Симптомы:**
+- Задача в `in_progress` с label `approved` > 10 минут
+- `run-merge-queue.sh` не запускается или ошибки в логе
+- Ветка `task/beads-<id>` существует
+
+**Причина:**
+1. Merge queue не запустился (hype.sh не дошёл до этого шага)
+2. Git проблемы (lock, merge in progress)
+3. Branch отсутствует на remote
+
+**Диагностика:**
+```bash
+bd list --status=in_progress --json --limit 0 | jq '.[] | select((.labels // []) | index("approved")) | {id, title, updated_at}'
+git branch -r | grep task/beads-
+grep "MERGE" logs/hype.log | tail -10
+```
+
+**Решение (runtime-fix):**
+```bash
+# Вариант 1: Перезапустить merge queue
+./scripts/run-merge-queue.sh
+
+# Вариант 2: Вернуть на ревью
+bd update <id> --remove-label=approved --add-label=needs-review
+```
+
+**Auto-recovery (v2.2+):**
+`heal_stuck_tasks()` логирует предупреждение для задач approved >5 минут.
+
+---
+
+### PROBLEM: Merge conflict loop (approved → conflict → executor → approved → conflict)
+
+**Симптомы:**
+- reject:N растёт, задача циклит между executor и reviewer
+- В логах: "Merge conflict for <id>" повторяется
+- Executor делает rebase, но conflict возвращается
+
+**Причина:**
+1. Другая задача мержится между ребейзом и мержем
+2. Ветка слишком разошлась с main
+3. Конфликт в auto-generated файлах (lock files, build artifacts)
+
+**Диагностика:**
+```bash
+bd show <id> --json | jq '.[0] | {id, title, labels, notes}'
+grep "Merge conflict" logs/hype.log | grep <id>
+git log --oneline origin/main | head -10
+```
+
+**Решение (runtime-fix):**
+```bash
+# Вариант 1: Ручной мерж
+git fetch origin
+git checkout task/beads-<id>
+git rebase origin/main
+# Resolve conflicts manually
+git push --force-with-lease origin task/beads-<id>
+bd update <id> --add-label=needs-review --remove-label=executor
+
+# Вариант 2: Закрыть и пересоздать
+bd close <id> --reason="Persistent merge conflicts"
+```
+
+**Auto-recovery (v2.2+):**
+При reject:4 задача эскалируется к Troubleshooter (`blocked:troubleshoot`).
+
+---
+
+### PROBLEM: Reviewer-executor thrashing (rapid reject without progress)
+
+**Симптомы:**
+- reject:N растёт быстро (3-4 за цикл)
+- Reviewer отклоняет по одной и той же причине
+- Executor не исправляет проблему
+
+**Причина:**
+1. Rejection reason слишком общий для executor
+2. Executor не видит review notes
+3. Модель executor слишком слабая для задачи
+
+**Диагностика:**
+```bash
+bd show <id> --json | jq '.[0] | {labels, notes}'
+tail -50 logs/reviewer-<id>.log 2>/dev/null
+tail -50 logs/executor-<id>.log 2>/dev/null
+```
+
+**Решение (runtime-fix):**
+```bash
+# Эскалировать модель вручную
+bd update <id> --add-label=model:opus --notes="Manual: persistent rejection"
+
+# Или переформулировать задачу
+bd update <id> --description="<более точное описание>"
+```
+
+**Auto-recovery (v2.2+):**
+Escalation ladder: reject:2-3 → model escalation (haiku→sonnet→opus), reject:4 → Troubleshooter. Circuit breaker (v2.1.8+) обнаруживает same-reason loops и эскалирует к user.
+
+---
+
+### PROBLEM: Orphaned reviewer slot (reviewer-N.lock stuck)
+
+**Симптомы:**
+- `MAX_PARALLEL_REVIEWERS` слотов заняты, но reviewer не работают
+- `.hype-worktrees/reviewer-N.lock` существует без процесса
+
+**Причина:**
+Reviewer crash без cleanup lock.
+
+**Диагностика:**
+```bash
+ls -la .hype-worktrees/reviewer-*.lock
+pgrep -fl reviewer
+```
+
+**Решение (runtime-fix):**
+```bash
+rmdir .hype-worktrees/reviewer-N.lock
+```
+
+**Auto-recovery (v2.2+):**
+`find_free_reviewer_slot()` автоматически чистит stale locks >20 минут.
+
+---
+
 ## Формат doctor-log
 
 ```markdown

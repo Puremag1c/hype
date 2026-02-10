@@ -276,6 +276,24 @@ detect_project_type() {
     fi
 }
 
+# === Beads Tuning ===
+
+configure_flush_debounce() {
+    local config=".beads/config.yaml"
+    [ -f "$config" ] || return 0
+
+    # Skip if already configured (uncommented)
+    if grep -q '^flush-debounce:' "$config" 2>/dev/null; then
+        return 0
+    fi
+
+    # Uncomment and set to 15s (prevents daemon feedback loop on large JSONL)
+    if grep -q '^# flush-debounce:' "$config" 2>/dev/null; then
+        sed -i '' 's/^# flush-debounce: "5s"/flush-debounce: "15s"/' "$config"
+        success "beads flush-debounce set to 15s"
+    fi
+}
+
 # === Init ===
 
 cmd_init() {
@@ -287,7 +305,7 @@ cmd_init() {
     # Beads daemon (auto-start if not running)
     if ! bd daemon status &>/dev/null; then
         info "Starting beads daemon..."
-        bd daemon start &>/dev/null
+        bd daemon start --log-level warn &>/dev/null
         success "beads daemon started"
     else
         success "beads daemon running"
@@ -322,6 +340,11 @@ cmd_init() {
     else
         success "beads already initialized"
     fi
+
+    # Beads daemon tuning: increase flush-debounce to prevent feedback loops
+    # Default 5s is too aggressive for projects with many tasks — daemon can enter
+    # import→export→file-change→import loop that kills the socket
+    configure_flush_debounce
 
     # .hype/config.sh
     mkdir -p .hype
@@ -499,9 +522,12 @@ cmd_start() {
     # Beads daemon (auto-start if not running)
     if ! bd daemon status &>/dev/null; then
         info "Starting beads daemon..."
-        bd daemon start &>/dev/null
+        bd daemon start --log-level warn &>/dev/null
         success "beads daemon started"
     fi
+
+    # Ensure flush-debounce is tuned (safe for existing projects)
+    configure_flush_debounce
 
     # If DONE, inform user about cleanup
     local current_phase phase_json

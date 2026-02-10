@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.1.7] - 2026-02-10
+
+### Fixed
+
+- **Zombie daemon recovery in check_beads()** - When beads daemon is alive but its socket is gone (feedback loop on large JSONL), `bd daemon restart` fails because the lock file is held. Now `check_beads()` falls back to `hard_kill_beads_daemon()`: reads PID from `.beads/daemon.pid`, verifies it's a beads process, kills it, cleans up stale files, and starts fresh. Previously this was a fatal exit requiring manual intervention.
+
+- **flush-debounce set to 15s in hype init** - Default beads flush-debounce (5s) is too aggressive for projects with many tasks. Daemon can enter import→export→file-change→import feedback loop that overwhelms the socket. Now `hype init` and `hype start` set `flush-debounce: "15s"` in `.beads/config.yaml`. Existing projects get the fix on next `hype start`.
+
+- **Daemon log noise reduced** - All `bd daemon start` calls now use `--log-level warn` instead of default INFO. Prevents 16MB+ daemon logs filled with routine import/export events (146K lines per session observed in production).
+
+---
+
 ## [2.1.6] - 2026-02-09
 
 ### Improved

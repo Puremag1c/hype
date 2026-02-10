@@ -35,6 +35,39 @@ rm -f .beads/daemon.*
 bd daemon start
 ```
 
+**Auto-recovery (v2.1.7+):**
+`check_beads()` в hype.sh автоматически обрабатывает этот случай: 3 попытки soft restart → hard kill по PID из `.beads/daemon.pid` → очистка stale файлов → fresh start.
+
+---
+
+### PROBLEM: Beads daemon zombie (alive but socket gone)
+
+**Симптомы:**
+- `bd list` показывает "Daemon took too long to start (>5s). Running in direct mode."
+- `bd daemon restart` не помогает (лог: "daemon already running (lock held), exiting")
+- `ps aux | grep bd` показывает живой процесс
+- `.beads/daemon.sock` отсутствует
+
+**Причина:**
+Daemon вошёл в feedback loop: import→export→file-change→import. При большом JSONL (много задач/tombstones) loop ускоряется, daemon перегружается, socket теряется. Процесс живой, lock держит, но команды не принимает.
+
+**Диагностика:**
+```bash
+ls -la .beads/daemon.sock    # отсутствует
+cat .beads/daemon.pid        # PID жив
+kill -0 $(cat .beads/daemon.pid) && echo "zombie"
+```
+
+**Решение (ручное):**
+```bash
+kill $(cat .beads/daemon.pid)
+rm -f .beads/daemon.lock .beads/daemon.pid
+bd daemon start --log-level warn
+```
+
+**Auto-recovery (v2.1.7+):**
+`check_beads()` → `hard_kill_beads_daemon()` автоматически: читает PID, проверяет что это bd процесс, kill, cleanup, restart. Также `flush-debounce: "15s"` в config.yaml предотвращает feedback loop.
+
 ---
 
 ### PROBLEM: Beads daemon explosion (270+ processes)

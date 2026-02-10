@@ -324,6 +324,126 @@ EOF
     grep -q "NEW_VAR=default" "$user_config"
 }
 
+# =============================================================================
+# hard_kill_beads_daemon tests
+# =============================================================================
+
+# Extract hard_kill_beads_daemon for testing (uses .beads dir in TEST_TMPDIR)
+hard_kill_beads_daemon() {
+    local pid_file=".beads/daemon.pid"
+    local lock_file=".beads/daemon.lock"
+
+    if [ -f "$pid_file" ]; then
+        local pid
+        pid=$(cat "$pid_file" 2>/dev/null | tr -d '[:space:]')
+
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            local proc_name
+            proc_name=$(ps -p "$pid" -o comm= 2>/dev/null || echo "")
+
+            if [[ "$proc_name" == *"bd"* ]] || [[ "$proc_name" == *"beads"* ]]; then
+                kill "$pid" 2>/dev/null || true
+                sleep 1
+                if kill -0 "$pid" 2>/dev/null; then
+                    kill -9 "$pid" 2>/dev/null || true
+                    sleep 1
+                fi
+            fi
+        fi
+    fi
+
+    rm -f "$pid_file" "$lock_file" .beads/daemon.sock 2>/dev/null || true
+}
+
+@test "hard_kill_beads_daemon: cleans up stale files when PID does not exist" {
+    cd "$TEST_TMPDIR"
+    mkdir -p .beads
+    echo "999999999" > .beads/daemon.pid
+    echo '{"pid": 999999999}' > .beads/daemon.lock
+    touch .beads/daemon.sock
+
+    run hard_kill_beads_daemon
+    [[ "$status" -eq 0 ]]
+    [[ ! -f .beads/daemon.pid ]]
+    [[ ! -f .beads/daemon.lock ]]
+    [[ ! -f .beads/daemon.sock ]]
+}
+
+@test "hard_kill_beads_daemon: handles missing pid file" {
+    cd "$TEST_TMPDIR"
+    mkdir -p .beads
+    # No daemon.pid exists
+
+    run hard_kill_beads_daemon
+    [[ "$status" -eq 0 ]]
+}
+
+@test "hard_kill_beads_daemon: skips kill when PID is not a beads process" {
+    cd "$TEST_TMPDIR"
+    mkdir -p .beads
+    # Use current shell PID (not a beads process)
+    echo "$$" > .beads/daemon.pid
+    touch .beads/daemon.lock
+
+    run hard_kill_beads_daemon
+    [[ "$status" -eq 0 ]]
+    # Process should still be alive (not killed)
+    kill -0 $$ 2>/dev/null
+    # But stale files should be cleaned
+    [[ ! -f .beads/daemon.pid ]]
+    [[ ! -f .beads/daemon.lock ]]
+}
+
+# =============================================================================
+# configure_flush_debounce tests
+# =============================================================================
+
+configure_flush_debounce() {
+    local config=".beads/config.yaml"
+    [ -f "$config" ] || return 0
+
+    if grep -q '^flush-debounce:' "$config" 2>/dev/null; then
+        return 0
+    fi
+
+    if grep -q '^# flush-debounce:' "$config" 2>/dev/null; then
+        sed -i '' 's/^# flush-debounce: "5s"/flush-debounce: "15s"/' "$config"
+    fi
+}
+
+@test "configure_flush_debounce: sets 15s on fresh config" {
+    cd "$TEST_TMPDIR"
+    mkdir -p .beads
+    echo '# flush-debounce: "5s"' > .beads/config.yaml
+
+    run configure_flush_debounce
+    [[ "$status" -eq 0 ]]
+    grep -q '^flush-debounce: "15s"' .beads/config.yaml
+}
+
+@test "configure_flush_debounce: skips when already configured" {
+    cd "$TEST_TMPDIR"
+    mkdir -p .beads
+    echo 'flush-debounce: "30s"' > .beads/config.yaml
+
+    run configure_flush_debounce
+    [[ "$status" -eq 0 ]]
+    # Should preserve existing value
+    grep -q 'flush-debounce: "30s"' .beads/config.yaml
+}
+
+@test "configure_flush_debounce: handles missing config file" {
+    cd "$TEST_TMPDIR"
+    # No .beads/config.yaml
+
+    run configure_flush_debounce
+    [[ "$status" -eq 0 ]]
+}
+
+# =============================================================================
+# merge_config tests
+# =============================================================================
+
 @test "merge_config: preserves user value" {
     local user_config="$TEST_TMPDIR/.hype/config.sh"
     local template="$TEST_TMPDIR/template.sh"

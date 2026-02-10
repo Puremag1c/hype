@@ -23,7 +23,7 @@ bd_safe() {
         pkill -9 -x bd 2>/dev/null || true
         sleep 2
         # Restart daemon (will start fresh on next bd command automatically)
-        bd daemon start >/dev/null 2>&1 || true
+        bd daemon start --log-level warn >/dev/null 2>&1 || true
         sleep 1
     fi
 

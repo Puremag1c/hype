@@ -314,6 +314,13 @@ bd dep cycles  # Проверка циклов
 - Если задача stuck >2 минут → автоматически добавляет `needs-review`
 - Закрывает gap когда executor завершился но label не поставился (beads sync race)
 
+### Zombie daemon recovery (v2.1.7+)
+- `check_beads()` → 3x soft restart → `hard_kill_beads_daemon()`
+- Hard kill: читает PID из `.beads/daemon.pid`, проверяет что это bd процесс, kill → kill -9 → rm stale files → fresh start
+- Решает проблему когда daemon жив но socket потерян (feedback loop на большом JSONL)
+- Профилактика: `flush-debounce: "15s"` в `.beads/config.yaml` (ставится при `hype init` / `hype start`)
+- Все daemon start с `--log-level warn` для уменьшения лога
+
 ### Adaptive backoff
 - Если beads daemon отвечает >2s → удваивает iteration delay (max 60s)
 - Предотвращает overload spiral: медленный daemon → больше запросов → ещё медленнее

@@ -204,6 +204,12 @@ preflight_check() {
         return 0
     fi
 
+    # Check for potential secrets in diff (soft warning — reviewer decides)
+    if git diff "origin/main..origin/$branch_name" 2>/dev/null | grep -qiE "(sk-[a-zA-Z0-9]{20,}|api_key\s*=|password\s*=|secret\s*=|\.env)"; then
+        echo "SECRETS_WARNING"
+        return 0
+    fi
+
     echo "PASS"
 }
 
@@ -243,19 +249,51 @@ run_reviewer() {
             trap - EXIT INT TERM
             return 0
             ;;
+        SECRETS_WARNING)
+            # Soft warning: add label, let Claude reviewer decide (not hard reject)
+            bd_safe update "$task_id" --add-label=secrets-warning >/dev/null 2>&1 || true
+            log "WARN" "SECRETS WARNING: $task_id - potential secrets in diff, reviewer will decide"
+            # Re-fetch task_json so build_review_context sees the new label
+            task_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
+            # Fall through to Claude review (no return)
+            ;;
         NO_BRANCH|NO_COMMITS)
             log "WARN" "Preflight failed for $task_id: $preflight"
-            # Reject back to executor
+            # Reject back to executor with circuit breaker check
             local reject_count
             reject_count=$(get_counter_value "$task_json" "reject")
             ((reject_count++))
             set_counter_label "$task_id" "reject" "$reject_count"
-            reject_from_review "$task_id"
 
             if [ "$reject_count" -ge 4 ]; then
-                bd_safe update "$task_id" --add-label=blocked:troubleshoot \
-                    --notes="Preflight: $preflight after $reject_count attempts. Escalated." >/dev/null 2>&1 || true
-                log "WARN" "TROUBLESHOOT: $task_id - $preflight (reject:$reject_count)"
+                # Circuit breaker: if task was already reformulated AND same rejection reason → user-escalation
+                local has_reformulated last_reject_reason
+                has_reformulated=$(echo "$task_json" | jq -r '[.[0].labels[]? | select(. == "reformulated")] | length' 2>/dev/null || echo "0")
+                last_reject_reason=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("last-reject:")) | split(":")[1]' 2>/dev/null | head -1)
+
+                if [ "$has_reformulated" != "0" ] && [ "$last_reject_reason" = "$preflight" ]; then
+                    # CIRCUIT BREAKER: same reason after reformulation → escalate to user
+                    log "WARN" "CIRCUIT BREAKER: $task_id - $preflight after reformulation (same reason). Escalating to user."
+                    bd_safe update "$task_id" --status=open \
+                        --remove-label=reviewing --remove-label=executor \
+                        --remove-label=blocked:troubleshoot \
+                        --add-label=user-escalation \
+                        --notes="Circuit breaker: $preflight persists after reformulation. Automated resolution impossible — escalating to user." >/dev/null 2>&1 || true
+                else
+                    # Track rejection reason for circuit breaker detection on next cycle
+                    if [ -n "$last_reject_reason" ]; then
+                        bd_safe update "$task_id" --remove-label="last-reject:$last_reject_reason" >/dev/null 2>&1 || true
+                    fi
+                    bd_safe update "$task_id" --add-label="last-reject:$preflight" >/dev/null 2>&1 || true
+
+                    # Route to troubleshooter
+                    reject_from_review "$task_id"
+                    bd_safe update "$task_id" --add-label=blocked:troubleshoot \
+                        --notes="Preflight: $preflight after $reject_count attempts. Escalated." >/dev/null 2>&1 || true
+                    log "WARN" "TROUBLESHOOT: $task_id - $preflight (reject:$reject_count)"
+                fi
+            else
+                reject_from_review "$task_id"
             fi
 
             release_review_lock "$task_id" "$WORKTREES_DIR"

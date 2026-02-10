@@ -39,7 +39,6 @@ hype/
 │   │   ├── architect-ops.md     # Conflicts, cycles (Sonnet)
 │   │   ├── executor.md          # Реализация задач (по label)
 │   │   ├── reviewer.md            # Code review only (v2.2)
-│   │   ├── senior-executor.md   # Code review + merge (legacy)
 │   │   ├── auditor.md           # Аудит задач с label:audit (Sonnet→Opus)
 │   │   ├── analyzer.md          # Deep analysis кода (Opus)
 │   │   ├── versioner.md         # VERSION + CHANGELOG (Haiku)
@@ -55,7 +54,6 @@ hype/
 │   │   ├── run-executors.sh     # Параллельный запуск исполнителей
 │   │   ├── run-reviewers.sh       # Parallel code review (v2.2)
 │   │   ├── run-merge-queue.sh    # Sequential merge queue (v2.2)
-│   │   ├── run-senior-executor.sh # Review + merge (legacy)
 │   │   ├── run-testers.sh       # Параллельный запуск тестеров
 │   │   └── ...
 │   └── commands/            # Slash-команды (/start, /status)

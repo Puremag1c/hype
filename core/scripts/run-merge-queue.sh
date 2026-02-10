@@ -137,9 +137,23 @@ merge_task() {
 Task: $task_id" 2>/dev/null || true
 
     if ! git push origin "$main_ref" 2>/dev/null; then
-        log "ERROR" "Push failed for $task_id, resetting"
+        log "ERROR" "Push failed for $task_id, returning to executor"
         git reset --hard "origin/$main_ref" 2>/dev/null || true
-        # Don't increment reject — transient error, will retry next cycle
+
+        # Increment reject:N and return to executor
+        local reject_count
+        reject_count=$(get_counter_value "$task_json" "reject")
+        ((reject_count++))
+        set_counter_label "$task_id" "reject" "$reject_count"
+
+        bd_safe update "$task_id" --status=open --remove-label=approved \
+            --notes="Push to $main_ref failed after squash merge. Rebase on $main_ref and retry. (reject:$reject_count)" >/dev/null 2>&1 || true
+
+        if [ "$reject_count" -ge 4 ]; then
+            bd_safe update "$task_id" --add-label=blocked:troubleshoot \
+                --notes="Push failures persist after $reject_count attempts. Escalated." >/dev/null 2>&1 || true
+            log "WARN" "TROUBLESHOOT: $task_id - push failures persist (reject:$reject_count)"
+        fi
         return 0
     fi
 

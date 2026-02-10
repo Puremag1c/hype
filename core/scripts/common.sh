@@ -18,7 +18,7 @@ bd_safe() {
     local daemon_count
     daemon_count=$(pgrep -x bd 2>/dev/null | wc -l | tr -d ' ')
 
-    if [ "$daemon_count" -gt 10 ]; then
+    if [ "$daemon_count" -gt 30 ]; then
         >&2 echo "WARN: Beads daemon explosion detected ($daemon_count processes). Killing all and restarting."
         pkill -9 -x bd 2>/dev/null || true
         sleep 2
@@ -201,27 +201,31 @@ reset_stale_tasks() {
     local log_prefix="${2:-stale}"
     local reset_count=0
 
-    for task_id in $(bd_safe list --status=in_progress --json --limit 0 2>/dev/null | jq -r '.[].id' 2>/dev/null || true); do
-        # Skip tasks waiting for review - they're not stale, just queued
-        local has_needs_review
-        has_needs_review=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].labels | index("needs-review") // empty' 2>/dev/null || echo "")
-        if [ -n "$has_needs_review" ]; then
-            continue
-        fi
+    # Single bd list call — filter in memory instead of N×bd show
+    local all_tasks_json
+    all_tasks_json=$(bd_safe list --status=in_progress --json --limit 0 2>/dev/null || echo "[]")
 
-        # Skip smoke/regression tasks - they're waiting for Architect smoke_review
-        # Skip user-escalation tasks - they're waiting for user decision
-        local has_protected_label
-        has_protected_label=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].labels // [] | if (index("regression") or index("smoke") or index("user-escalation")) then "yes" else empty end' 2>/dev/null || echo "")
-        if [ -n "$has_protected_label" ]; then
-            continue
-        fi
+    # Filter: exclude protected labels (needs-review, reviewing, approved, regression, smoke, user-escalation)
+    local candidate_ids
+    candidate_ids=$(echo "$all_tasks_json" | jq -r '.[] |
+        select(
+            ((.labels // []) | index("needs-review") | not) and
+            ((.labels // []) | index("reviewing") | not) and
+            ((.labels // []) | index("approved") | not) and
+            ((.labels // []) | index("regression") | not) and
+            ((.labels // []) | index("smoke") | not) and
+            ((.labels // []) | index("user-escalation") | not)
+        ) | .id' 2>/dev/null || true)
 
+    local now_epoch
+    now_epoch=$(date +%s)
+
+    for task_id in $candidate_ids; do
         local updated_at
-        updated_at=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].updated_at' 2>/dev/null || echo "")
+        updated_at=$(echo "$all_tasks_json" | jq -r ".[] | select(.id == \"$task_id\") | .updated_at // \"\"" 2>/dev/null)
 
         if [ -n "$updated_at" ]; then
-            local task_epoch now_epoch age
+            local task_epoch age
             # Strip milliseconds and timezone for cross-platform parsing
             local clean_date="${updated_at%%.*}"
             clean_date="${clean_date%%+*}"
@@ -231,7 +235,6 @@ reset_stale_tasks() {
                          date -d "$clean_date" +%s 2>/dev/null || \
                          python3 -c "from datetime import datetime; print(int(datetime.fromisoformat('$clean_date').timestamp()))" 2>/dev/null || \
                          echo "0")
-            now_epoch=$(date +%s)
             age=$((now_epoch - task_epoch))
 
             if [ "$age" -gt "$stale_threshold" ]; then
@@ -564,7 +567,7 @@ export -f calculate_backoff_delay 2>/dev/null || true
 # Возвращает: 0 если audit, 1 если code task
 #
 # ВАЖНО: Explicit opt-in только. Ложные audit опаснее ложных code tasks
-# (audit без commits → senior-executor застревает).
+# (audit без commits → reviewer застревает).
 #
 # Критерии audit задачи (ТОЛЬКО явные маркеры):
 # 1. Label "audit"

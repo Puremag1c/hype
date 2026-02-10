@@ -64,11 +64,26 @@ NEW_VERSION="$MAJOR.$MINOR.$PATCH"
 echo $NEW_VERSION
 ```
 
-### 5. Обнови VERSION
+### 5. Найди и обнови версию в проекте
+
+**КРИТИЧНО**: Версия может быть определена НЕ в файле VERSION. Найди где она задана:
 
 ```bash
-echo "$NEW_VERSION" > VERSION
+# Ищи файлы с определением версии
+for f in VERSION package.json pyproject.toml Cargo.toml mix.exs setup.py setup.cfg build.gradle pom.xml; do
+    [ -f "$f" ] && echo "Found: $f"
+done
 ```
+
+Обнови версию В КАЖДОМ найденном файле:
+- `VERSION` → просто записать новую версию
+- `package.json` → обновить поле `"version": "X.Y.Z"`
+- `pyproject.toml` → обновить `version = "X.Y.Z"`
+- `Cargo.toml` → обновить `version = "X.Y.Z"`
+- `mix.exs` → обновить `@version "X.Y.Z"` или `version: "X.Y.Z"`
+- `setup.py` / `setup.cfg` → обновить `version=X.Y.Z`
+
+Если файла VERSION нет — **не создавай** его. Используй тот формат который уже есть в проекте.
 
 ### 6. Сгенерируй CHANGELOG
 

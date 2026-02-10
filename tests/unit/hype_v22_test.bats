@@ -88,13 +88,22 @@ load '../helpers/setup'
     echo "$heal_block" | grep -q 'index("approved")'
 }
 
-@test "heal: approved threshold is 300s (5 min)" {
+@test "heal: approved warn threshold is 300s (5 min)" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
     local heal_block
     heal_block=$(sed -n '/^heal_stuck_tasks()/,/^}/p' "$hype_sh")
 
-    echo "$heal_block" | grep -q 'approved_threshold=300'
+    echo "$heal_block" | grep -q 'approved_warn_threshold=300'
+}
+
+@test "heal: approved recovery threshold is 600s (10 min)" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    local heal_block
+    heal_block=$(sed -n '/^heal_stuck_tasks()/,/^}/p' "$hype_sh")
+
+    echo "$heal_block" | grep -q 'approved_recover_threshold=600'
 }
 
 @test "heal: logs warning for stuck approved tasks" {
@@ -104,4 +113,42 @@ load '../helpers/setup'
     heal_block=$(sed -n '/^heal_stuck_tasks()/,/^}/p' "$hype_sh")
 
     echo "$heal_block" | grep -q 'merge queue may be stuck'
+}
+
+@test "heal: recovers approved tasks stuck >10min (returns to executor)" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    local heal_block
+    heal_block=$(sed -n '/^heal_stuck_tasks()/,/^}/p' "$hype_sh")
+
+    # Should return to executor on recovery threshold
+    echo "$heal_block" | grep -q 'returning to executor'
+    # Should increment reject:N
+    echo "$heal_block" | grep -q 'set_counter_label'
+    # Should remove approved and set status=open
+    echo "$heal_block" | grep -q 'remove-label=approved'
+}
+
+# =============================================================================
+# merge queue: push failure handling
+# =============================================================================
+
+@test "merge-queue: handles push failure with reject:N increment" {
+    local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
+
+    # Push failure block should increment reject:N
+    local push_block
+    push_block=$(sed -n '/git push.*main_ref/,/return 0/p' "$merge_sh" | head -20)
+
+    echo "$push_block" | grep -q 'set_counter_label.*reject'
+    echo "$push_block" | grep -q 'remove-label=approved'
+    echo "$push_block" | grep -q 'status=open'
+}
+
+@test "merge-queue: push failure escalates to troubleshooter at reject:4" {
+    local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
+
+    # After push failure, should escalate at reject:4
+    grep -q 'blocked:troubleshoot' "$merge_sh"
+    grep -q 'Push failures persist' "$merge_sh"
 }

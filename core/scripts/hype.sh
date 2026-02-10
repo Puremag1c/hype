@@ -683,8 +683,9 @@ heal_stuck_tasks() {
         fi
     done
 
-    # v2.2: Warn about tasks stuck in approved (merge queue not running, >5 min)
-    local approved_threshold=300
+    # v2.2: Warn/recover tasks stuck in approved (merge queue not running)
+    local approved_warn_threshold=300   # 5 min: warn
+    local approved_recover_threshold=600  # 10 min: recover
     local approved_ids
     approved_ids=$(echo "$in_progress_json" | jq -r '.[] | select(
         ((.labels // []) | index("approved"))
@@ -700,7 +701,23 @@ heal_stuck_tasks() {
                      date -d "$updated_at" +%s 2>/dev/null || echo "0")
         task_age=$((now - task_epoch))
 
-        if [ "$task_age" -gt "$approved_threshold" ]; then
+        if [ "$task_age" -gt "$approved_recover_threshold" ]; then
+            # Recovery: return to executor for rebase/retry
+            log "WARN" "HEAL: $task_id approved but not merged for ${task_age}s — returning to executor"
+            local task_json_heal
+            task_json_heal=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
+            local reject_count
+            reject_count=$(get_counter_value "$task_json_heal" "reject")
+            ((reject_count++))
+            set_counter_label "$task_id" "reject" "$reject_count"
+            bd_safe update "$task_id" --status=open --remove-label=approved \
+                --notes="Approved but not merged for ${task_age}s. Merge queue may be stuck. Rebase and retry. (reject:$reject_count)" >/dev/null 2>&1 || true
+            if [ "$reject_count" -ge 4 ]; then
+                bd_safe update "$task_id" --add-label=blocked:troubleshoot \
+                    --notes="Merge stuck after $reject_count attempts. Escalated." >/dev/null 2>&1 || true
+                log "WARN" "TROUBLESHOOT: $task_id - merge stuck (reject:$reject_count)"
+            fi
+        elif [ "$task_age" -gt "$approved_warn_threshold" ]; then
             log "WARN" "HEAL: $task_id approved but not merged for ${task_age}s — merge queue may be stuck"
         fi
     done
@@ -1263,11 +1280,11 @@ show_active_work() {
         fi
     done
 
-    # Check senior-executor logs (CHECK)
-    for log_file in "$LOGS_DIR"/senior-executor-*.log; do
+    # Check reviewer logs (REVIEW)
+    for log_file in "$LOGS_DIR"/reviewer-*.log; do
         [ -f "$log_file" ] || continue
         local task_id size mtime age status
-        task_id=$(basename "$log_file" .log | sed 's/senior-executor-//')
+        task_id=$(basename "$log_file" .log | sed 's/reviewer-//')
 
         # Skip if task is not in_progress (using cached list, no bd show)
         is_in_progress "$task_id" || continue
@@ -1283,7 +1300,7 @@ show_active_work() {
                 status="stale ${age}s"
             fi
             local size_kb=$((size / 1024))
-            active_items="${active_items}CHECK:$task_id(${size_kb}KB,$status) "
+            active_items="${active_items}REVIEW:$task_id(${size_kb}KB,$status) "
         fi
     done
 

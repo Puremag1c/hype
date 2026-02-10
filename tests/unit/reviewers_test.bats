@@ -62,6 +62,45 @@ load '../helpers/setup'
     grep -q 'SECURITY WARNING' "$reviewers_sh"
 }
 
+@test "reviewers: preflight scans diff for secrets (SECRETS_WARNING)" {
+    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+
+    # preflight_check should grep for credential patterns
+    local fn_block
+    fn_block=$(sed -n '/^preflight_check()/,/^}/p' "$reviewers_sh")
+
+    echo "$fn_block" | grep -q 'SECRETS_WARNING'
+    echo "$fn_block" | grep -q 'api_key\|password\|secret'
+}
+
+@test "reviewers: SECRETS_WARNING adds label and falls through to review" {
+    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+
+    # SECRETS_WARNING case should add secrets-warning label
+    local block
+    block=$(sed -n '/SECRETS_WARNING)/,/;;/p' "$reviewers_sh" | head -10)
+
+    echo "$block" | grep -q 'add-label=secrets-warning'
+    # Should NOT contain 'return' (falls through to Claude review)
+    ! echo "$block" | grep -qE '^\s*return'
+}
+
+@test "reviewers: circuit breaker on preflight rejection (reformulated + same reason)" {
+    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+
+    # Should check for reformulated label and last-reject match
+    grep -q 'CIRCUIT BREAKER' "$reviewers_sh"
+    grep -q 'user-escalation' "$reviewers_sh"
+    grep -q 'last-reject:' "$reviewers_sh"
+}
+
+@test "reviewers: tracks last-reject reason for circuit breaker" {
+    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+
+    # Should add last-reject:{TYPE} label before escalating to troubleshooter
+    grep -q 'add-label="last-reject:' "$reviewers_sh"
+}
+
 @test "reviewers: uses run_claude_with_progress" {
     local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
 

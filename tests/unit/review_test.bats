@@ -14,7 +14,7 @@ load '../helpers/mock_bd'
 
 @test "preflight: returns SECRETS_WARNING not SECRETS_DETECTED" {
     # Verify the source code no longer returns SECRETS_DETECTED
-    local senior_exec="$SCRIPTS_DIR/run-senior-executor.sh"
+    local senior_exec="$SCRIPTS_DIR/run-reviewers.sh"
 
     # SECRETS_WARNING should be present
     grep -q 'echo "SECRETS_WARNING"' "$senior_exec"
@@ -24,7 +24,7 @@ load '../helpers/mock_bd'
 }
 
 @test "preflight: SECRETS_WARNING case does not return (falls through)" {
-    local senior_exec="$SCRIPTS_DIR/run-senior-executor.sh"
+    local senior_exec="$SCRIPTS_DIR/run-reviewers.sh"
 
     # The SECRETS_WARNING case should NOT have 'return 0' statement
     local block
@@ -35,14 +35,14 @@ load '../helpers/mock_bd'
 }
 
 @test "preflight: SECRETS_WARNING adds secrets-warning label" {
-    local senior_exec="$SCRIPTS_DIR/run-senior-executor.sh"
+    local senior_exec="$SCRIPTS_DIR/run-reviewers.sh"
 
     # Should add secrets-warning label
     grep -q 'add-label=secrets-warning' "$senior_exec"
 }
 
 @test "preflight: SECRETS_WARNING re-fetches task_json" {
-    local senior_exec="$SCRIPTS_DIR/run-senior-executor.sh"
+    local senior_exec="$SCRIPTS_DIR/run-reviewers.sh"
 
     # After adding label, should re-fetch task_json for build_review_context
     local block
@@ -51,7 +51,7 @@ load '../helpers/mock_bd'
 }
 
 @test "build_review_context: injects warning when secrets-warning label present" {
-    local senior_exec="$SCRIPTS_DIR/run-senior-executor.sh"
+    local senior_exec="$SCRIPTS_DIR/run-reviewers.sh"
 
     # Should check for secrets-warning label
     grep -q 'secrets-warning' "$senior_exec"
@@ -142,7 +142,7 @@ load '../helpers/mock_bd'
 }
 
 @test "circuit breaker: source code routes to user-escalation" {
-    local senior_exec="$SCRIPTS_DIR/run-senior-executor.sh"
+    local senior_exec="$SCRIPTS_DIR/run-reviewers.sh"
 
     # Should contain circuit breaker logic
     grep -q 'CIRCUIT BREAKER' "$senior_exec"

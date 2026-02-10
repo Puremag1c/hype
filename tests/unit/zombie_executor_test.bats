@@ -86,25 +86,5 @@ load '../helpers/setup'
 }
 
 # =============================================================================
-# Review "no action" path: re-add needs-review
+# Review "no action" path: re-add needs-review (now tested in reviewers_test.bats)
 # =============================================================================
-
-@test "review: reject:1 'no action' path re-adds needs-review" {
-    local senior_sh="$SCRIPTS_DIR/run-senior-executor.sh"
-
-    # The "no action taken" branch should add needs-review back
-    local block
-    block=$(sed -n '/REVIEW RETRY.*no action taken/,/fi$/p' "$senior_sh" | head -5)
-
-    echo "$block" | grep -q 'add-label=needs-review'
-}
-
-@test "review: reject:2-3 escalation path re-adds needs-review" {
-    local senior_sh="$SCRIPTS_DIR/run-senior-executor.sh"
-
-    # The model escalation branch (in the "no action" else block) should add needs-review
-    local block
-    block=$(sed -n '/Review escalated.*reject/p' "$senior_sh")
-
-    echo "$block" | grep -q 'add-label=needs-review'
-}

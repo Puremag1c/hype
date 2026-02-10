@@ -85,14 +85,6 @@ load '../helpers/setup'
     [ "$missing" -eq 0 ]
 }
 
-@test "run-senior-executor.sh: all bd_safe list calls use --limit 0" {
-    local senior_sh="$SCRIPTS_DIR/run-senior-executor.sh"
-
-    local missing
-    missing=$(grep 'bd_safe list.*--json' "$senior_sh" | grep -cv '\-\-limit 0' || true)
-    [ "$missing" -eq 0 ]
-}
-
 @test "detect-phase.sh: all bd_safe list calls use --limit 0" {
     local detect_sh="$SCRIPTS_DIR/detect-phase.sh"
 

@@ -170,7 +170,6 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 | `run-executors.sh` | Параллельный запуск Executors с backpressure |
 | `run-reviewers.sh` | Параллельный запуск Reviewers с backpressure (v2.2) |
 | `run-merge-queue.sh` | Sequential merge approved задач (v2.2) |
-| `run-senior-executor.sh` | Code review и merge (legacy, заменён в v2.2) |
 | `run-testers.sh` | Параллельный запуск Testers (SMOKE_TEST) |
 | `common.sh` | Общие функции (bd_safe, timeout, milestones, backoff, audit detection) |
 | `log.sh` | Хелпер для логирования |

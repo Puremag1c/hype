@@ -336,6 +336,16 @@ $context
     local exit_code=0
     run_claude_with_progress "$full_prompt" "$mapped_model" "$REVIEW_TIMEOUT" "$output_file" "REVIEW $slot" "$LOGS_DIR" || exit_code=$?
 
+    # Timeout is not a rejection — return to queue without incrementing reject:N
+    if [ "$exit_code" -eq 124 ]; then
+        log "WARN" "REVIEW TIMEOUT: $task_id (${REVIEW_TIMEOUT}) — returning to queue"
+        bd_safe update "$task_id" --add-label=needs-review --remove-label=reviewing >/dev/null 2>&1 || true
+        release_review_lock "$task_id" "$WORKTREES_DIR"
+        cleanup_reviewer_slot "$slot"
+        trap - EXIT INT TERM
+        return 0
+    fi
+
     # Post-processing: check what reviewer did
     local updated_json
     updated_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")

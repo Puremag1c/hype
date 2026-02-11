@@ -162,8 +162,9 @@ Task: $task_id" 2>/dev/null || true
     main_after=$(git rev-parse "$main_ref" 2>/dev/null || echo "unknown")
 
     if [ "$main_before" != "unknown" ] && [ "$main_before" = "$main_after" ]; then
-        log "WARN" "Main unchanged after merge of $task_id — possible empty squash"
-        # Nothing to close — will retry next cycle
+        log "WARN" "Empty squash for $task_id — closing (no changes to merge)"
+        bd_safe close "$task_id" --reason="Empty merge — branch changes already in main" >/dev/null 2>&1 || true
+        bd_safe update "$task_id" --remove-label=approved --add-label=reviewed >/dev/null 2>&1 || true
         return 0
     fi
 

@@ -259,7 +259,7 @@ check_symlinks_health() {
     fi
 
     # Check required scripts exist
-    local required_scripts=("detect-phase.sh" "run-executors.sh" "run-analysts.sh")
+    local required_scripts=("detect-phase.sh" "run-executors.sh" "run-analysts.sh" "run-reviewers.sh" "run-merge-queue.sh")
     for script in "${required_scripts[@]}"; do
         if [[ ! -x "./scripts/$script" ]]; then
             log "ERROR" "Required script not found or not executable: scripts/$script"

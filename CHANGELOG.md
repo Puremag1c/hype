@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.2.2] - 2026-02-11
+
+### Fixed
+
+- **Health check includes v2.2 scripts** — `required_scripts` in `hype.sh` now verifies `run-reviewers.sh` and `run-merge-queue.sh` exist at startup. Previously only checked `detect-phase.sh`, `run-executors.sh`, `run-analysts.sh` — missing review pipeline scripts would cause silent failure during IMPLEMENTATION phase with no recovery path.
+
+- **Review timeout does not increment reject:N** — When Claude times out during code review (exit 124), the task now returns to `needs-review` queue without incrementing the rejection counter. Previously, timeouts were treated as "no action" rejections, which falsely escalated model (sonnet→opus) and triggered troubleshooter after 4 timeouts — wasting escalation budget on infrastructure issues, not code quality.
+
+- **Empty squash merge closes task instead of infinite loop** — When `git merge --squash` produces no changes (branch already in main), `run-merge-queue.sh` now closes the task with reason instead of silently returning. Previously, the `approved` label persisted, causing merge queue to re-process the same task every cycle indefinitely.
+
+---
+
 ## [2.2.1] - 2026-02-10
 
 ### Fixed

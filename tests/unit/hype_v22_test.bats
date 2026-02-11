@@ -152,3 +152,36 @@ load '../helpers/setup'
     grep -q 'blocked:troubleshoot' "$merge_sh"
     grep -q 'Push failures persist' "$merge_sh"
 }
+
+# =============================================================================
+# health check: v2.2 scripts included
+# =============================================================================
+
+@test "hype: health check includes run-reviewers.sh" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    grep 'required_scripts=' "$hype_sh" | grep -q 'run-reviewers.sh'
+}
+
+@test "hype: health check includes run-merge-queue.sh" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    grep 'required_scripts=' "$hype_sh" | grep -q 'run-merge-queue.sh'
+}
+
+# =============================================================================
+# reviewer timeout: does NOT increment reject:N
+# =============================================================================
+
+@test "reviewers: timeout returns to queue without reject increment" {
+    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+
+    # Timeout handler should exist and return to needs-review
+    local timeout_block
+    timeout_block=$(sed -n '/exit_code.*-eq 124/,/return 0/p' "$reviewers_sh")
+
+    echo "$timeout_block" | grep -q 'add-label=needs-review'
+    echo "$timeout_block" | grep -q 'remove-label=reviewing'
+    # Must NOT increment reject:N in timeout block
+    ! echo "$timeout_block" | grep -q 'set_counter_label'
+}

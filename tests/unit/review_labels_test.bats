@@ -155,6 +155,17 @@ load '../helpers/setup'
     grep -q 'main_before.*main_after' "$merge_sh"
 }
 
+@test "merge queue: closes task on empty squash (not infinite loop)" {
+    local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
+
+    # Empty squash should close the task, not retry
+    local empty_block
+    empty_block=$(sed -n '/main_before.*=.*main_after/,/return 0/p' "$merge_sh")
+
+    echo "$empty_block" | grep -q 'bd_safe close'
+    echo "$empty_block" | grep -q 'add-label=reviewed'
+}
+
 @test "merge queue: escalates to troubleshooter on persistent conflicts" {
     local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
 

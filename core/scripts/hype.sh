@@ -40,8 +40,9 @@ acquire_lock() {
         fi
     fi
 
-    # Ensure lock is released on ANY exit (not just SIGINT/SIGTERM)
-    trap "rm -f '$LOCK_FILE'" EXIT
+    # Unified EXIT trap: handles both graceful shutdown and unexpected death
+    # set -e / pipefail kills bypass SIGINT/SIGTERM traps but EXIT always fires
+    trap '_hype_exit_handler' EXIT
 }
 
 # === Logging ===
@@ -221,10 +222,32 @@ cleanup() {
 
     rm -f "$LOCK_FILE"
     log "INFO" "Shutdown complete"
+}
+
+# Exit handler: dispatches to cleanup for signals, logs unexpected deaths
+_hype_exit_handler() {
+    local exit_code=$?
+    if [ "$_hype_shutting_down" = true ]; then
+        # Already in cleanup (from signal), just release lock
+        rm -f "$LOCK_FILE" 2>/dev/null || true
+        return
+    fi
+    if [ "$exit_code" -eq 0 ]; then
+        rm -f "$LOCK_FILE" 2>/dev/null || true
+    else
+        log "ERROR" "HYPE exited unexpectedly (exit code $exit_code). Check logs."
+        rm -f "$LOCK_FILE" 2>/dev/null || true
+    fi
+}
+_hype_shutting_down=false
+
+_hype_signal_handler() {
+    _hype_shutting_down=true
+    cleanup
     exit 0
 }
 
-trap cleanup SIGINT SIGTERM
+trap _hype_signal_handler SIGINT SIGTERM
 
 # === Detect phase ===
 
@@ -901,7 +924,7 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             # Create trigger tasks for analysts (if not exist), then run them
             log "INFO" "HELPERS: Creating analyst triggers and running analysts..."
             create_analyst_triggers
-            ./scripts/run-analysts.sh
+            ./scripts/run-analysts.sh || log "ERROR" "run-analysts.sh failed (exit $?)"
 
             # Check if all analysts done and create milestone (single source of truth)
             # Must check BOTH open AND in_progress to prevent race condition:
@@ -1002,9 +1025,9 @@ For each task:
             # Note: regression tasks are handled in SMOKE_REVIEW phase before reaching here
             log "INFO" "IMPLEMENTATION: Streaming cycle..."
 
-            ./scripts/run-executors.sh
-            ./scripts/run-reviewers.sh
-            ./scripts/run-merge-queue.sh
+            ./scripts/run-executors.sh || log "ERROR" "run-executors.sh failed (exit $?)"
+            ./scripts/run-reviewers.sh || log "ERROR" "run-reviewers.sh failed (exit $?)"
+            ./scripts/run-merge-queue.sh || log "ERROR" "run-merge-queue.sh failed (exit $?)"
             ;;
 
         SMOKE_TEST)

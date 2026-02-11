@@ -429,7 +429,7 @@ $context
 
 get_review_tasks() {
     bd_safe list --status=in_progress --json --limit 0 2>/dev/null | \
-        jq -r '.[] | select((.labels // []) | index("needs-review")) | select((.labels // []) | index("trigger") | not) | select(.title | test("^milestone:") | not) | .id' 2>/dev/null
+        jq -r '.[] | select((.labels // []) | index("needs-review")) | select((.labels // []) | index("trigger") | not) | select(.title | test("^milestone:") | not) | .id' 2>/dev/null || echo ""
 }
 
 # === Main ===
@@ -473,7 +473,7 @@ main() {
         }
 
         local task_title
-        task_title=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].title // "unknown"' 2>/dev/null | head -c 40)
+        task_title=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].title // "unknown"' 2>/dev/null | head -c 40 || echo "unknown")
         log "INFO" "Review: $task_id \"$task_title\" (slot $slot)"
 
         ( run_reviewer "$slot" "$task_id" ) &

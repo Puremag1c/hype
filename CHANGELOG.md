@@ -4,7 +4,9 @@
 
 ### Fixed
 
-- **Shared `check_beads` daemon health check** — Extracted `check_beads()` and `hard_kill_beads_daemon()` from `hype.sh` into `common.sh` with `export -f`. Previously daemon recovery was copy-pasted: hype.sh had the full version (soft restart × 3 → hard kill by PID → fresh daemon), while doctor.sh had a simplified inline copy. Now all scripts (hype, doctor, future ones) use the same battle-tested recovery: `check_beads` returns 0/1 and the caller decides policy — hype.sh exits on failure, doctor.sh continues with limited data.
+- **Shared `check_beads` daemon health check** — Extracted `check_beads()` and `hard_kill_beads_daemon()` from `hype.sh` into `common.sh` with `export -f`. All scripts use the same recovery: soft restart × 3 → hard kill → fresh daemon. `check_beads` returns 0/1, caller decides policy. Daemon failure retries with 60s backoff instead of killing HYPE.
+
+- **HYPE no longer dies silently from bd daemon failure** — Three layers of defense against `set -euo pipefail` cascading death: (1) all `bd_safe|jq` pipelines in subscripts end with `|| echo ""` fallback, (2) all `./scripts/*.sh` calls in hype.sh protected with `|| log "ERROR"`, (3) unified EXIT trap logs unexpected exits with exit code. Previously, a single bd_safe timeout in `get_approved_tasks()` killed run-merge-queue.sh → killed hype.sh with zero logging. Diagnosed by Doctor from ChatFilter production incident.
 
 ---
 

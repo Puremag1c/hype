@@ -46,7 +46,7 @@ log() {
 # Get tasks ready for merge (approved label, in_progress status)
 get_approved_tasks() {
     bd_safe list --status=in_progress --json --limit 0 2>/dev/null | \
-        jq -r '.[] | select((.labels // []) | index("approved")) | select((.labels // []) | index("trigger") | not) | .id' 2>/dev/null
+        jq -r '.[] | select((.labels // []) | index("approved")) | select((.labels // []) | index("trigger") | not) | .id' 2>/dev/null || echo ""
 }
 
 # Merge one approved task

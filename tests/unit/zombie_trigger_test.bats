@@ -309,3 +309,63 @@ load '../helpers/setup'
     # Must track failure streak
     echo "$beads_block" | grep -q 'beads_fail_streak'
 }
+
+# =============================================================================
+# set -e resilience: scripts don't kill HYPE on bd failure (v2.2.8)
+# =============================================================================
+
+@test "hype.sh: IMPLEMENTATION script calls protected with || log" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    local impl_block
+    impl_block=$(sed -n '/IMPLEMENTATION)/,/;;/p' "$hype_sh")
+
+    # All three scripts must have || log protection
+    echo "$impl_block" | grep 'run-executors.sh' | grep -q '|| log'
+    echo "$impl_block" | grep 'run-reviewers.sh' | grep -q '|| log'
+    echo "$impl_block" | grep 'run-merge-queue.sh' | grep -q '|| log'
+}
+
+@test "hype.sh: HELPERS script call protected with || log" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    local helpers_block
+    helpers_block=$(sed -n '/HELPERS)/,/;;/p' "$hype_sh")
+
+    echo "$helpers_block" | grep 'run-analysts.sh' | grep -q '|| log'
+}
+
+@test "hype.sh: EXIT trap logs unexpected exit" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    # Must have exit handler that logs unexpected exits
+    grep -q '_hype_exit_handler' "$hype_sh"
+    grep -q 'exited unexpectedly' "$hype_sh"
+}
+
+@test "get_approved_tasks: pipeline has fallback (|| echo)" {
+    local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
+
+    local fn_block
+    fn_block=$(sed -n '/^get_approved_tasks/,/^}/p' "$merge_sh")
+
+    echo "$fn_block" | grep -q '|| echo'
+}
+
+@test "get_ready_tasks: pipeline has fallback (|| echo)" {
+    local exec_sh="$SCRIPTS_DIR/run-executors.sh"
+
+    local fn_block
+    fn_block=$(sed -n '/^get_ready_tasks/,/^}/p' "$exec_sh")
+
+    echo "$fn_block" | grep -q '|| echo'
+}
+
+@test "get_review_tasks: pipeline has fallback (|| echo)" {
+    local rev_sh="$SCRIPTS_DIR/run-reviewers.sh"
+
+    local fn_block
+    fn_block=$(sed -n '/^get_review_tasks/,/^}/p' "$rev_sh")
+
+    echo "$fn_block" | grep -q '|| echo'
+}

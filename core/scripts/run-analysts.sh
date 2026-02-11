@@ -59,7 +59,7 @@ run_analyst() {
 
     # Find trigger task from cache
     local task_id
-    task_id=$(echo "$bd_cache" | jq -r ".[] | select(.title == \"$trigger_task\") | .id" | head -1)
+    task_id=$(echo "$bd_cache" | jq -r ".[] | select(.title == \"$trigger_task\") | .id" | head -1 || echo "")
 
     if [ -z "$task_id" ]; then
         log "WARN" "No trigger task for analyst-$analyst"

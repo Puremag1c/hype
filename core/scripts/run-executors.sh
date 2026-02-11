@@ -150,7 +150,7 @@ get_ready_tasks() {
         jq -r '.[] | select(.issue_type == "task" or .issue_type == "bug" or .issue_type == "feature") | select(.title | test("^run-|^milestone:") | not) | select((.labels // []) | any(test("^milestone:")) | not) | select((.labels // []) | index("trigger") | not) | select((.labels // []) | index("regression") | not) | select((.labels // []) | index("smoke") | not) | select((.labels // []) | index("user-escalation") | not) | "\(.priority):\(.id)"' 2>/dev/null | \
         sort -n | \
         cut -d: -f2 | \
-        head -n "$MAX_PARALLEL"
+        head -n "$MAX_PARALLEL" || echo ""
 }
 
 # === Run single executor ===
@@ -162,7 +162,7 @@ run_executor() {
 
     # Check task status before claim (avoid race condition confusion)
     local current_status
-    current_status=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].status // "unknown"' 2>/dev/null)
+    current_status=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].status // "unknown"' 2>/dev/null || echo "unknown")
 
     if [ "$current_status" != "open" ]; then
         log "INFO" "Task $task_id not open (status: $current_status), skipping"
@@ -243,7 +243,7 @@ $retry_context}"
     # Guard: check if task was already handled by senior executor during our run.
     # Without this, a zombie executor timeout reopens a task that senior already closed.
     local post_status
-    post_status=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].status // "unknown"' 2>/dev/null)
+    post_status=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].status // "unknown"' 2>/dev/null || echo "unknown")
     if [ "$post_status" = "closed" ]; then
         log "INFO" "Task $task_id already closed (reviewed during executor run), skipping post-processing"
         return 0
@@ -356,7 +356,7 @@ PROJECT_ROOT: $PROJECT_DIR"
 
     # Guard: check if task was already handled during our run
     local post_status
-    post_status=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].status // "unknown"' 2>/dev/null)
+    post_status=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].status // "unknown"' 2>/dev/null || echo "unknown")
     if [ "$post_status" = "closed" ]; then
         log "INFO" "Task $task_id already closed (reviewed during auditor run), skipping post-processing"
         return 0

@@ -1011,8 +1011,39 @@ grep "MERGE" logs/hype.log | tail -10
 bd update <id> --remove-label=approved --add-label=needs-review
 ```
 
-**Auto-recovery (v2.2+):**
-`heal_stuck_tasks()` логирует предупреждение для задач approved >5 минут.
+**Auto-recovery (v2.2.1+):**
+`heal_stuck_tasks()`: предупреждение при >5 минут, recovery при >10 минут (remove approved, increment reject:N, return to executor). Если empty squash (v2.2.2) — задача закрывается автоматически с reason.
+
+---
+
+### PROBLEM: Empty squash — task loops in merge queue forever
+
+**Fixed in:** 2.2.2
+
+**Симптомы:**
+- Задача с `approved` label крутится в merge queue без прогресса
+- В логах: "Main unchanged after merge" повторяется
+- `reject:N` не растёт (merge queue возвращал 0 без действий)
+- heal_stuck_tasks возвращает в executor, но тот ничего не меняет
+
+**Причина:**
+`git merge --squash` не даёт изменений (branch changes already in main). Merge queue логировал warning и возвращал 0, но label `approved` оставался → merge queue подбирал задачу снова → бесконечный цикл.
+
+**Диагностика:**
+```bash
+# Проверить что branch уже в main
+git log --oneline origin/main | head -5
+git diff origin/main..origin/task/beads-<id>  # пустой diff = empty squash
+```
+
+**Решение:**
+Обновиться до 2.2.2+. Merge queue теперь закрывает задачу с reason "Empty merge — branch changes already in main".
+
+**Manual fix (для старых версий):**
+```bash
+bd close <id> --reason="Empty merge — branch already in main"
+bd update <id> --remove-label=approved --add-label=reviewed
+```
 
 ---
 
@@ -1083,7 +1114,98 @@ bd update <id> --description="<более точное описание>"
 ```
 
 **Auto-recovery (v2.2+):**
-Escalation ladder: reject:2-3 → model escalation (haiku→sonnet→opus), reject:4 → Troubleshooter. Circuit breaker (v2.1.8+) обнаруживает same-reason loops и эскалирует к user.
+Escalation ladder: reject:2-3 → model escalation (haiku→sonnet→opus), reject:4 → Troubleshooter. Circuit breaker (v2.1.8+) через `last-reject:{TYPE}` label обнаруживает same-reason loops после reformulation и эскалирует к user-escalation.
+
+---
+
+### PROBLEM: Review timeout falsely escalates model (reject:N grows on infrastructure timeouts)
+
+**Fixed in:** 2.2.2
+
+**Симптомы:**
+- reject:N растёт для нескольких задач одновременно
+- Модели эскалируются до opus без реальных code quality проблем
+- Задачи попадают к troubleshooter, хотя код нормальный
+- В логах reviewer: timeout (exit 124), а не конкретные замечания
+
+**Причина:**
+До v2.2.2 timeout Claude при ревью (exit 124) трактовался как "no action" и инкрементировал `reject:N`. При медленном API или параллельной нагрузке — все ревью таймаутились, reject:N рос для всех задач, модели эскалировались впустую.
+
+**Диагностика:**
+```bash
+# Проверить что задачи реджектятся по таймауту, не по содержанию
+grep "REVIEW TIMEOUT" logs/hype.log | tail -10
+# Проверить reject:N — если растёт для многих задач одновременно, это инфраструктурная проблема
+bd list --status=in_progress --json --limit 0 | jq '.[] | select(.labels[]? | startswith("reject:")) | {id, title, labels}'
+```
+
+**Решение:**
+Обновиться до 2.2.2+. Timeout теперь возвращает задачу в `needs-review` БЕЗ инкремента reject:N. Следующий reviewer попробует снова.
+
+**Manual fix (для старых версий):**
+```bash
+# Сбросить ложные reject:N
+bd update <id> --remove-label=reject:4 --add-label=reject:0 --remove-label=blocked:troubleshoot
+bd update <id> --add-label=needs-review --status=in_progress
+```
+
+---
+
+### PROBLEM: Secrets-warning blocks review progress
+
+**Since:** 2.2.1
+
+**Симптомы:**
+- Задача с label `secrets-warning` в review pipeline
+- Reviewer отклоняет из-за "security warning" для тестовых данных
+- Задача циклит между executor и reviewer
+
+**Причина:**
+Preflight check в `run-reviewers.sh` нашёл credential-like patterns в diff (API keys, passwords, .env). Это soft warning — reviewer должен решить, но слабые модели (sonnet) могут перестраховаться и отклонить.
+
+**Диагностика:**
+```bash
+# Проверить что именно нашёл preflight
+bd show <id> --json | jq '.[0].labels'
+grep "SECRETS_WARNING" logs/reviewer-*.log | tail -5
+# Посмотреть diff задачи
+git diff origin/main..origin/task/beads-<id> | grep -iE "sk-|api_key|password|secret|\.env"
+```
+
+**Решение (runtime-fix):**
+```bash
+# Если это тестовые данные — эскалировать модель до opus (лучше отличает real secrets от test data)
+bd update <id> --add-label=model:opus --remove-label=secrets-warning
+bd update <id> --add-label=needs-review
+```
+
+---
+
+### PROBLEM: Trigger task stuck in review pipeline
+
+**Fixed in:** 2.2.1
+
+**Симптомы:**
+- Задача с label `trigger` в `reviewing` или `needs-review` статусе
+- В логах reviewer: "NO_BRANCH" error (trigger не имеет git branch)
+- P0 bug count растёт, SMOKE_TEST блокируется
+- Бесконечный цикл: trigger → review → NO_BRANCH → reject → review
+
+**Причина:**
+Trigger tasks — системные координационные задачи (run-analyst-*, run-tester-*), не пользовательский код. До v2.2.1 они могли попасть в review pipeline через heal_stuck_tasks (добавляло needs-review) или через get_review_tasks (не фильтровало по label trigger).
+
+**Диагностика:**
+```bash
+bd list --json --limit 0 | jq '.[] | select((.labels // []) | index("trigger")) | {id, title, status, labels}'
+```
+
+**Решение:**
+Обновиться до 2.2.1+. Trigger tasks исключены из всех task-fetching функций.
+
+**Manual fix (для старых версий):**
+```bash
+bd close <id>  # Просто закрыть trigger
+```
 
 ---
 

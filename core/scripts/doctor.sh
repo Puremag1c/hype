@@ -61,6 +61,23 @@ log() {
 gather_context() {
     local context=""
 
+    # HYPE version and script health
+    context+="## HYPE Version\n"
+    context+="\`\`\`\n"
+    context+="Version: $(cat "$HYPE_HOME/VERSION" 2>/dev/null || cat "VERSION" 2>/dev/null || echo "unknown")\n"
+    local missing_scripts=""
+    for script in detect-phase.sh run-executors.sh run-analysts.sh run-reviewers.sh run-merge-queue.sh; do
+        if [[ ! -x "./scripts/$script" ]] && [[ ! -x "$SCRIPT_DIR/$script" ]]; then
+            missing_scripts+="MISSING: $script\n"
+        fi
+    done
+    if [ -n "$missing_scripts" ]; then
+        context+="CRITICAL — Missing scripts:\n$missing_scripts"
+    else
+        context+="All required scripts present\n"
+    fi
+    context+="\`\`\`\n\n"
+
     # Beads status
     context+="## Beads Status\n"
     context+="\`\`\`\n"
@@ -133,6 +150,12 @@ gather_context() {
     context+="\n\n"
     context+="Approved tasks:\n"
     context+=$(bd_safe list --status=in_progress --json --limit 0 2>/dev/null | jq -r '.[] | select((.labels // []) | index("approved")) | "\(.id): \(.title) (updated: \(.updated_at))"' 2>/dev/null || echo "none")
+    context+="\n\n"
+    context+="Trigger tasks (should be closed or excluded):\n"
+    context+=$(bd_safe list --json --limit 0 2>/dev/null | jq -r '.[] | select((.labels // []) | index("trigger")) | "\(.id): \(.title) [status: \(.status)]"' 2>/dev/null || echo "none")
+    context+="\n\n"
+    context+="Tasks with secrets-warning:\n"
+    context+=$(bd_safe list --json --limit 0 2>/dev/null | jq -r '.[] | select((.labels // []) | index("secrets-warning")) | "\(.id): \(.title)"' 2>/dev/null || echo "none")
     context+="\n\`\`\`\n\n"
 
     # Recent logs

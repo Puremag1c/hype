@@ -103,10 +103,16 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 - **Управление:** `run-reviewers.sh`, до `MAX_PARALLEL_REVIEWERS` параллельно
 - **Workflow:**
   1. Atomic claim: `try_claim_for_review()` (mkdir lock + label)
-  2. Preflight: проверка ветки и коммитов
+  2. Preflight: проверка ветки, коммитов, secret scanning (v2.2.1)
   3. Build context: diff, commits, executor log, secrets warning
   4. Claude review с `reviewer.md` промптом
   5. Результат: approve (label) / reject (status=open) / no-merge (close)
+- **Preflight checks (v2.2.1):**
+  - Проверка что ветка существует (`NO_BRANCH` → reject)
+  - Проверка что есть коммиты (`NO_COMMITS` → reject)
+  - Secret scanning: grep по diff на API keys, passwords, secrets, .env → `SECRETS_WARNING` + label `secrets-warning` → reviewer решает (soft, не hard reject)
+  - Circuit breaker: если reformulated задача ломается по той же причине (`last-reject:{TYPE}` label) → `user-escalation`
+- **Timeout handling (v2.2.2):** Если Claude таймаутится (exit 124) — задача возвращается в `needs-review` БЕЗ инкремента `reject:N`. Timeout = инфраструктурная проблема, не отказ
 - **Backpressure:** Lock-based (`reviewer-N.lock`), stale cleanup >20 min
 - **Escalation:** reject:1→retry, reject:2-3→model, reject:4→troubleshooter
 
@@ -118,6 +124,8 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
   2. Verify main changed (detect empty squash)
   3. Close task, cleanup remote branch
 - **Конфликты:** Abort merge, increment reject:N, return to executor
+- **Push failure (v2.2.1):** Increment reject:N, remove approved, return to executor. Escalate at reject:4
+- **Empty squash (v2.2.2):** Если merge не даёт изменений (branch already in main) — закрывает задачу с reason, не зацикливается
 - **Audit tasks:** Close without merge
 
 ### Auditor (Sonnet → Opus)
@@ -131,7 +139,7 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 - **Когда:** После успешного FINAL_REVIEW: PASSED
 - **Задачи:**
   - Определяет тип изменений (major/minor/patch)
-  - Обновляет VERSION файл
+  - Обнаруживает источник версии в целевом проекте (v2.2.1): `package.json`, `pyproject.toml`, `Cargo.toml`, `mix.exs`, etc. — обновляет версию где она определена, не только `VERSION` файл
   - Добавляет запись в CHANGELOG.md
 
 ### Architect Troubleshooter (Opus)
@@ -309,6 +317,26 @@ bd daemon start
 - `reviewed` — задача замержена и закрыта (v2.2)
 - `blocked:troubleshoot` — исчерпан escalation ladder, ждёт Troubleshooter
 - `blocked:*` — прочие причины блокировки
+- `trigger` — системная задача-координатор (run-analyst-*, run-tester-*, milestone:*). Исключена из executor/reviewer/merge/heal/reset. Автоматически закрывается после запуска агента
+- `secrets-warning` — preflight нашёл credential-like patterns в diff. Reviewer решает: реальный секрет = REJECT, тестовые данные = proceed
+- `last-reject:{TYPE}` — причина последнего reject для circuit breaker (cross-cycle detection, v2.2.1)
+
+### Trigger Tasks
+
+**Trigger tasks** — системные задачи для координации параллельных агентов. Создаются скриптами (`run-analysts.sh`, `run-testers.sh`), не пользователями.
+
+- **Label:** `trigger`
+- **Примеры:** `run-analyst-ux`, `run-tester-functional`, `milestone:analysts-done`
+- **Lifecycle:** create → claim → agent runs → auto-close
+- **Исключены из (v2.2.1):**
+  - `get_ready_tasks()` — executors не берут trigger'ы
+  - `get_review_tasks()` — reviewers не ревьюят trigger'ы
+  - `get_approved_tasks()` — merge queue не мержит trigger'ы
+  - `heal_stuck_tasks()` — healing не трогает trigger'ы
+  - `reset_stale_tasks()` — stale reset не сбрасывает trigger'ы
+  - P0 bug count в `detect-phase.sh` — trigger'ы не считаются багами
+
+**Почему это важно:** До v2.2.1 trigger'ы могли попасть в review pipeline → получить `NO_BRANCH` error → считаться P0 багами → блокировать SMOKE_TEST бесконечно.
 
 ### Dependencies
 
@@ -329,13 +357,20 @@ bd dep cycles  # Проверка циклов
 - Global lock через `mkdir /tmp/hype-bd.lock.d` (atomic)
 - Предотвращает daemon explosion от параллельных bd вызовов
 
+### Startup health check (v2.2.2)
+- Проверяет наличие и executable права для всех критичных скриптов:
+  - `detect-phase.sh`, `run-executors.sh`, `run-analysts.sh`, `run-reviewers.sh`, `run-merge-queue.sh`
+- При отсутствии любого — fatal error, daemon не стартует
+- Предотвращает silent failure: без проверки executors работали бы, но review pipeline молча бы не запустился
+
 ### Self-healing (heal_stuck_tasks)
 - Запускается в каждой итерации main loop
 - Находит `in_progress` задачи без `executor` и `needs-review` labels
 - Если задача stuck >2 минут → автоматически добавляет `needs-review`
 - Закрывает gap когда executor завершился но label не поставился (beads sync race)
 - **v2.2:** Reviewing healing — задачи с `reviewing` >3 мин без reviewer lock → возврат в `needs-review`
-- **v2.2:** Approved warning — задачи с `approved` >5 мин → лог предупреждение (merge queue stuck)
+- **v2.2.1:** Approved recovery — задачи с `approved` >5 мин → лог предупреждение; >10 мин → remove approved, increment reject:N, return to executor
+- **Исключения:** trigger, reviewing (пока есть lock), approved (до 10 мин), user-escalation
 
 ### Zombie daemon recovery (v2.1.7+)
 - `check_beads()` → 3x soft restart → `hard_kill_beads_daemon()`

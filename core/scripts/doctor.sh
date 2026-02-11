@@ -62,16 +62,17 @@ sanitize_doctor_report() {
     local file="$1"
     [[ -f "$file" ]] || return 1
 
+    local tmp="${file}.tmp"
     # Replace HOME path with ~
-    sed -i '' "s|$HOME|~|g" "$file"
+    sed "s|$HOME|~|g" "$file" > "$tmp" && mv "$tmp" "$file"
     # Replace PROJECT_DIR with $PROJECT
-    sed -i '' "s|$PROJECT_DIR|\$PROJECT|g" "$file"
+    sed "s|$PROJECT_DIR|\$PROJECT|g" "$file" > "$tmp" && mv "$tmp" "$file"
     # Redact API keys (ANTHROPIC_API_KEY=..., OPENAI_API_KEY=..., etc.)
-    sed -i '' 's/\([A-Z_]*API_KEY\)=[^ ]*/\1=[REDACTED]/g' "$file"
+    sed 's/\([A-Z_]*API_KEY\)=[^ ]*/\1=[REDACTED]/g' "$file" > "$tmp" && mv "$tmp" "$file"
     # Redact sk-* keys
-    sed -i '' 's/sk-[a-zA-Z0-9_-]\{20,\}/[REDACTED_KEY]/g' "$file"
+    sed 's/sk-[a-zA-Z0-9_-]\{20,\}/[REDACTED_KEY]/g' "$file" > "$tmp" && mv "$tmp" "$file"
     # Redact Bearer tokens
-    sed -i '' 's/Bearer [a-zA-Z0-9_.-]\{10,\}/Bearer [REDACTED]/g' "$file"
+    sed 's/Bearer [a-zA-Z0-9_.-]\{10,\}/Bearer [REDACTED]/g' "$file" > "$tmp" && mv "$tmp" "$file"
 }
 
 check_gh_available() {
@@ -83,14 +84,15 @@ check_gh_available() {
 find_latest_doctor_log() {
     local since_ts="$1"
     local latest=""
-    for f in $(ls -t "$CLAUDEV_DIR/logs"/doctor-*.md 2>/dev/null); do
+    while IFS= read -r f; do
         local file_ts
-        file_ts=$(stat -f '%m' "$f" 2>/dev/null || stat -c '%Y' "$f" 2>/dev/null || echo 0)
+        # macOS: stat -f '%m', Linux: stat -c '%Y'
+        file_ts=$(stat -f '%m' "$f" 2>/dev/null || stat -c '%Y' "$f" 2>/dev/null) || continue
         if [[ "$file_ts" -ge "$since_ts" ]]; then
             latest="$f"
             break
         fi
-    done
+    done < <(ls -t "$CLAUDEV_DIR/logs"/doctor-*.md 2>/dev/null)
     [[ -n "$latest" ]] && echo "$latest"
 }
 

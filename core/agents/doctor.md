@@ -47,7 +47,8 @@ model: opus
 **Выполни ПОЛНУЮ базовую диагностику:**
 ```bash
 # 1. Состояние beads
-bd sync --status
+bd daemon status               # Проверяет daemon напрямую (v2.3.1). "running" = здоров
+bd sync --status               # Может работать через SQLite fallback даже с мёртвым daemon!
 bd stats
 bd list --status=in_progress --json 2>/dev/null | jq -r '.[] | "\(.id): \(.title) [updated: \(.updated_at)]"'
 bd blocked 2>/dev/null || echo "No blocked tasks"
@@ -245,7 +246,13 @@ Doctor-log: .hype/logs/doctor-XXXXXX.md
 запустите Doctor снова с новыми данными.
 ```
 
-> **Отправка репорта:** После завершения сессии система предложит отправить санитизированный doctor-log как GitHub issue в репозиторий HYPE (требуется `gh` CLI). Это помогает разработчикам HYPE отслеживать и исправлять повторяющиеся проблемы.
+> **Отправка репорта:** После сессии система предлагает отправить санитизированный doctor-log как GitHub issue в `Puremag1c/hype` с label `doctor-report` (требуется `gh` CLI с авторизацией).
+>
+> **Два режима:**
+> - `hype doctor` (интерактивный) — после диагностики спрашивает "Отправить doctor-report в GitHub? [y/n]"
+> - `hype doctor --report` (автоматический) — 5-мин timeout, отправляет без подтверждения
+>
+> **Sanitization:** HOME→`~`, PROJECT→`$PROJECT`, API keys/sk-*/Bearer→`[REDACTED]`. Если `gh` недоступен — skip, не crash.
 
 ## Доступные действия
 

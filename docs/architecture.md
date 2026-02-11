@@ -123,8 +123,8 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
   1. Fetch, merge --squash, commit, push
   2. Verify main changed (detect empty squash)
   3. Close task, cleanup remote branch
-- **Конфликты:** Abort merge, increment reject:N, return to executor
-- **Push failure (v2.2.1):** Increment reject:N, remove approved, return to executor. Escalate at reject:4
+- **Конфликты (v2.3.3):** Abort merge, increment `merge-conflict:N` (отдельный от `reject:N`), skip task и попробовать следующий approved. После 6 неудач → return to executor. Не эскалирует модель, не зовёт Troubleshooter
+- **Push failure (v2.3.3):** Та же retry-in-place логика — `merge-conflict:N`, skip, retry next cycle
 - **Empty squash (v2.2.2):** Если merge не даёт изменений (branch already in main) — закрывает задачу с reason, не зацикливается
 - **Audit tasks:** Close without merge
 
@@ -168,6 +168,24 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 - **Sequential:** functional + visual запускаются последовательно (Playwright MCP conflicts)
 - **Async (v2.2.6):** `run-testers.sh` запускается в background с PID tracking. HYPE продолжает тикать (check_beads, heal каждый цикл). Три состояния: running (PID alive → wait), never launched (no PID file → start), finished/crashed (PID dead → check results or re-launch orphans)
 - **Hard gate:** P0 bugs блокируют milestone:smoke-test-done → возврат в IMPLEMENTATION
+
+### Doctor (Opus)
+- **Роль:** Диагностика проблем HYPE, формирование doctor-log
+- **Вызывается:** `hype doctor` (интерактивно) или `hype doctor --report` (автоматически)
+- **Pre-flight:** `check_beads()` проверяет daemon через `bd daemon status` (v2.3.1). Без daemon — Doctor работает с ограниченными данными
+- **Workflow:**
+  1. `gather_context()` — 11 категорий: HYPE version, beads status, in-progress tasks, blocked tasks, current phase, running processes, git status, HYPE markers, executor worktrees, review pipeline (v2.2), recent logs
+  2. `load_knowledge()` — загружает `architecture.md` + `troubleshooting.md` как knowledge base
+  3. `build_prompt()` — agent prompt + context + knowledge → Claude
+  4. Claude диагностирует и создаёт doctor-log в `.hype/logs/doctor-TIMESTAMP.md`
+- **Два режима:**
+  - **Интерактивный:** Claude ведёт диалог, после сессии предлагает отправить doctor-log (`read -p`)
+  - **`--report`:** Автоматический с 5-мин timeout, doctor-log отправляется как GitHub issue без подтверждения
+- **Report sending (v2.3.0+):**
+  1. `sanitize_doctor_report()` — HOME→`~`, PROJECT_DIR→`$PROJECT`, API keys/sk-*/Bearer→`[REDACTED]`
+  2. `gh label create "doctor-report"` — idempotent создание label (v2.3.3)
+  3. `gh issue create` — в `Puremag1c/hype` с label `doctor-report`, title из "## Reported Symptom"
+- **Graceful degradation:** gh отсутствует / не авторизован / сеть недоступна → skip с логом, не crash
 
 ## Скрипты
 
@@ -307,7 +325,8 @@ bd daemon start
 - `added-by:analyst-*` — кто добавил задачу
 - `milestone:*` — маркер завершения фазы
 - `retry:N` — счётчик timeout/failure при execution
-- `reject:N` — unified счётчик отказов review (escalation ladder: 1→retry, 2-3→escalate model, 4→troubleshooter)
+- `reject:N` — счётчик отказов code review (escalation ladder: 1→retry, 2-3→escalate model, 4→troubleshooter). Только для quality rejections от Reviewer
+- `merge-conflict:N` — счётчик git конфликтов при merge (v2.3.3). Отдельный от `reject:N` — retry-in-place, после 6 → executor. Не эскалирует модель, не зовёт Troubleshooter
 - `regress:N` — счётчик regression cycles (script-driven)
 - `smoke` — баг из SMOKE_TEST, ждёт тriage от Architect
 - `regression` — баг который вернулся после fix
@@ -379,12 +398,19 @@ bd dep cycles  # Проверка циклов
 - Закрывает orphaned triggers от предыдущих сессий (все non-closed задачи с label `trigger`)
 - Предотвращает: zombie trigger блокирует phase detection, stale PID file пропускает запуск тестеров
 
-### Zombie daemon recovery (v2.1.7+)
-- `check_beads()` → 3x soft restart → `hard_kill_beads_daemon()`
+### Zombie daemon recovery (v2.1.7+, v2.3.1+)
+- `check_beads()` использует `bd daemon status` (v2.3.1) — различает "daemon здоров" vs "bd работает через SQLite fallback"
+- Recovery: 3x soft restart → `hard_kill_beads_daemon()`
 - Hard kill: читает PID из `.beads/daemon.pid`, проверяет что это bd процесс, kill → kill -9 → rm stale files → fresh start
 - Решает проблему когда daemon жив но socket потерян (feedback loop на большом JSONL)
 - Профилактика: `flush-debounce: "15s"` в `.beads/config.yaml` (ставится при `hype init` / `hype start`)
 - Все daemon start с `--log-level warn` для уменьшения лога
+
+### Startup hardening (v2.3.1+)
+- `ensure_single_daemon()` — при старте проверяет `pgrep -x bd`: >1 → killall + restart; 0 → start; 1 → ok
+- `compact_beads_if_large()` — если `.beads/beads.db` > 10MB → `bd admin compact --purge-tombstones`
+- `bd_safe` explosion threshold = 5 (было 30). ChatFilter имел 6 daemons — порог 30 бесполезен
+- Milestones: `bd update --remove-label` вместо `bd delete` — без tombstones (v2.3.1)
 
 ### Adaptive backoff
 - Если beads daemon отвечает >2s → удваивает iteration delay (max 60s)
@@ -394,8 +420,9 @@ bd dep cycles  # Проверка циклов
 
 ### Retry & escalation logic
 - Execution failures: `retry:N` (timeout, crash)
-- Review rejections: `reject:N` (unified counter)
-- Escalation ladder: reject:1→retry, reject:2-3→escalate model (haiku→sonnet→opus), reject:4→Troubleshooter
+- Review rejections: `reject:N` — только code quality отказы от Reviewer
+- Merge conflicts: `merge-conflict:N` (v2.3.3) — отдельный счётчик для git infrastructure. Retry-in-place в merge queue, после 6 → executor
+- Escalation ladder (reject:N): 1→retry, 2-3→escalate model (haiku→sonnet→opus), 4→Troubleshooter
 - Troubleshooter: reformulate / split / remove / escalate to user
 - Max 2 reformulations (label `reformulated`), then only reduce/remove/user
 

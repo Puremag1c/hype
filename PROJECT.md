@@ -166,13 +166,38 @@ startup_timeout: 30          # Секунды на запуск сервера
 - gh — GitHub CLI (для PR workflow)
 - gitleaks — secret detection (авто-установка при наличии GitHub)
 
-## v2.3.0: Doctor Report Sending (завершено)
+## v2.3.0: Doctor System (завершено)
 
-- **Автоотправка репортов** — после диагностики, Doctor report отправляется как GitHub issue в `Puremag1c/hype` с label `doctor-report`
-- **Sanitization** — HOME → `~`, PROJECT_DIR → `$PROJECT`, API keys / Bearer tokens → `[REDACTED]`
-- **Два режима** — `--report`: автоматическая отправка; interactive: `read -p` подтверждение от пользователя
-- **Graceful degradation** — gh отсутствует → skip, gh не авторизован → skip, сеть недоступна → log ERROR
-- **5 функций** — `sanitize_doctor_report`, `check_gh_available`, `find_latest_doctor_log`, `save_report_output`, `send_doctor_report`
+### Архитектура Doctor (`core/scripts/doctor.sh`)
+
+**Entry point:** `hype doctor` (интерактивно) / `hype doctor --report` (автоматически, 5-мин timeout)
+
+**Pipeline:**
+1. `main()` — проверяет `claude`, `bd`, запускает `check_beads()` pre-flight
+2. `gather_context()` — собирает 11 категорий данных о системе:
+   - HYPE version + script health
+   - Beads status (daemon + stats)
+   - In-progress / blocked tasks
+   - Current phase (detect-phase.sh)
+   - Running processes
+   - Git status + worktrees + locks
+   - HYPE markers (locks, needs-spec, force-phase)
+   - Executor worktrees
+   - Review pipeline state (v2.2): reviewer slots, review locks, reviewing/approved tasks, triggers, secrets-warning
+   - Recent logs (last 30 lines)
+3. `load_knowledge()` — загружает `docs/architecture.md` + `docs/troubleshooting.md` как knowledge base
+4. `build_prompt()` — собирает: agent prompt (`doctor.md`) + context + knowledge → Claude
+5. `run_doctor()` — два режима:
+   - **Interactive:** Claude ведёт диалог → `find_latest_doctor_log()` находит doctor-log → `sanitize_doctor_report()` → предлагает отправить
+   - **`--report`:** `timeout 5m claude --print` → `save_report_output()` → `sanitize_doctor_report()` → `send_doctor_report()`
+
+**Report sending:**
+- `sanitize_doctor_report()` — HOME→`~`, PROJECT→`$PROJECT`, API_KEY/sk-*/Bearer→`[REDACTED]`
+- `check_gh_available()` — проверяет `gh` + `gh auth status`
+- `send_doctor_report()` — `gh label create` (idempotent, v2.3.3) → `gh issue create` в `Puremag1c/hype` с label `doctor-report`
+- **Graceful degradation** — gh отсутствует / не авторизован / сеть недоступна → skip, не crash
+
+**Cross-platform:** `find_latest_doctor_log()` использует `stat -f '%m'` (Darwin) / `stat -c '%Y'` (Linux)
 
 ## v2.2.0: Parallel Review Pipeline (завершено)
 
@@ -187,7 +212,7 @@ startup_timeout: 30          # Секунды на запуск сервера
 
 ## v2.1.0: Review Escalation & Model Switching (завершено)
 
-- **Unified reject:N counter** — один счётчик отказов для всех review/rework путей
+- **reject:N counter** — счётчик code quality отказов от Reviewer (с v2.3.3 отделён от merge-conflict:N)
 - **Model escalation ladder** — автоматическая эскалация: reject:1→retry, reject:2-3→upgrade model, reject:4→Troubleshooter
 - **Architect Troubleshooter** — новый агент для persistent failures (reformulate / split / remove / escalate to user)
 - **USER_REVIEW phase** — daemon stops, tech-writer-review генерирует отчёт для пользователя

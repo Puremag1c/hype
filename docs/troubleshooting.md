@@ -10,7 +10,7 @@
 
 **Симптомы:**
 - Команды `bd` зависают на 30+ секунд
-- `bd sync --status` не отвечает
+- `bd sync --status` не отвечает (или отвечает через SQLite fallback — ложный "ок")
 - В логах: timeout на bd операциях
 
 **Причина:**
@@ -18,7 +18,8 @@ Daemon завис или SQLite lock не освободился.
 
 **Диагностика:**
 ```bash
-timeout 5s bd sync --status
+bd daemon status                # v2.3.1+: проверяет daemon напрямую. "running" = здоров
+timeout 5s bd sync --status     # ВНИМАНИЕ: может работать через SQLite fallback с мёртвым daemon!
 pgrep -f "bd daemon"
 ls -la .beads/daemon.*
 ```
@@ -35,8 +36,8 @@ rm -f .beads/daemon.*
 bd daemon start
 ```
 
-**Auto-recovery (v2.1.7+):**
-`check_beads()` в hype.sh автоматически обрабатывает этот случай: 3 попытки soft restart → hard kill по PID из `.beads/daemon.pid` → очистка stale файлов → fresh start.
+**Auto-recovery (v2.3.1+):**
+`check_beads()` в hype.sh использует `bd daemon status` (не `bd sync --status` который имеет SQLite fallback). 3 попытки soft restart → hard kill по PID из `.beads/daemon.pid` → очистка stale файлов → fresh start.
 
 ---
 
@@ -65,8 +66,8 @@ rm -f .beads/daemon.lock .beads/daemon.pid
 bd daemon start --log-level warn
 ```
 
-**Auto-recovery (v2.1.7+):**
-`check_beads()` → `hard_kill_beads_daemon()` автоматически: читает PID, проверяет что это bd процесс, kill, cleanup, restart. Также `flush-debounce: "15s"` в config.yaml предотвращает feedback loop.
+**Auto-recovery (v2.3.1+):**
+`check_beads()` использует `bd daemon status` (различает живой daemon от SQLite fallback) → `hard_kill_beads_daemon()` автоматически: читает PID, проверяет что это bd процесс, kill, cleanup, restart. Также `flush-debounce: "15s"` в config.yaml предотвращает feedback loop. При старте `ensure_single_daemon()` убивает лишние процессы.
 
 ---
 
@@ -95,7 +96,7 @@ bd daemon start
 ```
 
 **Решение (permanent):**
-HYPE 2.0.14+ использует `bd_safe()` с сериализацией через mkdir-lock. Все bd вызовы выполняются последовательно.
+HYPE 2.0.14+ использует `bd_safe()` с сериализацией через mkdir-lock. Все bd вызовы выполняются последовательно. Порог explosion detection снижен с 30 до 5 (v2.3.1). При старте `ensure_single_daemon()` проверяет и убивает лишние bd процессы.
 
 ---
 
@@ -782,8 +783,9 @@ Self-healing в detect-phase.sh автоматически удаляет premat
 
 **Manual fix:**
 ```bash
-bd delete <milestone-id>
+bd update <milestone-id> --remove-label=milestone:analysts-done
 ```
+**Note (v2.3.1+):** HYPE больше не использует `bd delete` для milestones (создаёт tombstones). Вместо этого — `bd update --remove-label`.
 
 ---
 
@@ -1124,26 +1126,35 @@ bd update <id> --remove-label=approved --add-label=reviewed
 
 ---
 
-### PROBLEM: Merge conflict loop (approved → conflict → executor → approved → conflict)
+### PROBLEM: Merge conflict loop (approved → conflict → retry → conflict)
 
 **Симптомы:**
-- reject:N растёт, задача циклит между executor и reviewer
-- В логах: "Merge conflict for <id>" повторяется
-- Executor делает rebase, но conflict возвращается
+- `merge-conflict:N` растёт (видно в labels задачи)
+- В логах: "Merge conflict" / "CONFLICT — retry-in-place" повторяется
+- Задача остаётся `approved`, merge queue пропускает её и пробует следующую
 
 **Причина:**
-1. Другая задача мержится между ребейзом и мержем
+1. Другая задача мержится между ребейзом и мержем (race condition)
 2. Ветка слишком разошлась с main
 3. Конфликт в auto-generated файлах (lock files, build artifacts)
 
 **Диагностика:**
 ```bash
 bd show <id> --json | jq '.[0] | {id, title, labels, notes}'
-grep "Merge conflict" logs/hype.log | grep <id>
+# Проверить merge-conflict:N counter
+bd show <id> --json | jq '.[0].labels[] | select(startswith("merge-conflict:"))'
+grep "Merge conflict\|CONFLICT" logs/hype.log | grep <id>
 git log --oneline origin/main | head -10
 ```
 
-**Решение (runtime-fix):**
+**Auto-recovery (v2.3.3+):**
+Merge queue использует retry-in-place:
+1. Конфликт → `merge-conflict:N++`, задача остаётся `approved`, skip to next
+2. Следующий цикл HYPE → merge queue пробует снова (main мог измениться)
+3. После 6 неудач (`merge-conflict:6`) → return to executor для полного rebase
+4. `merge-conflict:N` **НЕ** эскалирует модель и **НЕ** зовёт Troubleshooter — это бесполезно для git конфликтов
+
+**Решение (runtime-fix, если автоматика не справляется):**
 ```bash
 # Вариант 1: Ручной мерж
 git fetch origin
@@ -1151,14 +1162,11 @@ git checkout task/beads-<id>
 git rebase origin/main
 # Resolve conflicts manually
 git push --force-with-lease origin task/beads-<id>
-bd update <id> --add-label=needs-review --remove-label=executor
+bd update <id> --add-label=needs-review --remove-label=approved
 
 # Вариант 2: Закрыть и пересоздать
 bd close <id> --reason="Persistent merge conflicts"
 ```
-
-**Auto-recovery (v2.2+):**
-При reject:4 задача эскалируется к Troubleshooter (`blocked:troubleshoot`).
 
 ---
 
@@ -1192,6 +1200,8 @@ bd update <id> --description="<более точное описание>"
 
 **Auto-recovery (v2.2+):**
 Escalation ladder: reject:2-3 → model escalation (haiku→sonnet→opus), reject:4 → Troubleshooter. Circuit breaker (v2.1.8+) через `last-reject:{TYPE}` label обнаруживает same-reason loops после reformulation и эскалирует к user-escalation.
+
+**Note (v2.3.3+):** `reject:N` теперь только для code quality rejections. Merge конфликты используют отдельный `merge-conflict:N` counter — не эскалируют модель и не зовут Troubleshooter.
 
 ---
 
@@ -1308,6 +1318,29 @@ rmdir .hype-worktrees/reviewer-N.lock
 
 **Auto-recovery (v2.2+):**
 `find_free_reviewer_slot()` автоматически чистит stale locks >20 минут.
+
+---
+
+## Doctor проблемы
+
+### PROBLEM: Doctor report send failure (label not found)
+
+**Fixed in:** 2.3.3
+
+**Симптомы:**
+- `gh issue create` falls с ошибкой "label 'doctor-report' not found"
+- Doctor-log создан, но не отправлен
+
+**Причина:**
+Label `doctor-report` не существовал в GitHub репозитории. `gh issue create --label` не создаёт labels автоматически.
+
+**Решение:**
+Обновиться до 2.3.3+. `send_doctor_report()` теперь вызывает `gh label create "doctor-report"` перед `gh issue create` (idempotent — игнорирует если label уже есть).
+
+**Manual fix (для старых версий):**
+```bash
+gh label create "doctor-report" --repo "Puremag1c/hype" --description "Auto-generated doctor diagnostic report" --color "d4c5f9"
+```
 
 ---
 

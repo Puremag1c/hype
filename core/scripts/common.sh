@@ -212,6 +212,7 @@ reset_stale_tasks() {
             ((.labels // []) | index("needs-review") | not) and
             ((.labels // []) | index("reviewing") | not) and
             ((.labels // []) | index("approved") | not) and
+            ((.labels // []) | index("trigger") | not) and
             ((.labels // []) | index("regression") | not) and
             ((.labels // []) | index("smoke") | not) and
             ((.labels // []) | index("user-escalation") | not)

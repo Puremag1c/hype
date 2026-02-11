@@ -232,7 +232,9 @@ $spec_content"
     task_status=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r 'if type == "array" then .[0].status else .status end' 2>/dev/null || echo "unknown")
     if [ "$task_status" != "closed" ]; then
         log "WARN" "Tester $tester didn't close trigger, closing now"
-        bd_safe close "$task_id" --reason="Tester completed (auto-closed)" >/dev/null 2>&1
+        if ! bd_safe close "$task_id" --reason="Tester completed (auto-closed)" 2>&1; then
+            log "ERROR" "Failed to auto-close trigger $task_id for tester $tester"
+        fi
     fi
 
     # Clear trap and task_id to prevent double-close on normal exit

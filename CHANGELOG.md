@@ -24,6 +24,10 @@
 
 - **Deleted `run-senior-executor.sh` and `senior-executor.md`** — Fully replaced by v2.2 parallel review pipeline (`run-reviewers.sh` + `run-merge-queue.sh`). All features ported. Updated `hype.sh` log parser to use `reviewer-*.log`. Removed 3 legacy tests, repointed 8 tests to `run-reviewers.sh`. 135 tests pass.
 
+- **Exclude trigger tasks from heal_stuck_tasks and reset_stale_tasks** — Trigger tasks (label `trigger`) are system coordination tasks, not user work. `heal_stuck_tasks()` incorrectly added `needs-review` to stuck triggers, which then hit `NO_BRANCH` in review pipeline and were counted as P0 bugs — blocking smoke test progression indefinitely. Also added `reviewing` and `approved` exclusions to `heal_stuck_tasks` stuck detection (already handled by dedicated v2.2 healing logic). `reset_stale_tasks()` in common.sh also now excludes `trigger`.
+
+- **Visible errors on trigger auto-close failure** — `run-testers.sh` auto-close of unclosed trigger tasks now logs ERROR on failure instead of silently swallowing it.
+
 ---
 
 ## [2.2.0] - 2026-02-10

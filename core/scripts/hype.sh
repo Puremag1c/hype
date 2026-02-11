@@ -634,6 +634,9 @@ heal_stuck_tasks() {
     stuck_ids=$(echo "$in_progress_json" | jq -r '.[] | select(
         ((.labels // []) | index("executor") | not) and
         ((.labels // []) | index("needs-review") | not) and
+        ((.labels // []) | index("trigger") | not) and
+        ((.labels // []) | index("reviewing") | not) and
+        ((.labels // []) | index("approved") | not) and
         ((.labels // []) | any(test("^blocked:")) | not)
     ) | .id' 2>/dev/null || true)
 

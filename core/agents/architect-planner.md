@@ -57,6 +57,8 @@ done_when: tests pass"
 
 **КРИТИЧНО:** Проверяй cycles ПОСЛЕ КАЖДОЙ зависимости!
 
+**File overlap rule:** Если две задачи трогают один и тот же файл — поставь dependency между ними. Параллельные правки одного файла вызывают merge conflicts и тратят циклы. Используй `files:` в description для трекинга.
+
 ```bash
 bd dep add <task-id> <depends-on-id>
 

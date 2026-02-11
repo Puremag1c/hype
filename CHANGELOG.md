@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.2.7] - 2026-02-11
+
+### Fixed
+
+- **Merge queue auto-rebase eliminates false conflicts** — `run-merge-queue.sh` now rebases the task branch on main before squash merge. Previously, when another task merged while this one was in review, the stale branch caused a merge conflict — sending the task back to executor for a full 15-minute cycle just to do a trivial rebase. Now the merge queue handles this automatically: `git rebase main` → `push --force-with-lease` → `merge --squash`. Only true textual conflicts (two executors edited the same code) are rejected to the executor.
+
+- **Architect planner: file overlap awareness** — `architect-planner.md` now instructs the planner to add dependencies between tasks that touch the same file. This prevents parallel executors from creating conflicting edits in the first place.
+
+---
+
 ## [2.2.6] - 2026-02-11
 
 ### Fixed

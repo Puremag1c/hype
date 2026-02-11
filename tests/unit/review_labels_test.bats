@@ -141,8 +141,9 @@ load '../helpers/setup'
 @test "merge queue: handles merge conflicts" {
     local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
 
+    # v2.2.7: conflict detected via rebase --abort (auto-rebase before merge)
     local conflict_block
-    conflict_block=$(sed -n '/merge --abort/,/return 0/p' "$merge_sh" | head -20)
+    conflict_block=$(sed -n '/rebase --abort/,/return 0/p' "$merge_sh" | head -20)
 
     echo "$conflict_block" | grep -q 'reject_count'
     echo "$conflict_block" | grep -q 'remove-label=approved'
@@ -170,6 +171,28 @@ load '../helpers/setup'
     local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
 
     grep -q 'blocked:troubleshoot' "$merge_sh"
+}
+
+@test "merge queue: auto-rebase before merge (v2.2.7)" {
+    local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
+
+    # Must rebase branch on main before squash merge
+    grep -q 'git rebase.*main_ref' "$merge_sh"
+
+    # Must force-push rebased branch
+    grep -q 'force-with-lease' "$merge_sh"
+}
+
+@test "merge queue: rebase failure rejects to executor (not silent)" {
+    local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
+
+    # After rebase --abort, must increment reject:N and return to executor
+    local rebase_fail_block
+    rebase_fail_block=$(sed -n '/rebase --abort/,/return 0/p' "$merge_sh" | head -15)
+
+    echo "$rebase_fail_block" | grep -q 'reject_count'
+    echo "$rebase_fail_block" | grep -q 'remove-label=approved'
+    echo "$rebase_fail_block" | grep -q 'status=open'
 }
 
 @test "merge queue: uses --limit 0 for bd list" {

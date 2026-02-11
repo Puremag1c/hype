@@ -103,15 +103,20 @@ merge_task() {
     local main_before
     main_before=$(git rev-parse "$main_ref" 2>/dev/null || echo "unknown")
 
-    # Merge to main
+    # Auto-rebase branch on main before merge (v2.2.7)
+    # Most "conflicts" are just stale branches — another task merged while this was in review.
+    # Rebase resolves these automatically without wasting a full executor cycle.
     log "INFO" "Merging $task_id ($branch)"
     git checkout "$main_ref" 2>/dev/null || true
     git pull origin "$main_ref" 2>/dev/null || true
 
-    if ! git merge --squash "origin/$branch" 2>/dev/null; then
-        # Merge conflict
-        git merge --abort 2>/dev/null || git reset --hard "origin/$main_ref" 2>/dev/null || true
-        log "WARN" "Merge conflict for $task_id"
+    # Try rebase: checkout branch, rebase on main, force-push
+    git checkout "origin/$branch" 2>/dev/null || true
+    if ! git rebase "$main_ref" 2>/dev/null; then
+        # Real conflict — rebase can't auto-resolve
+        git rebase --abort 2>/dev/null || true
+        git checkout "$main_ref" 2>/dev/null || true
+        log "WARN" "Merge conflict for $task_id (rebase failed)"
 
         # Increment reject:N
         local reject_count
@@ -128,6 +133,19 @@ merge_task() {
                 --notes="Merge conflicts persist after $reject_count attempts. Escalated." >/dev/null 2>&1 || true
             log "WARN" "TROUBLESHOOT: $task_id - merge conflicts persist (reject:$reject_count)"
         fi
+        return 0
+    fi
+
+    # Rebase succeeded — push rebased branch, then squash merge
+    git push origin HEAD:"$branch" --force-with-lease 2>/dev/null || true
+    git checkout "$main_ref" 2>/dev/null || true
+
+    if ! git merge --squash "origin/$branch" 2>/dev/null; then
+        # Should not happen after successful rebase, but safety net
+        git merge --abort 2>/dev/null || git reset --hard "origin/$main_ref" 2>/dev/null || true
+        log "ERROR" "Merge failed after successful rebase for $task_id"
+        bd_safe update "$task_id" --status=open --remove-label=approved \
+            --notes="Unexpected merge failure after rebase. Return to executor." >/dev/null 2>&1 || true
         return 0
     fi
 

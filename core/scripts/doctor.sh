@@ -86,8 +86,11 @@ find_latest_doctor_log() {
     local latest=""
     while IFS= read -r f; do
         local file_ts
-        # macOS: stat -f '%m', Linux: stat -c '%Y'
-        file_ts=$(stat -f '%m' "$f" 2>/dev/null || stat -c '%Y' "$f" 2>/dev/null) || continue
+        if [[ "$(uname -s)" == "Darwin" ]]; then
+            file_ts=$(stat -f '%m' "$f" 2>/dev/null) || continue
+        else
+            file_ts=$(stat -c '%Y' "$f" 2>/dev/null) || continue
+        fi
         if [[ "$file_ts" -ge "$since_ts" ]]; then
             latest="$f"
             break

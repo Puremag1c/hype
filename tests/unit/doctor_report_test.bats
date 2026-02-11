@@ -34,7 +34,8 @@ source_doctor_functions() {
     cat > "$test_file" << EOF
 Path: $HOME/some/path
 Project: $TEST_PROJECT_DIR/src/main.go
-Key: ANTHROPIC_API_KEY=sk-ant-abc123def456ghi789jkl012mno
+Key: ANTHROPIC_API_KEY=some-secret-value-here
+Standalone: sk-ant-abc123def456ghi789jkl012mno
 Token: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test
 Normal: this should stay
 EOF

@@ -245,7 +245,7 @@ run_doctor() {
 
     # Model for doctor (configurable, default sonnet)
     local doctor_model
-    doctor_model=$(map_model "${MODEL_DOCTOR:-sonnet}")
+    doctor_model=$(map_model "${MODEL_DOCTOR:-opus}")
 
     if [ "$REPORT_ONLY" = true ]; then
         log "INFO" "Report-only mode — non-interactive"

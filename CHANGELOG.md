@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.3.0] - 2026-02-11
+
+### Added
+
+- **Doctor Report Sending** — After a diagnostic session, Doctor can send a sanitized report as a GitHub issue to the HYPE repo. In `--report` mode, the report is sent automatically (if `gh` is available). In interactive mode, Doctor creates the log, then the user is asked whether to send it. Reports are sanitized before sending: HOME paths → `~`, project paths → `$PROJECT`, API keys and Bearer tokens → `[REDACTED]`. Five new functions in `doctor.sh`: `sanitize_doctor_report`, `check_gh_available`, `find_latest_doctor_log`, `save_report_output`, `send_doctor_report`. 8 new tests (174 total).
+
+---
+
 ## [2.2.8] - 2026-02-11
 
 ### Fixed

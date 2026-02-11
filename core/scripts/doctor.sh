@@ -56,6 +56,81 @@ log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') [HYPE DOCTOR] $level: $message" >> "$LOGS_DIR/hype.log"
 }
 
+# === Report functions ===
+
+sanitize_doctor_report() {
+    local file="$1"
+    [[ -f "$file" ]] || return 1
+
+    # Replace HOME path with ~
+    sed -i '' "s|$HOME|~|g" "$file"
+    # Replace PROJECT_DIR with $PROJECT
+    sed -i '' "s|$PROJECT_DIR|\$PROJECT|g" "$file"
+    # Redact API keys (ANTHROPIC_API_KEY=..., OPENAI_API_KEY=..., etc.)
+    sed -i '' 's/\([A-Z_]*API_KEY\)=[^ ]*/\1=[REDACTED]/g' "$file"
+    # Redact sk-* keys
+    sed -i '' 's/sk-[a-zA-Z0-9_-]\{20,\}/[REDACTED_KEY]/g' "$file"
+    # Redact Bearer tokens
+    sed -i '' 's/Bearer [a-zA-Z0-9_.-]\{10,\}/Bearer [REDACTED]/g' "$file"
+}
+
+check_gh_available() {
+    command -v gh &>/dev/null || return 1
+    gh auth status &>/dev/null || return 1
+    return 0
+}
+
+find_latest_doctor_log() {
+    local since_ts="$1"
+    local latest=""
+    for f in $(ls -t "$CLAUDEV_DIR/logs"/doctor-*.md 2>/dev/null); do
+        local file_ts
+        file_ts=$(stat -f '%m' "$f" 2>/dev/null || stat -c '%Y' "$f" 2>/dev/null || echo 0)
+        if [[ "$file_ts" -ge "$since_ts" ]]; then
+            latest="$f"
+            break
+        fi
+    done
+    [[ -n "$latest" ]] && echo "$latest"
+}
+
+save_report_output() {
+    local source_file="$1"
+    [[ -f "$source_file" ]] || return 1
+    local timestamp
+    timestamp=$(date +%Y%m%d-%H%M%S)
+    local dest="$CLAUDEV_DIR/logs/doctor-$timestamp.md"
+    mkdir -p "$CLAUDEV_DIR/logs"
+    cp "$source_file" "$dest"
+    echo "$dest"
+}
+
+send_doctor_report() {
+    local file="$1"
+    [[ -f "$file" ]] || return 1
+
+    # Extract title from "## Reported Symptom" section
+    local title
+    title=$(sed -n '/^## Reported Symptom/{n;/^$/d;p;q;}' "$file" 2>/dev/null)
+    if [[ -z "$title" ]]; then
+        title="Doctor report $(date +%Y-%m-%d)"
+    fi
+    # Truncate title to 100 chars
+    title="${title:0:100}"
+
+    local body
+    body=$(cat "$file")
+
+    gh issue create \
+        --repo "Puremag1c/hype" \
+        --label "doctor-report" \
+        --title "$title" \
+        --body "$body" 2>&1 || {
+        log "ERROR" "Failed to send doctor report via gh"
+        return 1
+    }
+}
+
 # === Gather context ===
 
 gather_context() {
@@ -243,17 +318,53 @@ run_doctor() {
 
     log "DOCTOR" "Starting diagnostic session..."
 
-    # Model for doctor (configurable, default sonnet)
+    # Model for doctor (configurable, default opus)
     local doctor_model
     doctor_model=$(map_model "${MODEL_DOCTOR:-opus}")
 
     if [ "$REPORT_ONLY" = true ]; then
         log "INFO" "Report-only mode — non-interactive"
-        # Non-interactive: just collect data and create doctor-log
+        # Non-interactive: capture output, save, sanitize, send
         printf '%s' "$prompt" | timeout_cmd 5m claude --model "$doctor_model" --print 2>&1 | tee "$LOGS_DIR/doctor-report.log"
+
+        local saved_file
+        saved_file=$(save_report_output "$LOGS_DIR/doctor-report.log")
+        if [[ -n "$saved_file" ]]; then
+            sanitize_doctor_report "$saved_file"
+            log "INFO" "Doctor report saved: $saved_file"
+            if check_gh_available; then
+                send_doctor_report "$saved_file"
+                log "INFO" "Doctor report sent to GitHub"
+            else
+                log "WARN" "gh not available — report not sent"
+            fi
+        else
+            log "WARN" "Failed to save doctor report"
+        fi
     else
-        # Interactive mode
+        # Interactive mode: track session start, then find agent's doctor-log
+        local session_start
+        session_start=$(date +%s)
+
         printf '%s' "$prompt" | claude --model "$doctor_model"
+
+        # Find doctor-log created by the agent during session
+        local doctor_log
+        doctor_log=$(find_latest_doctor_log "$session_start")
+        if [[ -n "$doctor_log" ]]; then
+            sanitize_doctor_report "$doctor_log"
+            log "INFO" "Doctor log sanitized: $doctor_log"
+            if check_gh_available; then
+                printf '\n'
+                read -r -p "Отправить doctor-report в GitHub? [y/n] " send_choice
+                if [[ "$send_choice" =~ ^[Yy]$ ]]; then
+                    send_doctor_report "$doctor_log"
+                    log "INFO" "Doctor report sent to GitHub"
+                fi
+            fi
+        else
+            log "WARN" "No doctor-log found after session"
+        fi
     fi
 
     log "DOCTOR" "Diagnostic session ended"

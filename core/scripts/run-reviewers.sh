@@ -51,9 +51,9 @@ log() {
 
 count_active_reviewers() {
     local count=0
-    for lock in "$WORKTREES_DIR"/reviewer-*.lock 2>/dev/null; do
+    for lock in "$WORKTREES_DIR"/reviewer-*.lock; do
         [ -d "$lock" ] && ((count++)) || true
-    done
+    done 2>/dev/null
     echo "$count"
 }
 

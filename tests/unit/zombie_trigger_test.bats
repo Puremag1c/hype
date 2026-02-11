@@ -97,30 +97,73 @@ load '../helpers/setup'
 # Stale trigger cleanup: close old triggers before creating new ones (v2.2.3)
 # =============================================================================
 
-@test "create_tester_triggers: closes stale triggers before creating new ones" {
+@test "create_tester_triggers: cleans stale triggers via cleanup_stale_trigger" {
     local testers_sh="$SCRIPTS_DIR/run-testers.sh"
 
-    # create_tester_triggers should close old triggers (bd_safe close)
     local fn_body
     fn_body=$(sed -n '/^create_tester_triggers/,/^}/p' "$testers_sh")
 
-    # Must have bd_safe close for stale cleanup
-    echo "$fn_body" | grep -q 'bd_safe close.*Stale trigger cleanup'
+    # Must call cleanup_stale_trigger before creating
+    echo "$fn_body" | grep -q 'cleanup_stale_trigger'
 
     # Must always create fresh trigger (unconditional bd_safe create)
     echo "$fn_body" | grep -q 'bd_safe create.*--label=trigger'
 }
 
-@test "create_analyst_triggers: closes stale triggers before creating new ones" {
+@test "create_analyst_triggers: cleans stale triggers via cleanup_stale_trigger" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
-    # create_analyst_triggers should close old triggers
     local fn_body
     fn_body=$(sed -n '/^create_analyst_triggers/,/^}/p' "$hype_sh")
 
-    # Must have bd_safe close for stale cleanup
-    echo "$fn_body" | grep -q 'bd_safe close.*Stale trigger cleanup'
+    # Must call cleanup_stale_trigger before creating
+    echo "$fn_body" | grep -q 'cleanup_stale_trigger'
 
     # Must always create fresh trigger
     echo "$fn_body" | grep -q 'bd_safe create.*--label=trigger'
+}
+
+@test "cleanup_stale_trigger: defined in common.sh and exported" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    grep -q 'cleanup_stale_trigger()' "$common_sh"
+    grep -q 'export -f cleanup_stale_trigger' "$common_sh"
+}
+
+@test "hype.sh: inline triggers use cleanup_stale_trigger" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    # All inline trigger creation points should call cleanup first
+    grep -q 'cleanup_stale_trigger "run-plan-review"' "$hype_sh"
+    grep -q 'cleanup_stale_trigger "run-smoke-review"' "$hype_sh"
+    grep -q 'cleanup_stale_trigger "run-versioning"' "$hype_sh"
+}
+
+@test "run-reviewers.sh: for loop glob does not have inline 2>/dev/null" {
+    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+
+    # The 2>/dev/null must be on 'done', not in 'for ... in ...' word list
+    ! grep -q 'for .* in .*\*.*2>/dev/null; do' "$reviewers_sh"
+}
+
+@test "hype.sh: FINAL_REVIEW PASSED checks for new open tasks" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    # After grep PASSED, must check for open tasks before setting success
+    local passed_block
+    passed_block=$(sed -n '/FINAL_REVIEW: PASSED/,/final_review_success=true/p' "$hype_sh")
+
+    echo "$passed_block" | grep -q 'bd_safe list.*--status=open'
+    echo "$passed_block" | grep -q 'NEEDS_FIXES'
+}
+
+@test "architect-qa.md: final_review bugs do NOT get smoke label" {
+    local qa_md="$SCRIPTS_DIR/../agents/architect-qa.md"
+
+    # The bug creation template in final_review section should NOT have --label=smoke
+    local final_review_section
+    final_review_section=$(sed -n '/## MODE: final_review/,/## MODE: smoke_review/p' "$qa_md")
+
+    # The bd create template should not include --label=smoke
+    ! echo "$final_review_section" | grep 'bd create.*--label=smoke'
 }

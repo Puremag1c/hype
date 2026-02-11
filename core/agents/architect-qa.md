@@ -135,7 +135,7 @@ echo "FINAL_REVIEW: NEEDS_FIXES"
 **Шаг 3: Создай новый баг (только если шаги 1-2 не нашли)**
 ```bash
 bd create --title="Fix: <что не работает>" --type=bug --priority=0 \
-  --label=smoke --description="Обнаружено при final review. <детали проблемы>"
+  --description="Обнаружено при final review. <детали проблемы>"
 echo "FINAL_REVIEW: NEEDS_FIXES"
 ```
 
@@ -156,7 +156,7 @@ git status --porcelain | grep '^??'
 
 **Если найдены проблемы:**
 Используй 3-step протокол из секции 3.5 выше (check open → check closed → create new).
-Все баги ОБЯЗАТЕЛЬНО получают `--label=smoke`.
+НЕ добавляй `--label=smoke` — баги из final_review идут напрямую в IMPLEMENTATION.
 
 **Если всё ок:**
 ```bash

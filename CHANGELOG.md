@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.2.4] - 2026-02-11
+
+### Fixed
+
+- **Syntax error crash in run-reviewers.sh** — `for lock in pattern 2>/dev/null; do` caused `syntax error near unexpected token '2'` on macOS bash 3.2, killing the entire HYPE daemon. Moved `2>/dev/null` to `done` line where it's valid shell syntax.
+
+- **FINAL_REVIEW smoke label triggers false SMOKE_REVIEW** — `architect-qa.md` mandated `--label=smoke` on ALL bugs including those found during `final_review`. This caused `detect-phase.sh` to see `SMOKE_TRIAGE_OPEN > 0` and return `SMOKE_REVIEW` instead of `IMPLEMENTATION`, sending the system backwards through phases after a successful review. Removed `--label=smoke` from `final_review` mode — final review bugs go directly to IMPLEMENTATION without smoke triage.
+
+- **FINAL_REVIEW PASSED with new tasks skips to versioner** — When architect wrote "FINAL_REVIEW: PASSED" and simultaneously created bug tasks, `hype.sh` saw PASSED and immediately ran versioner without checking for new open tasks. Added defense: after PASSED, verify no new non-trigger tasks exist before proceeding to versioner. If tasks found, treat as NEEDS_FIXES and invalidate smoke-test-done milestone.
+
+- **Unified stale trigger cleanup** — Extracted `cleanup_stale_trigger()` into `common.sh` and applied to all trigger creation points: `run-plan-review`, `run-smoke-review`, `run-versioning` (inline in hype.sh), plus `run-tester-*` and `run-analyst-*`. Previously only tester/analyst triggers had cleanup (v2.2.3), leaving other trigger types vulnerable to zombie phase locks from previous runs.
+
+---
+
 ## [2.2.3] - 2026-02-11
 
 ### Fixed

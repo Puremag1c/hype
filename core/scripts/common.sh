@@ -719,6 +719,25 @@ release_review_lock() {
 export -f release_review_lock 2>/dev/null || true
 
 # =============================================================================
+# Trigger Cleanup
+# =============================================================================
+
+# cleanup_stale_trigger - close any existing open/in_progress triggers with given title
+# Usage: cleanup_stale_trigger "run-smoke-review"
+# Prevents zombie triggers from previous runs blocking phase detection.
+cleanup_stale_trigger() {
+    local trigger_title="$1"
+    local old_ids
+    old_ids=$(bd_safe list --json --limit 0 2>/dev/null | \
+        jq -r ".[] | select(.title == \"$trigger_title\") | .id" 2>/dev/null || true)
+    for old_id in $old_ids; do
+        >&2 echo "WARN: Closing stale trigger $trigger_title ($old_id)"
+        bd_safe close "$old_id" --reason="Stale trigger cleanup (new run)" >/dev/null 2>&1 || true
+    done
+}
+export -f cleanup_stale_trigger 2>/dev/null || true
+
+# =============================================================================
 # Milestone Management Functions
 # =============================================================================
 # Milestones are marker tasks with labels like "milestone:planning-done"

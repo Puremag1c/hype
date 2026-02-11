@@ -433,21 +433,10 @@ $changelog_context
 
 create_analyst_triggers() {
     local analysts=("ux" "security" "ops" "reliability" "architecture")
-    local bd_cache
-    bd_cache=$(bd_safe list --json --limit 0 2>/dev/null || echo "[]")
 
     for analyst in "${analysts[@]}"; do
         local trigger_title="run-analyst-$analyst"
-
-        # Close any stale triggers from previous runs (zombie protection)
-        local old_ids
-        old_ids=$(echo "$bd_cache" | jq -r ".[] | select(.title == \"$trigger_title\") | .id" 2>/dev/null || true)
-        for old_id in $old_ids; do
-            log "WARN" "Closing stale trigger $trigger_title ($old_id) from previous run"
-            bd_safe close "$old_id" --reason="Stale trigger cleanup (new analyst run)" >/dev/null 2>&1 || true
-        done
-
-        # Create fresh trigger
+        cleanup_stale_trigger "$trigger_title"
         bd_safe create --title="$trigger_title" --type=task --priority=1 --label=trigger >/dev/null 2>&1 || true
         log "INFO" "Created trigger: $trigger_title"
     done
@@ -1007,10 +996,9 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             log "INFO" "PLAN_REVIEW: Starting Architect to review plan..."
             local arch_model
             arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
-            # Create trigger task if not exists
-            if ! bd_safe list --json --limit 0 2>/dev/null | jq -e '.[] | select(.title == "run-plan-review")' > /dev/null 2>&1; then
-                bd_safe create --title="run-plan-review" --type=task --priority=0 --label=trigger >/dev/null 2>&1 || true
-            fi
+            # Close stale triggers from previous runs, create fresh
+            cleanup_stale_trigger "run-plan-review"
+            bd_safe create --title="run-plan-review" --type=task --priority=0 --label=trigger >/dev/null 2>&1 || true
             run_agent_with_mode "architect" ".claude/agents/architect-reviewer.md" "$arch_model" "plan_review" "" "${PLAN_REVIEW_TIMEOUT:-10m}"
             ;;
 
@@ -1060,10 +1048,9 @@ $user_tasks"
             local arch_model
             arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
 
-            # Create trigger task if not exists
-            if ! bd_safe list --json --limit 0 2>/dev/null | jq -e '.[] | select(.title == "run-smoke-review")' > /dev/null 2>&1; then
-                bd_safe create --title="run-smoke-review" --type=task --priority=0 --label=trigger >/dev/null 2>&1 || true
-            fi
+            # Close stale triggers from previous runs, create fresh
+            cleanup_stale_trigger "run-smoke-review"
+            bd_safe create --title="run-smoke-review" --type=task --priority=0 --label=trigger >/dev/null 2>&1 || true
 
             # Collect ALL tasks needing triage (smoke label OR regression label)
             local smoke_tasks regression_tasks triage_prompt
@@ -1131,6 +1118,15 @@ For each task:
                     local latest_log
                     latest_log=$(ls -t "$LOGS_DIR"/architect-*.log 2>/dev/null | head -1)
                     if [ -n "$latest_log" ] && grep -q "FINAL_REVIEW: PASSED" "$latest_log" 2>/dev/null; then
+                        # Defense: check if architect also created tasks (contradicts PASSED)
+                        local new_open_count
+                        new_open_count=$(bd_safe list --status=open --json --limit 0 2>/dev/null | \
+                            jq '[.[] | select((.labels // []) | index("trigger") | not)] | length' 2>/dev/null || echo "0")
+                        if [ "$new_open_count" -gt 0 ]; then
+                            log "WARN" "FINAL_REVIEW: PASSED but $new_open_count new task(s) created — treating as NEEDS_FIXES"
+                            delete_milestone "milestone:smoke-test-done"
+                            break
+                        fi
                         final_review_success=true
                         break
                     fi
@@ -1157,7 +1153,8 @@ For each task:
             if [ "$final_review_success" = true ]; then
                 log "INFO" "FINAL_REVIEW passed, running versioner..."
 
-                # Create trigger task for versioner
+                # Close stale triggers from previous runs, create fresh
+                cleanup_stale_trigger "run-versioning"
                 local versioner_trigger
                 versioner_trigger=$(bd_safe create --title="run-versioning" --type=task --priority=0 --label=trigger 2>&1 | grep -oE '[A-Za-z]+-[a-z0-9]+' | head -1)
 

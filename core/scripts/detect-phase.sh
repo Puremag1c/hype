@@ -66,8 +66,8 @@ fi
 
 # Статистика из кэшированных данных (всё из одного bd вызова, --all включает closed)
 TOTAL=$(echo "$ALL_TASKS_JSON" | jq 'length' 2>/dev/null || echo "0")
-OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open")] | length' 2>/dev/null || echo "0")
-IN_PROGRESS=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "in_progress")] | length' 2>/dev/null || echo "0")
+OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open") | select((.labels // []) | index("trigger") | not)] | length' 2>/dev/null || echo "0")
+IN_PROGRESS=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "in_progress") | select((.labels // []) | index("trigger") | not)] | length' 2>/dev/null || echo "0")
 CLOSED=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "closed")] | length' 2>/dev/null || echo "0")
 
 # Milestones (из ALL tasks — если milestone существует, фаза завершена, статус open/closed неважен)

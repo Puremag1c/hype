@@ -1389,6 +1389,15 @@ main() {
     # Record iteration start time (epoch for cross-platform compatibility)
     date +%s > "$CLAUDEV_DIR/iteration_start.txt"
 
+    # Close orphaned triggers from previous sessions (crash recovery)
+    local stale_triggers
+    stale_triggers=$(bd_safe list --json --limit 0 2>/dev/null | \
+        jq -r '.[] | select((.labels // []) | index("trigger")) | .id' 2>/dev/null || true)
+    for stale_id in $stale_triggers; do
+        log "WARN" "Closing orphaned trigger $stale_id from previous session"
+        bd_safe close "$stale_id" --reason="Orphaned trigger (HYPE startup cleanup)" >/dev/null 2>&1 || true
+    done
+
     local cycle=0
     local max_cycles="${MAX_CYCLES:-1000}"
     local current_delay="${ITERATION_DELAY:-10}"

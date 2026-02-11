@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.2.5] - 2026-02-11
+
+### Fixed
+
+- **Triggers no longer block phase machine** — `detect-phase.sh` OPEN/IN_PROGRESS counters now exclude trigger-labeled tasks (via jq `index("trigger") | not` filter). Previously, a zombie trigger (e.g. `run-plan-review` stuck in `in_progress` from a crashed session) was counted as real work, blocking the IMPLEMENTATION → SMOKE_TEST transition indefinitely. Triggers already had dedicated counters (TRIGGERS_OPEN, TESTER_TRIGGERS_OPEN, etc.) — the general counters should have never included them.
+
+- **HYPE startup closes orphaned triggers** — On daemon start, all non-closed triggers from previous sessions are closed with reason before entering the main loop. This is belt-and-suspenders defense: even if `cleanup_stale_trigger()` can't reach triggers (e.g. bd commands timing out during a zombie daemon), the next clean HYPE start will clear them.
+
+---
+
 ## [2.2.4] - 2026-02-11
 
 ### Fixed

@@ -167,3 +167,44 @@ load '../helpers/setup'
     # The bd create template should not include --label=smoke
     ! echo "$final_review_section" | grep 'bd create.*--label=smoke'
 }
+
+# =============================================================================
+# Phase machine: triggers excluded from OPEN/IN_PROGRESS counts (v2.2.5)
+# =============================================================================
+
+@test "detect-phase.sh: OPEN excludes trigger-labeled tasks" {
+    local detect_sh="$SCRIPTS_DIR/detect-phase.sh"
+
+    # The OPEN= line must filter out trigger labels
+    local open_line
+    open_line=$(grep '^OPEN=' "$detect_sh")
+
+    echo "$open_line" | grep -q 'index("trigger") | not'
+}
+
+@test "detect-phase.sh: IN_PROGRESS excludes trigger-labeled tasks" {
+    local detect_sh="$SCRIPTS_DIR/detect-phase.sh"
+
+    # The IN_PROGRESS= line must filter out trigger labels
+    local ip_line
+    ip_line=$(grep '^IN_PROGRESS=' "$detect_sh")
+
+    echo "$ip_line" | grep -q 'index("trigger") | not'
+}
+
+@test "hype.sh: startup closes orphaned triggers" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    # Must have orphaned trigger cleanup block before main loop
+    local cleanup_block
+    cleanup_block=$(sed -n '/orphaned triggers/,/^$/p' "$hype_sh")
+
+    # Must use bd_safe list with --limit 0
+    echo "$cleanup_block" | grep -q 'bd_safe list.*--limit 0'
+
+    # Must filter for trigger label
+    echo "$cleanup_block" | grep -q 'index("trigger")'
+
+    # Must close with reason
+    echo "$cleanup_block" | grep -q 'bd_safe close.*--reason'
+}

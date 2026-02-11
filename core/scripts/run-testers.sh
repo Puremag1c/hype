@@ -621,7 +621,7 @@ main() {
         reg_json=$(bd_safe show "$reg_id" --json 2>/dev/null || echo "[]")
         reg_count=$(get_counter_value "$reg_json" "regress")
         ((reg_count++))
-        set_counter_label "$reg_id" "regress" "$reg_count"
+        set_counter_label "$reg_id" "regress" "$reg_count" "$reg_json"
         log "INFO" "Regression counter: $reg_id → regress:$reg_count"
     done
 

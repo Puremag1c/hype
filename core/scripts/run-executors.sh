@@ -493,9 +493,10 @@ main() {
             break
         fi
 
-        # Pre-check status (reduce race condition confusion in logs)
-        local current_status task_title model
-        current_status=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].status // "unknown"' 2>/dev/null || echo "unknown")
+        # Single bd show for status check + task details (merged to reduce daemon load)
+        local task_json current_status task_title model
+        task_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
+        current_status=$(echo "$task_json" | jq -r '.[0].status // "unknown"' 2>/dev/null || echo "unknown")
 
         if [ "$current_status" != "open" ]; then
             log "INFO" "SKIP: $task_id already $current_status"
@@ -503,9 +504,6 @@ main() {
             continue
         fi
 
-        # Get task details for logging and routing
-        local task_json
-        task_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
         task_title=$(echo "$task_json" | jq -r '.[0].title // "unknown"' 2>/dev/null | head -c 40)
         model=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("model:")) | split(":")[1]' 2>/dev/null | head -1)
         model="${model:-sonnet}"

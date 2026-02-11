@@ -45,8 +45,12 @@ log() {
 
 # Get tasks ready for merge (approved label, in_progress status)
 get_approved_tasks() {
-    bd_safe list --status=in_progress --json --limit 0 2>/dev/null | \
-        jq -r '.[] | select((.labels // []) | index("approved")) | select((.labels // []) | index("trigger") | not) | .id' 2>/dev/null || echo ""
+    local cache="${HYPE_IN_PROGRESS_CACHE:-}"
+    if [ -n "$cache" ]; then
+        echo "$cache"
+    else
+        bd_safe list --status=in_progress --json --limit 0 2>/dev/null || echo "[]"
+    fi | jq -r '.[] | select((.labels // []) | index("approved")) | select((.labels // []) | index("trigger") | not) | .id' 2>/dev/null || echo ""
 }
 
 # Merge one approved task
@@ -122,7 +126,7 @@ merge_task() {
         local reject_count
         reject_count=$(get_counter_value "$task_json" "reject")
         ((reject_count++))
-        set_counter_label "$task_id" "reject" "$reject_count"
+        set_counter_label "$task_id" "reject" "$reject_count" "$task_json"
 
         # Return to executor (not reviewer)
         bd_safe update "$task_id" --status=open --remove-label=approved \
@@ -162,7 +166,7 @@ Task: $task_id" 2>/dev/null || true
         local reject_count
         reject_count=$(get_counter_value "$task_json" "reject")
         ((reject_count++))
-        set_counter_label "$task_id" "reject" "$reject_count"
+        set_counter_label "$task_id" "reject" "$reject_count" "$task_json"
 
         bd_safe update "$task_id" --status=open --remove-label=approved \
             --notes="Push to $main_ref failed after squash merge. Rebase on $main_ref and retry. (reject:$reject_count)" >/dev/null 2>&1 || true

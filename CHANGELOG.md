@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.3.2] - 2026-02-11
+
+### Improved
+
+- **Reduced bd daemon load by ~15 calls/cycle** — Five caching optimizations to reduce redundant bd queries, each verified safe against stale data via staleness audit:
+
+  1. **set_counter_label accepts cached task_json** — Optional 4th parameter eliminates redundant `bd show` at all 8 call sites (reviewers, merge queue, heal, troubleshoot, testers). Each caller already had fresh task_json milliseconds earlier.
+
+  2. **Shared in_progress cache for check_stale + heal_stuck** — Single `bd list --status=in_progress` shared between the two sequential functions. Safe: no external mutation between them, check_stale's resets are idempotent for heal.
+
+  3. **Shared in_progress cache for run-reviewers + run-merge-queue** — `HYPE_IN_PROGRESS_CACHE` env var passes one `bd list` result to both scripts. Safe: they filter disjoint labels (needs-review vs approved), and no reviewer can approve in the sub-second gap between scripts.
+
+  4. **Merged duplicate bd show in run-executors** — Two consecutive `bd_safe show` calls (status check + detail fetch) collapsed into one. Zero mutation possible between them.
+
+  5. **Reviewer title from list cache** — Main loop in run-reviewers.sh extracts task title from already-fetched list data instead of separate `bd show` per task.
+
+- 11 new unit tests (195 total).
+
+---
+
 ## [2.3.1] - 2026-02-11
 
 ### Fixed

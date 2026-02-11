@@ -263,7 +263,7 @@ run_reviewer() {
             local reject_count
             reject_count=$(get_counter_value "$task_json" "reject")
             ((reject_count++))
-            set_counter_label "$task_id" "reject" "$reject_count"
+            set_counter_label "$task_id" "reject" "$reject_count" "$task_json"
 
             if [ "$reject_count" -ge 4 ]; then
                 # Circuit breaker: if task was already reformulated AND same rejection reason → user-escalation
@@ -365,7 +365,7 @@ $context
         local reject_count
         reject_count=$(get_counter_value "$updated_json" "reject")
         ((reject_count++))
-        set_counter_label "$task_id" "reject" "$reject_count"
+        set_counter_label "$task_id" "reject" "$reject_count" "$updated_json"
 
         local notes
         notes=$(echo "$updated_json" | jq -r '.[0].notes // ""' 2>/dev/null | tail -1 | head -c 80)
@@ -393,7 +393,7 @@ $context
         local reject_count
         reject_count=$(get_counter_value "$updated_json" "reject")
         ((reject_count++))
-        set_counter_label "$task_id" "reject" "$reject_count"
+        set_counter_label "$task_id" "reject" "$reject_count" "$updated_json"
 
         if [ "$reject_count" -ge 4 ]; then
             bd_safe update "$task_id" --add-label=blocked:troubleshoot \
@@ -428,8 +428,12 @@ $context
 # === Get review-ready tasks ===
 
 get_review_tasks() {
-    bd_safe list --status=in_progress --json --limit 0 2>/dev/null | \
-        jq -r '.[] | select((.labels // []) | index("needs-review")) | select((.labels // []) | index("trigger") | not) | select(.title | test("^milestone:") | not) | .id' 2>/dev/null || echo ""
+    local cache="${HYPE_IN_PROGRESS_CACHE:-}"
+    if [ -n "$cache" ]; then
+        echo "$cache"
+    else
+        bd_safe list --status=in_progress --json --limit 0 2>/dev/null || echo "[]"
+    fi | jq -r '.[] | select((.labels // []) | index("needs-review")) | select((.labels // []) | index("trigger") | not) | select(.title | test("^milestone:") | not) | .id' 2>/dev/null || echo ""
 }
 
 # === Main ===
@@ -448,8 +452,16 @@ main() {
 
     local available=$((MAX_PARALLEL - active))
 
+    # Fetch in_progress tasks once (from cache or fresh)
+    local all_in_progress
+    if [ -n "${HYPE_IN_PROGRESS_CACHE:-}" ]; then
+        all_in_progress="$HYPE_IN_PROGRESS_CACHE"
+    else
+        all_in_progress=$(bd_safe list --status=in_progress --json --limit 0 2>/dev/null || echo "[]")
+    fi
+
     local tasks
-    tasks=$(get_review_tasks)
+    tasks=$(echo "$all_in_progress" | jq -r '.[] | select((.labels // []) | index("needs-review")) | select((.labels // []) | index("trigger") | not) | select(.title | test("^milestone:") | not) | .id' 2>/dev/null || echo "")
 
     if [ -z "$tasks" ]; then
         log "INFO" "No tasks need review"
@@ -472,8 +484,9 @@ main() {
             break
         }
 
+        # Extract title from cached list data (avoid extra bd show per task)
         local task_title
-        task_title=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].title // "unknown"' 2>/dev/null | head -c 40 || echo "unknown")
+        task_title=$(echo "$all_in_progress" | jq -r ".[] | select(.id == \"$task_id\") | .title // \"unknown\"" 2>/dev/null | head -c 40 || echo "unknown")
         log "INFO" "Review: $task_id \"$task_title\" (slot $slot)"
 
         ( run_reviewer "$slot" "$task_id" ) &

@@ -192,9 +192,10 @@ $new_note"
 export -f append_notes 2>/dev/null || true
 
 # reset_stale_tasks - сбрасывает in_progress задачи старше threshold секунд
-# Использование: reset_stale_tasks [THRESHOLD_SECONDS] [LOG_PREFIX]
+# Использование: reset_stale_tasks [THRESHOLD_SECONDS] [LOG_PREFIX] [IN_PROGRESS_JSON]
 # По умолчанию: TASK_STALE_TIMEOUT из config или 600 секунд (10 минут)
 # Пример: reset_stale_tasks 300 "shutdown"
+# Пример: reset_stale_tasks 600 "stale" "$cached_json"  # skip bd list
 # ВАЖНО: НЕ сбрасывает задачи с needs-review — они ждут ревью, не stale
 reset_stale_tasks() {
     local stale_threshold="${1:-${TASK_STALE_TIMEOUT:-600}}"
@@ -202,8 +203,11 @@ reset_stale_tasks() {
     local reset_count=0
 
     # Single bd list call — filter in memory instead of N×bd show
-    local all_tasks_json
-    all_tasks_json=$(bd_safe list --status=in_progress --json --limit 0 2>/dev/null || echo "[]")
+    # Accept optional pre-fetched JSON to avoid redundant bd list
+    local all_tasks_json="${3:-}"
+    if [ -z "$all_tasks_json" ]; then
+        all_tasks_json=$(bd_safe list --status=in_progress --json --limit 0 2>/dev/null || echo "[]")
+    fi
 
     # Filter: exclude protected labels (needs-review, reviewing, approved, regression, smoke, user-escalation)
     local candidate_ids
@@ -621,16 +625,21 @@ clean_model_label() {
 export -f clean_model_label 2>/dev/null || true
 
 # set_counter_label - atomically set a counter label (removes old values)
-# Usage: set_counter_label TASK_ID PREFIX VALUE
+# Usage: set_counter_label TASK_ID PREFIX VALUE [TASK_JSON]
 # Example: set_counter_label "task-123" "reject" "2"
+# Example: set_counter_label "task-123" "reject" "2" "$task_json"  # skip bd show
 # Removes all reject:* labels, adds reject:2
+# Optional TASK_JSON: caller-provided cache to avoid redundant bd show.
 set_counter_label() {
     local task_id="$1"
     local prefix="$2"
     local value="$3"
-    local task_json old_labels
+    local task_json="${4:-}"
+    local old_labels
 
-    task_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
+    if [ -z "$task_json" ]; then
+        task_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
+    fi
     old_labels=$(echo "$task_json" | jq -r ".[0].labels[]? | select(startswith(\"$prefix:\"))" 2>/dev/null || true)
 
     for label in $old_labels; do

@@ -469,7 +469,7 @@ PROJECT_ROOT: $PROJECT_DIR"
         has_reformulated=$(echo "$updated_json" | jq -r '[.[0].labels[]? | select(. == "reformulated")] | length' 2>/dev/null || echo "0")
 
         if [ "$updated_status" = "open" ] && [ "$has_reformulated" != "0" ]; then
-            set_counter_label "$task_id" "reject" 0
+            set_counter_label "$task_id" "reject" 0 "$updated_json"
             log "INFO" "Reset reject:N for reformulated task $task_id (fresh escalation ladder)"
         fi
     done
@@ -557,9 +557,10 @@ $retry_tasks
 # Reset in_progress tasks older than 10 minutes (executor likely crashed)
 
 check_stale_tasks() {
+    local in_progress_cache="${1:-}"
     local reset_count
     # Use TASK_STALE_TIMEOUT from config (default 600s = 10 minutes)
-    reset_count=$(reset_stale_tasks "${TASK_STALE_TIMEOUT:-600}" "stale in_progress")
+    reset_count=$(reset_stale_tasks "${TASK_STALE_TIMEOUT:-600}" "stale in_progress" "$in_progress_cache")
     if [ "$reset_count" -gt 0 ]; then
         log "INFO" "Reset $reset_count stale task(s)"
     fi
@@ -575,8 +576,11 @@ heal_stuck_tasks() {
     local now
     now=$(date +%s)
 
-    local in_progress_json
-    in_progress_json=$(bd_safe list --status=in_progress --json --limit 0 2>/dev/null || echo "[]")
+    # Accept optional pre-fetched JSON to avoid redundant bd list
+    local in_progress_json="${1:-}"
+    if [ -z "$in_progress_json" ]; then
+        in_progress_json=$(bd_safe list --status=in_progress --json --limit 0 2>/dev/null || echo "[]")
+    fi
 
     local stuck_ids
     stuck_ids=$(echo "$in_progress_json" | jq -r '.[] | select(
@@ -660,7 +664,7 @@ heal_stuck_tasks() {
             local reject_count
             reject_count=$(get_counter_value "$task_json_heal" "reject")
             ((reject_count++))
-            set_counter_label "$task_id" "reject" "$reject_count"
+            set_counter_label "$task_id" "reject" "$reject_count" "$task_json_heal"
             bd_safe update "$task_id" --status=open --remove-label=approved \
                 --notes="Approved but not merged for ${task_age}s. Merge queue may be stuck. Rebase and retry. (reject:$reject_count)" >/dev/null 2>&1 || true
             if [ "$reject_count" -ge 4 ]; then
@@ -1026,8 +1030,13 @@ For each task:
             log "INFO" "IMPLEMENTATION: Streaming cycle..."
 
             ./scripts/run-executors.sh || log "ERROR" "run-executors.sh failed (exit $?)"
-            ./scripts/run-reviewers.sh || log "ERROR" "run-reviewers.sh failed (exit $?)"
-            ./scripts/run-merge-queue.sh || log "ERROR" "run-merge-queue.sh failed (exit $?)"
+
+            # Shared in_progress cache for reviewers + merge queue (disjoint label filters)
+            # SAFE: reviewers launch background subshells that can't approve in <1s
+            local impl_cache
+            impl_cache=$(bd_safe list --status=in_progress --json --limit 0 2>/dev/null || echo "[]")
+            HYPE_IN_PROGRESS_CACHE="$impl_cache" ./scripts/run-reviewers.sh || log "ERROR" "run-reviewers.sh failed (exit $?)"
+            HYPE_IN_PROGRESS_CACHE="$impl_cache" ./scripts/run-merge-queue.sh || log "ERROR" "run-merge-queue.sh failed (exit $?)"
             ;;
 
         SMOKE_TEST)
@@ -1501,11 +1510,11 @@ main() {
         # 6. Auto-close completed features and epics
         ./scripts/close-completed-parents.sh 2>/dev/null || true
 
-        # 7. Reset stale in_progress tasks (executor crashed without timeout)
-        check_stale_tasks
-
-        # 8. Heal stuck tasks (completed but needs-review label lost)
-        heal_stuck_tasks
+        # 7-8. Reset stale + heal stuck (shared bd list to reduce daemon load)
+        local in_progress_cache
+        in_progress_cache=$(bd_safe list --status=in_progress --json --limit 0 2>/dev/null || echo "[]")
+        check_stale_tasks "$in_progress_cache"
+        heal_stuck_tasks "$in_progress_cache"
 
         # 9. Cleanup stale worktrees (orphaned from crashed executors)
         cleanup_stale_worktrees

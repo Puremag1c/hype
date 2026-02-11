@@ -18,7 +18,7 @@ bd_safe() {
     local daemon_count
     daemon_count=$(pgrep -x bd 2>/dev/null | wc -l | tr -d ' ')
 
-    if [ "$daemon_count" -gt 30 ]; then
+    if [ "$daemon_count" -gt 5 ]; then
         >&2 echo "WARN: Beads daemon explosion detected ($daemon_count processes). Killing all and restarting."
         pkill -9 -x bd 2>/dev/null || true
         sleep 2
@@ -765,7 +765,8 @@ export -f hard_kill_beads_daemon 2>/dev/null || true
 # Returns: 0 if daemon is healthy, 1 if unrecoverable
 # Caller decides policy: hype.sh exits, doctor.sh continues with limited data
 check_beads() {
-    if timeout_cmd 5s bd sync --status &>/dev/null; then
+    # Check DAEMON specifically, not bd CLI (which has SQLite fallback even when daemon is dead)
+    if timeout_cmd 5s bd daemon status 2>/dev/null | grep -q "running"; then
         return 0
     fi
 
@@ -777,7 +778,7 @@ check_beads() {
         timeout_cmd 10s bd daemon restart . &>/dev/null || true
         sleep 2
 
-        if timeout_cmd 5s bd sync --status &>/dev/null; then
+        if timeout_cmd 5s bd daemon status 2>/dev/null | grep -q "running"; then
             >&2 echo "INFO: Beads daemon recovered after $attempts attempt(s)"
             return 0
         fi
@@ -786,7 +787,7 @@ check_beads() {
     >&2 echo "WARN: Soft restart failed, attempting hard kill..."
     hard_kill_beads_daemon
 
-    if timeout_cmd 5s bd sync --status &>/dev/null; then
+    if timeout_cmd 5s bd daemon status 2>/dev/null | grep -q "running"; then
         >&2 echo "INFO: Beads daemon recovered after hard kill"
         return 0
     fi
@@ -795,6 +796,52 @@ check_beads() {
     return 1
 }
 export -f check_beads 2>/dev/null || true
+
+# ensure_single_daemon - kill duplicates, ensure exactly one bd daemon running
+# ChatFilter incident: 6 daemons running simultaneously overwhelmed the socket.
+# Call at startup before main loop.
+ensure_single_daemon() {
+    local daemon_count
+    daemon_count=$(pgrep -x bd 2>/dev/null | wc -l | tr -d ' ')
+
+    if [ "$daemon_count" -gt 1 ]; then
+        >&2 echo "WARN: Multiple bd daemons ($daemon_count), killing all and restarting one"
+        pkill -9 -x bd 2>/dev/null || true
+        sleep 2
+        bd daemon start --log-level warn >/dev/null 2>&1 || true
+        sleep 1
+    elif [ "$daemon_count" -eq 0 ]; then
+        >&2 echo "INFO: No bd daemon running, starting one"
+        bd daemon start --log-level warn >/dev/null 2>&1 || true
+        sleep 1
+    fi
+}
+export -f ensure_single_daemon 2>/dev/null || true
+
+# compact_beads_if_large - compact beads DB if it exceeds size threshold
+# Purges tombstones and cleans old closed issues to prevent DB bloat.
+# ChatFilter incident: 1416 tombstones from bd delete grew DB to 60MB.
+compact_beads_if_large() {
+    local db_path=".beads/beads.db"
+    local max_size_mb="${1:-10}"
+
+    if [ ! -f "$db_path" ]; then
+        return 0
+    fi
+
+    local size_bytes
+    # macOS: stat -f %z, Linux: stat -c %s
+    size_bytes=$(stat -f %z "$db_path" 2>/dev/null || stat -c %s "$db_path" 2>/dev/null || echo 0)
+    local size_mb=$(( size_bytes / 1048576 ))
+
+    if [ "$size_mb" -ge "$max_size_mb" ]; then
+        >&2 echo "INFO: Beads DB is ${size_mb}MB (threshold ${max_size_mb}MB), running compaction..."
+        bd admin compact --purge-tombstones 2>/dev/null || true
+        bd admin cleanup --ephemeral --force 2>/dev/null || true
+        >&2 echo "INFO: Compaction complete"
+    fi
+}
+export -f compact_beads_if_large 2>/dev/null || true
 
 # =============================================================================
 # Trigger Cleanup
@@ -880,9 +927,9 @@ ensure_milestone() {
 }
 export -f ensure_milestone 2>/dev/null || true
 
-# delete_milestone - удаляет milestone task полностью
+# delete_milestone - removes milestone visibility by stripping its label
 # Использование: delete_milestone "milestone:planning-done"
-# Удаляет ВСЕ tasks с данным label (на случай дубликатов).
+# Uses --remove-label instead of bd delete to avoid tombstone accumulation.
 # NOTE: Ищет во ВСЕХ задачах (не только closed) — milestone может застрять в open при ошибке bd close
 delete_milestone() {
     local label="$1"
@@ -892,27 +939,28 @@ delete_milestone() {
 
     if [ -n "$task_ids" ]; then
         for task_id in $task_ids; do
-            bd_safe delete "$task_id" >/dev/null 2>&1 || true
+            bd_safe update "$task_id" --remove-label="$label" >/dev/null 2>&1 || true
         done
     fi
 }
 export -f delete_milestone 2>/dev/null || true
 
-# delete_all_milestones - удаляет все milestone tasks
+# delete_all_milestones - strips milestone labels from all milestone tasks
 # Использование: delete_all_milestones
 # Используется при начале новой итерации (INIT phase).
+# Uses --remove-label instead of bd delete to avoid tombstone accumulation.
 # NOTE: Ищет во ВСЕХ задачах (не только closed) — milestones могут застрять в open
 delete_all_milestones() {
-    local task_ids
-    task_ids=$(bd_safe list --json --limit 0 2>/dev/null | \
-        jq -r '.[] | select(.labels[]? | test("^milestone:")) | .id' 2>/dev/null || true)
+    local pairs
+    pairs=$(bd_safe list --json --limit 0 2>/dev/null | \
+        jq -r '.[] | .labels as $labels | select($labels != null) | .id as $id | $labels[] | select(test("^milestone:")) | "\($id) \(.)"' 2>/dev/null || true)
 
     local count=0
-    if [ -n "$task_ids" ]; then
-        for task_id in $task_ids; do
-            bd_safe delete "$task_id" >/dev/null 2>&1 || true
+    if [ -n "$pairs" ]; then
+        while IFS=' ' read -r task_id label; do
+            bd_safe update "$task_id" --remove-label="$label" >/dev/null 2>&1 || true
             ((count++)) || true
-        done
+        done <<< "$pairs"
     fi
     echo "$count"
 }

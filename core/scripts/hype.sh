@@ -1367,6 +1367,10 @@ main() {
     # Clean up stale state from previous sessions (crash recovery)
     rm -f "$CLAUDEV_DIR/run-testers.pid"
 
+    # Startup hardening: single daemon + DB compaction
+    ensure_single_daemon
+    compact_beads_if_large 10
+
     # Close orphaned triggers from previous sessions
     local stale_triggers
     stale_triggers=$(bd_safe list --json --limit 0 2>/dev/null | \

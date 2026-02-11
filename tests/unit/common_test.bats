@@ -406,3 +406,57 @@ load '../helpers/mock_bd'
     run calculate_backoff_delay 20 2 10
     [[ "$output" == "10" ]]
 }
+
+# =============================================================================
+# v2.3.1: Daemon Resilience — source code pattern tests
+# =============================================================================
+
+@test "no bd_safe delete in common.sh (tombstone prevention)" {
+    ! grep -q 'bd_safe delete' "$SCRIPTS_DIR/common.sh"
+}
+
+@test "no bd_safe delete in detect-phase.sh (tombstone prevention)" {
+    ! grep -q 'bd_safe delete' "$SCRIPTS_DIR/detect-phase.sh"
+}
+
+@test "bd_safe explosion threshold is 5" {
+    grep -q 'daemon_count.*-gt 5' "$SCRIPTS_DIR/common.sh"
+}
+
+@test "ensure_single_daemon function exists in common.sh" {
+    grep -q '^ensure_single_daemon()' "$SCRIPTS_DIR/common.sh"
+}
+
+@test "compact_beads_if_large function exists in common.sh" {
+    grep -q '^compact_beads_if_large()' "$SCRIPTS_DIR/common.sh"
+}
+
+@test "check_beads uses bd daemon status not bd sync --status" {
+    # check_beads should use bd daemon status
+    sed -n '/^check_beads()/,/^}/p' "$SCRIPTS_DIR/common.sh" | grep -q 'bd daemon status'
+
+    # check_beads should NOT use bd sync --status
+    ! sed -n '/^check_beads()/,/^}/p' "$SCRIPTS_DIR/common.sh" | grep -q 'bd sync --status'
+}
+
+@test "delete_milestone uses --remove-label not delete" {
+    local body
+    body=$(sed -n '/^delete_milestone()/,/^}/p' "$SCRIPTS_DIR/common.sh")
+    echo "$body" | grep -q 'remove-label'
+    ! echo "$body" | grep -q 'bd_safe delete'
+}
+
+@test "delete_all_milestones uses --remove-label not delete" {
+    local body
+    body=$(sed -n '/^delete_all_milestones()/,/^}/p' "$SCRIPTS_DIR/common.sh")
+    echo "$body" | grep -q 'remove-label'
+    ! echo "$body" | grep -q 'bd_safe delete'
+}
+
+@test "hype.sh calls ensure_single_daemon at startup" {
+    grep -q 'ensure_single_daemon' "$SCRIPTS_DIR/hype.sh"
+}
+
+@test "hype.sh calls compact_beads_if_large at startup" {
+    grep -q 'compact_beads_if_large' "$SCRIPTS_DIR/hype.sh"
+}

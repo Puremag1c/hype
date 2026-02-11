@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.3.1] - 2026-02-11
+
+### Fixed
+
+- **check_beads detects dead daemon** — Replaced `bd sync --status` (which silently falls back to direct SQLite when daemon is dead) with `bd daemon status | grep running`. ChatFilter incident: daemon crashed from git index corruption, but `check_beads` kept returning "ok" via SQLite fallback, missing the feedback loop that generated 50MB of logs. Now HYPE detects and restarts a dead daemon immediately.
+
+- **Tombstone-free milestones** — Replaced all `bd_safe delete` calls in `common.sh` and `detect-phase.sh` with `bd_safe update --remove-label`. ChatFilter accumulated 1416 tombstones from `bd delete` milestone operations, bloating the DB to 60MB. Removing the label makes the milestone invisible to `has_milestone()` without creating tombstones.
+
+- **Startup hardening** — New `ensure_single_daemon()` kills duplicate bd daemons and ensures exactly one is running at startup. New `compact_beads_if_large()` auto-purges tombstones when `.beads/beads.db` exceeds 10MB. Both run once before the main loop.
+
+- **bd_safe explosion threshold lowered** — Reduced from 30 to 5. ChatFilter had 6 zombie daemons — the old threshold of 30 was useless. Now HYPE detects daemon explosion much earlier.
+
+- 10 new unit tests (184 total): zero `bd_safe delete` in scripts, threshold=5, `bd daemon status` in check_beads, new functions exist, startup integration.
+
+---
+
 ## [2.3.0] - 2026-02-11
 
 ### Added

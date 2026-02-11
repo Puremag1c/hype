@@ -231,7 +231,7 @@ if [ "$PENDING_ANALYST_TRIGGERS" -gt 0 ] && [ "$HAS_ANALYSTS_DONE" -gt 0 ]; then
     >&2 echo "SELF-HEAL: Removing premature milestone:analysts-done ($PENDING_ANALYST_TRIGGERS triggers pending)"
     MILESTONE_IDS=$(echo "$ALL_TASKS_JSON" | jq -r '.[] | select(.labels[]? == "milestone:analysts-done") | .id' 2>/dev/null || true)
     for mid in $MILESTONE_IDS; do
-        bd_safe delete "$mid" >/dev/null 2>&1 || true
+        bd_safe update "$mid" --remove-label="milestone:analysts-done" >/dev/null 2>&1 || true
     done
     output_json "HELPERS"
     exit 0

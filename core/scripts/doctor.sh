@@ -282,6 +282,13 @@ main() {
     log "INFO" "Project: $PROJECT_DIR"
     log "INFO" "=========================================="
 
+    # Ensure bd daemon is alive before gathering context
+    # check_beads (from common.sh) handles soft restart + hard kill recovery
+    # Without this, gather_context spends 60-70s on timeouts with empty results
+    if ! check_beads; then
+        log "ERROR" "Beads daemon unrecoverable — Doctor will run with limited data"
+    fi
+
     run_doctor
 }
 

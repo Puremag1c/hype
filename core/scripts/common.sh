@@ -719,6 +719,84 @@ release_review_lock() {
 export -f release_review_lock 2>/dev/null || true
 
 # =============================================================================
+# Beads Daemon Health
+# =============================================================================
+# Shared daemon recovery logic — used by hype.sh, doctor.sh, and any script
+# that needs a healthy bd daemon before proceeding.
+
+# hard_kill_beads_daemon - kill zombie daemon by PID when socket is gone
+# Reads PID from .beads/daemon.pid, verifies it's a bd process, kills it,
+# cleans up stale files, and starts a fresh daemon.
+hard_kill_beads_daemon() {
+    local pid_file=".beads/daemon.pid"
+    local lock_file=".beads/daemon.lock"
+
+    if [ -f "$pid_file" ]; then
+        local pid
+        pid=$(cat "$pid_file" 2>/dev/null | tr -d '[:space:]')
+
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            local proc_name
+            proc_name=$(ps -p "$pid" -o comm= 2>/dev/null || echo "")
+
+            if [[ "$proc_name" == *"bd"* ]] || [[ "$proc_name" == *"beads"* ]]; then
+                >&2 echo "WARN: Killing zombie daemon (PID $pid)"
+                kill "$pid" 2>/dev/null || true
+                sleep 1
+
+                if kill -0 "$pid" 2>/dev/null; then
+                    kill -9 "$pid" 2>/dev/null || true
+                    sleep 1
+                fi
+            else
+                >&2 echo "WARN: PID $pid is not a beads process ($proc_name), removing stale files"
+            fi
+        fi
+    fi
+
+    rm -f "$pid_file" "$lock_file" .beads/daemon.sock 2>/dev/null || true
+
+    bd daemon start --log-level warn &>/dev/null || true
+    sleep 2
+}
+export -f hard_kill_beads_daemon 2>/dev/null || true
+
+# check_beads - ensure bd daemon is alive, attempt recovery if not
+# Returns: 0 if daemon is healthy, 1 if unrecoverable
+# Caller decides policy: hype.sh exits, doctor.sh continues with limited data
+check_beads() {
+    if timeout_cmd 5s bd sync --status &>/dev/null; then
+        return 0
+    fi
+
+    >&2 echo "WARN: Beads daemon not responding, attempting restart..."
+
+    local attempts=0
+    while [ $attempts -lt 3 ]; do
+        ((attempts++))
+        timeout_cmd 10s bd daemon restart . &>/dev/null || true
+        sleep 2
+
+        if timeout_cmd 5s bd sync --status &>/dev/null; then
+            >&2 echo "INFO: Beads daemon recovered after $attempts attempt(s)"
+            return 0
+        fi
+    done
+
+    >&2 echo "WARN: Soft restart failed, attempting hard kill..."
+    hard_kill_beads_daemon
+
+    if timeout_cmd 5s bd sync --status &>/dev/null; then
+        >&2 echo "INFO: Beads daemon recovered after hard kill"
+        return 0
+    fi
+
+    >&2 echo "ERROR: Beads daemon failed to recover after hard kill"
+    return 1
+}
+export -f check_beads 2>/dev/null || true
+
+# =============================================================================
 # Trigger Cleanup
 # =============================================================================
 

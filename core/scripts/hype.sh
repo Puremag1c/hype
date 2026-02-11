@@ -149,82 +149,8 @@ load_config() {
 }
 
 # === Beads daemon check ===
-
-check_beads() {
-    # Timeout prevents hanging if daemon is frozen
-    if timeout_cmd 5s bd sync --status &>/dev/null; then
-        return 0
-    fi
-
-    log "WARN" "Beads daemon not responding, attempting restart..."
-
-    local attempts=0
-    while [ $attempts -lt 3 ]; do
-        ((attempts++))
-
-        # Restart daemon with timeout (requires workspace path)
-        timeout_cmd 10s bd daemon restart . &>/dev/null || true
-        sleep 2
-
-        if timeout_cmd 5s bd sync --status &>/dev/null; then
-            log "INFO" "Beads daemon recovered after $attempts attempt(s)"
-            return 0
-        fi
-    done
-
-    # Soft restart failed — daemon may be alive but socket gone (zombie state)
-    # Hard kill by PID as last resort
-    log "WARN" "Soft restart failed, attempting hard kill..."
-    hard_kill_beads_daemon
-
-    if timeout_cmd 5s bd sync --status &>/dev/null; then
-        log "INFO" "Beads daemon recovered after hard kill"
-        return 0
-    fi
-
-    log "FATAL" "Beads daemon failed to recover after hard kill. Check: bd daemon status"
-    exit 1
-}
-
-# Hard kill beads daemon by PID when socket is gone
-# Reads PID from .beads/daemon.pid, verifies it's a bd process, kills it,
-# cleans up stale files, and starts a fresh daemon.
-hard_kill_beads_daemon() {
-    local pid_file=".beads/daemon.pid"
-    local lock_file=".beads/daemon.lock"
-
-    if [ -f "$pid_file" ]; then
-        local pid
-        pid=$(cat "$pid_file" 2>/dev/null | tr -d '[:space:]')
-
-        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-            # Verify it's actually a beads process (PID could be recycled)
-            local proc_name
-            proc_name=$(ps -p "$pid" -o comm= 2>/dev/null || echo "")
-
-            if [[ "$proc_name" == *"bd"* ]] || [[ "$proc_name" == *"beads"* ]]; then
-                log "WARN" "Killing zombie daemon (PID $pid)"
-                kill "$pid" 2>/dev/null || true
-                sleep 1
-
-                # Force kill if still alive
-                if kill -0 "$pid" 2>/dev/null; then
-                    kill -9 "$pid" 2>/dev/null || true
-                    sleep 1
-                fi
-            else
-                log "WARN" "PID $pid is not a beads process ($proc_name), removing stale files"
-            fi
-        fi
-    fi
-
-    # Clean up stale files regardless
-    rm -f "$pid_file" "$lock_file" .beads/daemon.sock 2>/dev/null || true
-
-    # Start fresh daemon
-    bd daemon start --log-level warn &>/dev/null || true
-    sleep 2
-}
+# check_beads and hard_kill_beads_daemon are defined in common.sh
+# Here we wrap check_beads with exit-on-failure policy for the main loop
 
 # === Symlinks health check ===
 
@@ -1439,7 +1365,10 @@ main() {
         # If daemon is slow, increase delay to reduce load instead of hammering it
         local health_start health_end health_elapsed
         health_start=$(date +%s)
-        check_beads
+        if ! check_beads; then
+            log "FATAL" "Beads daemon failed to recover. Check: bd daemon status"
+            exit 1
+        fi
         health_end=$(date +%s)
         health_elapsed=$((health_end - health_start))
 

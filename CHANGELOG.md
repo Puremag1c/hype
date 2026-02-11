@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.2.8] - 2026-02-11
+
+### Fixed
+
+- **Shared `check_beads` daemon health check** — Extracted `check_beads()` and `hard_kill_beads_daemon()` from `hype.sh` into `common.sh` with `export -f`. Previously daemon recovery was copy-pasted: hype.sh had the full version (soft restart × 3 → hard kill by PID → fresh daemon), while doctor.sh had a simplified inline copy. Now all scripts (hype, doctor, future ones) use the same battle-tested recovery: `check_beads` returns 0/1 and the caller decides policy — hype.sh exits on failure, doctor.sh continues with limited data.
+
+---
+
 ## [2.2.7] - 2026-02-11
 
 ### Fixed

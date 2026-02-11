@@ -1357,6 +1357,7 @@ main() {
     local max_cycles="${MAX_CYCLES:-1000}"
     local current_delay="${ITERATION_DELAY:-10}"
     local base_delay="${ITERATION_DELAY:-10}"
+    local beads_fail_streak=0
 
     while [ $cycle -lt "$max_cycles" ]; do
         ((cycle++))
@@ -1366,9 +1367,16 @@ main() {
         local health_start health_end health_elapsed
         health_start=$(date +%s)
         if ! check_beads; then
-            log "FATAL" "Beads daemon failed to recover. Check: bd daemon status"
-            exit 1
+            ((beads_fail_streak++)) || true
+            if [ "$beads_fail_streak" -ge 5 ]; then
+                log "ERROR" "Beads daemon failed $beads_fail_streak cycles in a row. Try: bd daemon restart ."
+            else
+                log "WARN" "Beads daemon not recovered (streak $beads_fail_streak/5), retrying in 60s..."
+            fi
+            sleep 60
+            continue
         fi
+        beads_fail_streak=0
         health_end=$(date +%s)
         health_elapsed=$((health_end - health_start))
 

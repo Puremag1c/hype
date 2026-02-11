@@ -292,3 +292,20 @@ load '../helpers/setup'
     ! grep -q 'kill -9.*pid' "$doctor_sh"
     ! grep -q 'daemon.pid' "$doctor_sh"
 }
+
+@test "hype.sh: check_beads failure retries instead of exit" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    # Main loop must NOT exit on check_beads failure
+    local beads_block
+    beads_block=$(sed -n '/check_beads/,/beads_fail_streak=0/p' "$hype_sh")
+
+    # Must have retry with continue (not exit)
+    echo "$beads_block" | grep -q 'continue'
+
+    # Must NOT have exit 1 after check_beads failure
+    ! echo "$beads_block" | grep -q 'exit 1'
+
+    # Must track failure streak
+    echo "$beads_block" | grep -q 'beads_fail_streak'
+}

@@ -133,24 +133,25 @@ load '../helpers/setup'
 # merge queue: push failure handling
 # =============================================================================
 
-@test "merge-queue: handles push failure with reject:N increment" {
+@test "merge-queue: handles push failure with merge-conflict:N (not reject:N)" {
     local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
 
-    # Push failure block should increment reject:N
+    # v2.3.3: Push failure uses merge-conflict counter, retries in-place
     local push_block
-    push_block=$(sed -n '/git push.*main_ref/,/return 0/p' "$merge_sh" | head -20)
+    push_block=$(sed -n '/git push.*main_ref.*then/,/fi/p' "$merge_sh")
 
-    echo "$push_block" | grep -q 'set_counter_label.*reject'
-    echo "$push_block" | grep -q 'remove-label=approved'
-    echo "$push_block" | grep -q 'status=open'
+    echo "$push_block" | grep -q 'merge-conflict'
+    echo "$push_block" | grep -q 'return 1'
 }
 
-@test "merge-queue: push failure escalates to troubleshooter at reject:4" {
+@test "merge-queue: no reject:N increment for infrastructure failures" {
     local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
 
-    # After push failure, should escalate at reject:4
-    grep -q 'blocked:troubleshoot' "$merge_sh"
-    grep -q 'Push failures persist' "$merge_sh"
+    # v2.3.3: merge queue should NOT use reject:N at all
+    # reject:N is for code quality only (reviewers)
+    local merge_fn
+    merge_fn=$(sed -n '/^merge_task()/,/^}/p' "$merge_sh")
+    ! echo "$merge_fn" | grep -q '"reject"'
 }
 
 # =============================================================================

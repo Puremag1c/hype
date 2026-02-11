@@ -542,3 +542,48 @@ load '../helpers/mock_bd'
     ! echo "$main_loop" | grep -q 'bd_safe show'
     echo "$main_loop" | grep -q 'all_in_progress.*jq.*title'
 }
+
+# =============================================================================
+# v2.3.3: Merge conflict retry-in-place + doctor label fix
+# =============================================================================
+
+@test "merge queue: uses merge-conflict:N counter (not reject:N)" {
+    local merge_fn
+    merge_fn=$(sed -n '/^merge_task()/,/^}/p' "$SCRIPTS_DIR/run-merge-queue.sh")
+
+    # Must use merge-conflict counter for conflicts
+    echo "$merge_fn" | grep -q 'merge-conflict'
+
+    # Must NOT use reject:N for infrastructure failures
+    ! echo "$merge_fn" | grep -q '"reject"'
+}
+
+@test "merge queue: conflict retry returns 1 to try next task" {
+    local merge_fn
+    merge_fn=$(sed -n '/^merge_task()/,/^}/p' "$SCRIPTS_DIR/run-merge-queue.sh")
+
+    # return 1 signals "skip this task, try next"
+    echo "$merge_fn" | grep -q 'return 1.*# Signal\|return 1.*# Try next'
+}
+
+@test "merge queue: main loop skips conflicting tasks" {
+    local main_fn
+    main_fn=$(sed -n '/^main()/,/^}/p' "$SCRIPTS_DIR/run-merge-queue.sh")
+
+    # Loop through tasks, not just head -n 1
+    echo "$main_fn" | grep -q 'for task_id in'
+    # Check return code of merge_task
+    echo "$main_fn" | grep -q 'merge_task.*task_id'
+}
+
+@test "merge queue: persistent conflict returns to executor at threshold 6" {
+    local merge_fn
+    merge_fn=$(sed -n '/^merge_task()/,/^}/p' "$SCRIPTS_DIR/run-merge-queue.sh")
+
+    echo "$merge_fn" | grep -q 'conflict_count.*-ge 6'
+    echo "$merge_fn" | grep -q 'status=open'
+}
+
+@test "doctor.sh: creates label before issue" {
+    grep -q 'gh label create.*doctor-report' "$SCRIPTS_DIR/doctor.sh"
+}

@@ -126,6 +126,11 @@ send_doctor_report() {
     local body
     body=$(cat "$file")
 
+    # Ensure label exists (idempotent — no error if already present)
+    gh label create "doctor-report" --repo "Puremag1c/hype" \
+        --description "Auto-generated doctor diagnostic report" \
+        --color "d4c5f9" 2>/dev/null || true
+
     gh issue create \
         --repo "Puremag1c/hype" \
         --label "doctor-report" \

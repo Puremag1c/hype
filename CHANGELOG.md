@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.3.3] - 2026-02-11
+
+### Fixed
+
+- **Merge conflicts no longer waste executor/reviewer cycles** — When merge queue hits a git conflict, the task stays approved and is skipped to try the next task. Next cycle it retries automatically — if another task merged meanwhile, the rebase succeeds with zero extra cost. Only after 6 failed retries does the task return to executor for manual conflict resolution. Previously, every single conflict sent the task through the full executor→reviewer→merge loop (3-5 min + tokens per round). ChatFilter incident: 19 conflicts in 85 min, 86% failure rate, tasks needlessly escalated to Opus and Troubleshooter.
+
+- **Separate `merge-conflict:N` counter** — Merge queue now uses its own counter instead of sharing `reject:N` with code quality rejections. Merge conflicts no longer trigger model escalation (sonnet→opus) or Troubleshooter — because neither helps with git problems. `reject:N` is now purely for code quality (reviewers only).
+
+- **Doctor report label auto-creation** — `gh label create doctor-report` runs before `gh issue create` (idempotent). Previously failed with "label not found" on first report to a repo.
+
+- 5 new tests, 6 updated tests (200 total).
+
+---
+
 ## [2.3.2] - 2026-02-11
 
 ### Improved

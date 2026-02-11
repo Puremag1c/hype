@@ -138,16 +138,19 @@ load '../helpers/setup'
     grep -q 'closing without merge' "$merge_sh"
 }
 
-@test "merge queue: handles merge conflicts" {
+@test "merge queue: handles merge conflicts with retry-in-place" {
     local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
 
-    # v2.2.7: conflict detected via rebase --abort (auto-rebase before merge)
+    # v2.3.3: conflict uses merge-conflict:N counter (not reject:N)
     local conflict_block
-    conflict_block=$(sed -n '/rebase --abort/,/return 0/p' "$merge_sh" | head -20)
+    conflict_block=$(sed -n '/rebase --abort/,/return 0/p' "$merge_sh")
 
-    echo "$conflict_block" | grep -q 'reject_count'
-    echo "$conflict_block" | grep -q 'remove-label=approved'
-    echo "$conflict_block" | grep -q 'status=open'
+    # Uses separate merge-conflict counter
+    echo "$conflict_block" | grep -q 'merge-conflict'
+    # Stays approved for retry (return 1 = skip, not reject)
+    echo "$conflict_block" | grep -q 'return 1'
+    # Only returns to executor after 6 attempts
+    echo "$conflict_block" | grep -q 'conflict_count.*-ge 6'
 }
 
 @test "merge queue: verifies main changed after merge" {
@@ -167,10 +170,12 @@ load '../helpers/setup'
     echo "$empty_block" | grep -q 'add-label=reviewed'
 }
 
-@test "merge queue: escalates to troubleshooter on persistent conflicts" {
+@test "merge queue: no troubleshooter escalation for merge conflicts" {
     local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
 
-    grep -q 'blocked:troubleshoot' "$merge_sh"
+    # v2.3.3: merge conflicts use merge-conflict:N, NOT reject:N
+    # No blocked:troubleshoot for infrastructure issues
+    ! grep -q 'blocked:troubleshoot' "$merge_sh"
 }
 
 @test "merge queue: auto-rebase before merge (v2.2.7)" {
@@ -183,15 +188,16 @@ load '../helpers/setup'
     grep -q 'force-with-lease' "$merge_sh"
 }
 
-@test "merge queue: rebase failure rejects to executor (not silent)" {
+@test "merge queue: rebase failure returns to executor only after 6 retries" {
     local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
 
-    # After rebase --abort, must increment reject:N and return to executor
+    # v2.3.3: After rebase --abort, retry in-place first (return 1)
+    # Only return to executor (status=open) after merge-conflict:N >= 6
     local rebase_fail_block
-    rebase_fail_block=$(sed -n '/rebase --abort/,/return 0/p' "$merge_sh" | head -15)
+    rebase_fail_block=$(sed -n '/rebase --abort/,/return 0/p' "$merge_sh")
 
-    echo "$rebase_fail_block" | grep -q 'reject_count'
-    echo "$rebase_fail_block" | grep -q 'remove-label=approved'
+    echo "$rebase_fail_block" | grep -q 'conflict_count'
+    echo "$rebase_fail_block" | grep -q 'return 1'
     echo "$rebase_fail_block" | grep -q 'status=open'
 }
 

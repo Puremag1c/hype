@@ -117,25 +117,27 @@ merge_task() {
     # Try rebase: checkout branch, rebase on main, force-push
     git checkout "origin/$branch" 2>/dev/null || true
     if ! git rebase "$main_ref" 2>/dev/null; then
-        # Real conflict — rebase can't auto-resolve
+        # Rebase failed — likely timing conflict (another task merged, shifting lines)
         git rebase --abort 2>/dev/null || true
         git checkout "$main_ref" 2>/dev/null || true
-        log "WARN" "Merge conflict for $task_id (rebase failed)"
 
-        # Increment reject:N
-        local reject_count
-        reject_count=$(get_counter_value "$task_json" "reject")
-        ((reject_count++))
-        set_counter_label "$task_id" "reject" "$reject_count" "$task_json"
+        # Use separate merge-conflict:N counter (NOT reject:N — merge conflicts are infra, not code quality)
+        local conflict_count
+        conflict_count=$(get_counter_value "$task_json" "merge-conflict")
+        ((conflict_count++))
+        set_counter_label "$task_id" "merge-conflict" "$conflict_count" "$task_json"
 
-        # Return to executor (not reviewer)
-        bd_safe update "$task_id" --status=open --remove-label=approved \
-            --notes="Merge conflict on $branch. Rebase on $main_ref and resolve. (reject:$reject_count)" >/dev/null 2>&1 || true
-
-        if [ "$reject_count" -ge 4 ]; then
-            bd_safe update "$task_id" --add-label=blocked:troubleshoot \
-                --notes="Merge conflicts persist after $reject_count attempts. Escalated." >/dev/null 2>&1 || true
-            log "WARN" "TROUBLESHOOT: $task_id - merge conflicts persist (reject:$reject_count)"
+        if [ "$conflict_count" -ge 6 ]; then
+            # Real persistent conflict — return to executor for manual rebase
+            log "WARN" "Merge conflict for $task_id (attempt $conflict_count) — returning to executor"
+            bd_safe update "$task_id" --status=open --remove-label=approved \
+                --notes="Persistent merge conflict on $branch after $conflict_count attempts. Rebase on $main_ref and resolve conflicts manually." >/dev/null 2>&1 || true
+        else
+            # Timing conflict — stay approved, skip this cycle, try next task
+            # Next cycle merge queue will retry after other tasks have merged
+            log "INFO" "Merge conflict for $task_id (attempt $conflict_count/6) — skipping, will retry next cycle"
+            bd_safe update "$task_id" --notes="Merge conflict (attempt $conflict_count/6). Waiting for other merges to complete." >/dev/null 2>&1 || true
+            return 1  # Signal to main() to try next approved task
         fi
         return 0
     fi
@@ -159,22 +161,22 @@ merge_task() {
 Task: $task_id" 2>/dev/null || true
 
     if ! git push origin "$main_ref" 2>/dev/null; then
-        log "ERROR" "Push failed for $task_id, returning to executor"
+        # Push failed — another task pushed to main between our merge and push
         git reset --hard "origin/$main_ref" 2>/dev/null || true
 
-        # Increment reject:N and return to executor
-        local reject_count
-        reject_count=$(get_counter_value "$task_json" "reject")
-        ((reject_count++))
-        set_counter_label "$task_id" "reject" "$reject_count" "$task_json"
+        local conflict_count
+        conflict_count=$(get_counter_value "$task_json" "merge-conflict")
+        ((conflict_count++))
+        set_counter_label "$task_id" "merge-conflict" "$conflict_count" "$task_json"
 
-        bd_safe update "$task_id" --status=open --remove-label=approved \
-            --notes="Push to $main_ref failed after squash merge. Rebase on $main_ref and retry. (reject:$reject_count)" >/dev/null 2>&1 || true
-
-        if [ "$reject_count" -ge 4 ]; then
-            bd_safe update "$task_id" --add-label=blocked:troubleshoot \
-                --notes="Push failures persist after $reject_count attempts. Escalated." >/dev/null 2>&1 || true
-            log "WARN" "TROUBLESHOOT: $task_id - push failures persist (reject:$reject_count)"
+        if [ "$conflict_count" -ge 6 ]; then
+            log "ERROR" "Push failed for $task_id (attempt $conflict_count) — returning to executor"
+            bd_safe update "$task_id" --status=open --remove-label=approved \
+                --notes="Push to $main_ref failed $conflict_count times. Rebase on $main_ref and retry." >/dev/null 2>&1 || true
+        else
+            log "INFO" "Push failed for $task_id (attempt $conflict_count/6) — will retry next cycle"
+            bd_safe update "$task_id" --notes="Push failed (attempt $conflict_count/6). Will retry." >/dev/null 2>&1 || true
+            return 1  # Try next approved task
         fi
         return 0
     fi
@@ -214,15 +216,20 @@ main() {
         exit 0
     fi
 
-    # Process ONE task per call (sequential, safe)
+    # Try to merge one task per call (sequential, safe)
+    # On conflict (return 1), skip to next approved task instead of blocking the queue
     local task_id
-    task_id=$(echo "$tasks" | head -n 1)
-
-    if [ -n "$task_id" ]; then
+    for task_id in $tasks; do
         log "INFO" "Merge: $task_id"
-        merge_task "$task_id"
-        bd_safe sync 2>/dev/null || true
-    fi
+        if merge_task "$task_id"; then
+            # return 0 = merged or returned to executor — done for this cycle
+            bd_safe sync 2>/dev/null || true
+            return
+        fi
+        # return 1 = conflict, task stays approved — try next task
+        log "INFO" "Skipped $task_id (conflict), trying next..."
+    done
+    bd_safe sync 2>/dev/null || true
 }
 
 main "$@"

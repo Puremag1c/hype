@@ -1082,24 +1082,50 @@ For each task:
             ;;
 
         SMOKE_TEST)
-            # Run parallel testers to verify product works
-            log "INFO" "SMOKE_TEST: Running parallel testers..."
-            ./scripts/run-testers.sh
+            # Non-blocking: launch testers in background, HYPE keeps ticking
+            # This ensures check_beads runs every cycle even during long smoke tests
+            local testers_pid_file="$CLAUDEV_DIR/run-testers.pid"
+            local testers_pid=""
+            [ -f "$testers_pid_file" ] && testers_pid=$(cat "$testers_pid_file" 2>/dev/null)
 
-            # Check results - milestone created only if ALL tasks are closed
-            # Must check BOTH open AND in_progress to prevent race condition
-            local pending_tasks
-            pending_tasks=$(bd_safe list --json --limit 0 2>/dev/null | \
-                jq '[.[] | select(.status == "open" or .status == "in_progress")] | length' 2>/dev/null || echo "0")
+            if [ -n "$testers_pid" ] && kill -0 "$testers_pid" 2>/dev/null; then
+                # STATE 1: Testers running — wait
+                log "INFO" "SMOKE_TEST: testers running (PID $testers_pid)"
 
-            if [ "$pending_tasks" -gt 0 ]; then
-                # Testers created tasks (bugs, regressions)
-                # detect-phase.sh will route to SMOKE_REVIEW (if regression) or IMPLEMENTATION
-                log "WARN" "SMOKE_TEST: $pending_tasks pending task(s) found"
+            elif [ ! -f "$testers_pid_file" ]; then
+                # STATE 2: Never launched (no PID file) — start testers
+                log "INFO" "SMOKE_TEST: launching testers..."
+                ./scripts/run-testers.sh &
+                echo $! > "$testers_pid_file"
+                log "INFO" "SMOKE_TEST: testers launched (PID $!)"
+
             else
-                # All tasks closed - create milestone
-                log "INFO" "SMOKE_TEST: All tests passed - creating milestone"
-                ensure_milestone "milestone:smoke-test-done" "Smoke test complete"
+                # STATE 3: PID file exists but process dead — testers finished (or crashed)
+                rm -f "$testers_pid_file"
+
+                # Check for orphaned triggers (crash case — re-launch)
+                local tester_triggers
+                tester_triggers=$(bd_safe list --json --limit 0 2>/dev/null | \
+                    jq '[.[] | select(.status == "open" or .status == "in_progress") | select(.title | startswith("run-tester-"))] | length' 2>/dev/null || echo "0")
+
+                if [ "$tester_triggers" -gt 0 ]; then
+                    log "WARN" "SMOKE_TEST: orphaned tester triggers ($tester_triggers), re-launching..."
+                    ./scripts/run-testers.sh &
+                    echo $! > "$testers_pid_file"
+                    log "INFO" "SMOKE_TEST: testers re-launched (PID $!)"
+                else
+                    # Testers done — check results
+                    local pending_tasks
+                    pending_tasks=$(bd_safe list --json --limit 0 2>/dev/null | \
+                        jq '[.[] | select(.status == "open" or .status == "in_progress") | select((.labels // []) | index("trigger") | not)] | length' 2>/dev/null || echo "0")
+
+                    if [ "$pending_tasks" -gt 0 ]; then
+                        log "WARN" "SMOKE_TEST: $pending_tasks pending task(s) found"
+                    else
+                        log "INFO" "SMOKE_TEST: All tests passed - creating milestone"
+                        ensure_milestone "milestone:smoke-test-done" "Smoke test complete"
+                    fi
+                fi
             fi
             ;;
 
@@ -1389,7 +1415,10 @@ main() {
     # Record iteration start time (epoch for cross-platform compatibility)
     date +%s > "$CLAUDEV_DIR/iteration_start.txt"
 
-    # Close orphaned triggers from previous sessions (crash recovery)
+    # Clean up stale state from previous sessions (crash recovery)
+    rm -f "$CLAUDEV_DIR/run-testers.pid"
+
+    # Close orphaned triggers from previous sessions
     local stale_triggers
     stale_triggers=$(bd_safe list --json --limit 0 2>/dev/null | \
         jq -r '.[] | select((.labels // []) | index("trigger")) | .id' 2>/dev/null || true)

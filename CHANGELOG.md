@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.2.6] - 2026-02-11
+
+### Fixed
+
+- **SMOKE_TEST no longer blocks HYPE main loop** — `run-testers.sh` now launches in background with PID tracking. Previously, HYPE called it synchronously (5-10 min blocking), during which `check_beads` never ran — so a frozen bd daemon went undetected, causing all tester bd calls to timeout silently. Now HYPE ticks every cycle during smoke tests, health-checking the daemon and healing stuck tasks. Three states tracked via PID file: running (wait), never launched (start), finished/crashed (check results or re-launch).
+
+---
+
 ## [2.2.5] - 2026-02-11
 
 ### Fixed

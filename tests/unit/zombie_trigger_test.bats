@@ -208,3 +208,50 @@ load '../helpers/setup'
     # Must close with reason
     echo "$cleanup_block" | grep -q 'bd_safe close.*--reason'
 }
+
+@test "hype.sh: startup cleans stale testers PID file" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    # Startup must remove stale PID file before main loop
+    grep -q 'rm -f.*run-testers.pid' "$hype_sh"
+}
+
+# =============================================================================
+# Async SMOKE_TEST: non-blocking testers (v2.2.6)
+# =============================================================================
+
+@test "hype.sh: SMOKE_TEST launches testers in background" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    # run-testers.sh must be launched with & (background)
+    local smoke_block
+    smoke_block=$(sed -n '/SMOKE_TEST)/,/;;/p' "$hype_sh")
+
+    echo "$smoke_block" | grep -q './scripts/run-testers.sh &'
+}
+
+@test "hype.sh: SMOKE_TEST uses PID file for state tracking" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    local smoke_block
+    smoke_block=$(sed -n '/SMOKE_TEST)/,/;;/p' "$hype_sh")
+
+    # Must write PID file
+    echo "$smoke_block" | grep -q 'run-testers.pid'
+
+    # Must check if process alive (kill -0)
+    echo "$smoke_block" | grep -q 'kill -0'
+}
+
+@test "hype.sh: SMOKE_TEST does NOT call run-testers.sh synchronously" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    local smoke_block
+    smoke_block=$(sed -n '/SMOKE_TEST)/,/;;/p' "$hype_sh")
+
+    # Must NOT have synchronous call (without &)
+    # All ./scripts/run-testers.sh calls must end with &
+    local sync_calls
+    sync_calls=$(echo "$smoke_block" | grep './scripts/run-testers.sh' | grep -cv '&$' || true)
+    [ "$sync_calls" -eq 0 ]
+}

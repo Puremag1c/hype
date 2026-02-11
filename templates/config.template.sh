@@ -10,6 +10,9 @@
 # Максимум параллельных Executor агентов
 MAX_PARALLEL_EXECUTORS=3
 
+# Максимум параллельных Reviewer агентов (v2.2)
+MAX_PARALLEL_REVIEWERS=3
+
 # Лимит retry перед эскалацией к Architect
 RETRY_LIMIT=3
 
@@ -65,8 +68,8 @@ ALLOWED_MODELS="opus,sonnet,haiku"
 MODEL_TECH_WRITER="opus"
 MODEL_ARCHITECT="opus"
 MODEL_ANALYSTS="sonnet"
-# MODEL_SENIOR_EXECUTOR не используется напрямую —
-# tiered review: opus задачи → opus review, остальные → sonnet
+# Модель для reviewer (v2.2): sonnet по умолчанию, opus при reject:2+
+MODEL_REVIEWER="sonnet"
 MODEL_MANAGER="sonnet"
 MODEL_ANALYZER="opus"
 

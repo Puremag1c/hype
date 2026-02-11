@@ -578,7 +578,7 @@ cmd_status() {
     # Active executors and pending reviews
     if command -v bd &>/dev/null && [[ -d ".beads" ]]; then
         local in_progress
-        in_progress=$(bd list --status=in_progress --json 2>/dev/null || echo "[]")
+        in_progress=$(bd list --status=in_progress --json --limit 0 2>/dev/null || echo "[]")
 
         # Active executors (have executor label)
         local executors
@@ -611,15 +611,43 @@ cmd_status() {
 
         # Pending reviews (have needs-review label, no executor label)
         local reviews
-        reviews=$(echo "$in_progress" | jq -r '.[] | select((.labels | index("needs-review")) and ((.labels | index("executor")) | not)) | "\(.id)|\(.title)"' 2>/dev/null || true)
+        reviews=$(echo "$in_progress" | jq -r '.[] | select((.labels // [] | index("needs-review")) and ((.labels // [] | index("executor")) | not)) | "\(.id)|\(.title)"' 2>/dev/null || true)
 
         if [[ -n "$reviews" ]]; then
             echo "Pending reviews:"
             while IFS='|' read -r task_id title; do
                 [[ -z "$task_id" ]] && continue
                 title="${title:0:40}"
-                printf "  %-12s %-42s waiting for senior\n" "$task_id" "\"$title\""
+                printf "  %-12s %-42s waiting for review\n" "$task_id" "\"$title\""
             done <<< "$reviews"
+            echo ""
+        fi
+
+        # Active reviews (reviewing label)
+        local reviewing
+        reviewing=$(echo "$in_progress" | jq -r '.[] | select((.labels // []) | index("reviewing")) | "\(.id)|\(.title)"' 2>/dev/null || true)
+
+        if [[ -n "$reviewing" ]]; then
+            echo "Under review:"
+            while IFS='|' read -r task_id title; do
+                [[ -z "$task_id" ]] && continue
+                title="${title:0:40}"
+                printf "  %-12s %-42s reviewing\n" "$task_id" "\"$title\""
+            done <<< "$reviewing"
+            echo ""
+        fi
+
+        # Approved (waiting for merge)
+        local approved
+        approved=$(echo "$in_progress" | jq -r '.[] | select((.labels // []) | index("approved")) | "\(.id)|\(.title)"' 2>/dev/null || true)
+
+        if [[ -n "$approved" ]]; then
+            echo "Approved (merge queue):"
+            while IFS='|' read -r task_id title; do
+                [[ -z "$task_id" ]] && continue
+                title="${title:0:40}"
+                printf "  %-12s %-42s merging\n" "$task_id" "\"$title\""
+            done <<< "$approved"
             echo ""
         fi
 

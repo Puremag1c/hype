@@ -166,6 +166,14 @@ startup_timeout: 30          # Секунды на запуск сервера
 - gh — GitHub CLI (для PR workflow)
 - gitleaks — secret detection (авто-установка при наличии GitHub)
 
+## v2.3.0: Doctor Report Sending (завершено)
+
+- **Автоотправка репортов** — после диагностики, Doctor report отправляется как GitHub issue в `Puremag1c/hype` с label `doctor-report`
+- **Sanitization** — HOME → `~`, PROJECT_DIR → `$PROJECT`, API keys / Bearer tokens → `[REDACTED]`
+- **Два режима** — `--report`: автоматическая отправка; interactive: `read -p` подтверждение от пользователя
+- **Graceful degradation** — gh отсутствует → skip, gh не авторизован → skip, сеть недоступна → log ERROR
+- **5 функций** — `sanitize_doctor_report`, `check_gh_available`, `find_latest_doctor_log`, `save_report_output`, `send_doctor_report`
+
 ## v2.2.0: Parallel Review Pipeline (завершено)
 
 - **Parallel Reviewers** — `run-reviewers.sh` запускает до `MAX_PARALLEL_REVIEWERS` ревьюеров одновременно

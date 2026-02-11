@@ -26,6 +26,8 @@
 
 - **Exclude trigger tasks from heal_stuck_tasks and reset_stale_tasks** — Trigger tasks (label `trigger`) are system coordination tasks, not user work. `heal_stuck_tasks()` incorrectly added `needs-review` to stuck triggers, which then hit `NO_BRANCH` in review pipeline and were counted as P0 bugs — blocking smoke test progression indefinitely. Also added `reviewing` and `approved` exclusions to `heal_stuck_tasks` stuck detection (already handled by dedicated v2.2 healing logic). `reset_stale_tasks()` in common.sh also now excludes `trigger`.
 
+- **Exclude trigger tasks from all task-fetching functions** — `get_review_tasks()` in `run-reviewers.sh`, `get_approved_tasks()` in `run-merge-queue.sh`, and `get_ready_tasks()` in `run-executors.sh` now filter out `trigger` label. Previously, trigger tasks could leak through title-based filters if their name didn't match `^run-` pattern.
+
 - **Visible errors on trigger auto-close failure** — `run-testers.sh` auto-close of unclosed trigger tasks now logs ERROR on failure instead of silently swallowing it.
 
 ---

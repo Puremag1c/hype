@@ -419,7 +419,7 @@ $context
 
 get_review_tasks() {
     bd_safe list --status=in_progress --json --limit 0 2>/dev/null | \
-        jq -r '.[] | select((.labels // []) | index("needs-review")) | select(.title | test("^milestone:") | not) | .id' 2>/dev/null
+        jq -r '.[] | select((.labels // []) | index("needs-review")) | select((.labels // []) | index("trigger") | not) | select(.title | test("^milestone:") | not) | .id' 2>/dev/null
 }
 
 # === Main ===

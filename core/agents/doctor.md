@@ -60,6 +60,12 @@ bd dep cycles 2>/dev/null || echo "No cycles"
 pgrep -fl "claude|hype|bd" 2>/dev/null || echo "No HYPE processes"
 pgrep -c bd 2>/dev/null || echo "0"  # Количество bd процессов
 
+# 3b. Async testers state (v2.2.6+)
+cat .hype/run-testers.pid 2>/dev/null && echo "(PID file exists)" || echo "No testers PID file"
+kill -0 $(cat .hype/run-testers.pid 2>/dev/null) 2>/dev/null && echo "Testers RUNNING" || echo "Testers NOT running"
+# Orphaned triggers (should be 0 during normal operation)
+bd list --json --limit 0 2>/dev/null | jq '[.[] | select((.labels // []) | index("trigger"))] | length' 2>/dev/null || echo "?"
+
 # 4. Логи (последние записи)
 tail -30 logs/hype.log 2>/dev/null || echo "No hype.log"
 ls -lt logs/*.log 2>/dev/null | head -5

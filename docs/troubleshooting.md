@@ -789,6 +789,83 @@ bd delete <milestone-id>
 
 ## SMOKE_TEST проблемы
 
+### PROBLEM: Testers not running (bd daemon frozen during SMOKE_TEST)
+
+**Fixed in:** 2.2.6
+
+**Симптомы:**
+- `SMOKE_TEST: testers running (PID X)` в логах, но тестеры не работают
+- `bd` commands timeout: `ERROR: bd command timeout: bd close ...`
+- Tester logs show "Trigger already claimed" within 10-15 seconds (too fast for real test)
+- Tester trigger tasks stuck in `open` (never claimed to `in_progress`)
+- `bd show <id>` hangs (daemon frozen)
+
+**Причина:**
+До v2.2.6 `run-testers.sh` запускалось синхронно внутри HYPE main loop. 4+ Claude тестера + hype.sh одновременно вызывали `bd` — daemon перегружался и переставал отвечать. `check_beads` не запускалось (заблокировано внутри SMOKE_TEST), daemon не перезапускался. `bd_safe update --status=in_progress` таймаутил → интерпретировался как "already claimed" → тестер пропускал задачу.
+
+**Диагностика:**
+```bash
+# Daemon alive but not responding?
+timeout 5s bd show <any-id> 2>&1 || echo "DAEMON FROZEN"
+
+# Check tester PID file
+cat .hype/run-testers.pid 2>/dev/null
+kill -0 $(cat .hype/run-testers.pid 2>/dev/null) 2>/dev/null && echo "RUNNING" || echo "DEAD"
+
+# Check tester trigger states
+bd list --all --json --limit 0 2>/dev/null | jq '.[] | select(.title | startswith("run-tester-")) | {id, title, status}'
+```
+
+**Решение:**
+Обновиться до 2.2.6+. `run-testers.sh` запускается в background с PID tracking. HYPE продолжает тикать каждый цикл — `check_beads` обнаруживает и перезапускает frozen daemon.
+
+**Manual fix (для старых версий):**
+```bash
+# 1. Kill frozen daemon
+pkill -9 -f "bd daemon"
+rm -f .beads/daemon.*
+bd daemon start --log-level warn
+
+# 2. Restart HYPE
+hype stop && hype
+```
+
+---
+
+### PROBLEM: Zombie trigger blocks phase transition (IMPLEMENTATION → SMOKE_TEST)
+
+**Fixed in:** 2.2.5
+
+**Симптомы:**
+- Phase stuck on `IMPLEMENTATION` despite all real tasks being closed (100% progress)
+- `bd list` shows a trigger task (e.g. `run-plan-review`) in `in_progress` from previous session
+- Phase never transitions to SMOKE_TEST
+
+**Причина:**
+До v2.2.5 `detect-phase.sh` counted trigger tasks in OPEN/IN_PROGRESS totals. A zombie trigger (from crashed session) was counted as real work, blocking phase transition. `cleanup_stale_trigger()` couldn't help when bd daemon was also frozen.
+
+**Диагностика:**
+```bash
+# Check for non-closed triggers
+bd list --json --limit 0 | jq '.[] | select((.labels // []) | index("trigger")) | {id, title, status}'
+
+# Check phase
+./scripts/detect-phase.sh 2>&1 | jq .
+```
+
+**Решение:**
+Обновиться до 2.2.5+. Три уровня защиты:
+1. `detect-phase.sh` исключает trigger labels из OPEN/IN_PROGRESS
+2. HYPE startup закрывает все orphaned triggers
+3. `cleanup_stale_trigger()` чистит перед созданием новых
+
+**Manual fix (для старых версий):**
+```bash
+bd close <trigger-id> --reason="Orphaned trigger"
+```
+
+---
+
 ### PROBLEM: Testers see OLD code (stale code loop)
 
 **Симптомы:**

@@ -15,7 +15,7 @@ hype.sh (bash loop с lock file)
     │   ├─► HELPERS: run-analysts.sh → Analysts (Sonnet × 5)
     │   ├─► PLAN_REVIEW: Architect-Reviewer (Opus)
     │   ├─► IMPLEMENTATION: run-executors.sh + run-reviewers.sh + run-merge-queue.sh
-    │   ├─► SMOKE_TEST: run-testers.sh → Testers × 6
+    │   ├─► SMOKE_TEST: run-testers.sh (background) → Testers × 6
     │   ├─► SMOKE_REVIEW: Architect-QA (Opus)
     │   ├─► USER_REVIEW: Tech-Writer-Review (Sonnet) → daemon stops
     │   ├─► FINAL_REVIEW: Architect-QA (Opus)
@@ -166,6 +166,7 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
   - `tester-cli` (haiku) — Команды, --help (cli)
   - `tester-regression` (sonnet) — Тестовый suite (library)
 - **Sequential:** functional + visual запускаются последовательно (Playwright MCP conflicts)
+- **Async (v2.2.6):** `run-testers.sh` запускается в background с PID tracking. HYPE продолжает тикать (check_beads, heal каждый цикл). Три состояния: running (PID alive → wait), never launched (no PID file → start), finished/crashed (PID dead → check results or re-launch orphans)
 - **Hard gate:** P0 bugs блокируют milestone:smoke-test-done → возврат в IMPLEMENTATION
 
 ## Скрипты
@@ -335,6 +336,7 @@ bd daemon start
   - `heal_stuck_tasks()` — healing не трогает trigger'ы
   - `reset_stale_tasks()` — stale reset не сбрасывает trigger'ы
   - P0 bug count в `detect-phase.sh` — trigger'ы не считаются багами
+  - OPEN/IN_PROGRESS counts в `detect-phase.sh` (v2.2.5) — trigger'ы не блокируют фазовую машину
 
 **Почему это важно:** До v2.2.1 trigger'ы могли попасть в review pipeline → получить `NO_BRANCH` error → считаться P0 багами → блокировать SMOKE_TEST бесконечно.
 
@@ -371,6 +373,11 @@ bd dep cycles  # Проверка циклов
 - **v2.2:** Reviewing healing — задачи с `reviewing` >3 мин без reviewer lock → возврат в `needs-review`
 - **v2.2.1:** Approved recovery — задачи с `approved` >5 мин → лог предупреждение; >10 мин → remove approved, increment reject:N, return to executor
 - **Исключения:** trigger, reviewing (пока есть lock), approved (до 10 мин), user-escalation
+
+### Startup cleanup (v2.2.5+)
+- При старте HYPE удаляет stale PID файлы (`run-testers.pid`)
+- Закрывает orphaned triggers от предыдущих сессий (все non-closed задачи с label `trigger`)
+- Предотвращает: zombie trigger блокирует phase detection, stale PID file пропускает запуск тестеров
 
 ### Zombie daemon recovery (v2.1.7+)
 - `check_beads()` → 3x soft restart → `hard_kill_beads_daemon()`

@@ -433,13 +433,23 @@ $changelog_context
 
 create_analyst_triggers() {
     local analysts=("ux" "security" "ops" "reliability" "architecture")
+    local bd_cache
+    bd_cache=$(bd_safe list --json --limit 0 2>/dev/null || echo "[]")
 
     for analyst in "${analysts[@]}"; do
         local trigger_title="run-analyst-$analyst"
-        if ! bd_safe list --json --limit 0 2>/dev/null | jq -e ".[] | select(.title == \"$trigger_title\")" > /dev/null 2>&1; then
-            bd_safe create --title="$trigger_title" --type=task --priority=1 --label=trigger >/dev/null 2>&1 || true
-            log "INFO" "Created trigger: $trigger_title"
-        fi
+
+        # Close any stale triggers from previous runs (zombie protection)
+        local old_ids
+        old_ids=$(echo "$bd_cache" | jq -r ".[] | select(.title == \"$trigger_title\") | .id" 2>/dev/null || true)
+        for old_id in $old_ids; do
+            log "WARN" "Closing stale trigger $trigger_title ($old_id) from previous run"
+            bd_safe close "$old_id" --reason="Stale trigger cleanup (new analyst run)" >/dev/null 2>&1 || true
+        done
+
+        # Create fresh trigger
+        bd_safe create --title="$trigger_title" --type=task --priority=1 --label=trigger >/dev/null 2>&1 || true
+        log "INFO" "Created trigger: $trigger_title"
     done
 }
 

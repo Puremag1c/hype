@@ -244,17 +244,25 @@ $spec_content"
     log "INFO" "Tester $tester completed"
 }
 
-# Create tester trigger tasks if they don't exist
+# Create tester trigger tasks, closing stale ones from previous runs
 create_tester_triggers() {
     local testers=$1
     local bd_cache=$2  # Cached bd list --json (v1.9.0+)
 
     for tester in $testers; do
         local trigger_title="run-tester-$tester"
-        if ! echo "$bd_cache" | jq -e ".[] | select(.title == \"$trigger_title\")" > /dev/null 2>&1; then
-            bd_safe create --title="$trigger_title" --type=task --priority=0 --label=trigger >/dev/null 2>&1
-            log "INFO" "Created trigger: $trigger_title"
-        fi
+
+        # Close any stale triggers from previous runs (zombie protection)
+        local old_ids
+        old_ids=$(echo "$bd_cache" | jq -r ".[] | select(.title == \"$trigger_title\") | .id" 2>/dev/null || true)
+        for old_id in $old_ids; do
+            log "WARN" "Closing stale trigger $trigger_title ($old_id) from previous run"
+            bd_safe close "$old_id" --reason="Stale trigger cleanup (new smoke run)" >/dev/null 2>&1 || true
+        done
+
+        # Create fresh trigger
+        bd_safe create --title="$trigger_title" --type=task --priority=0 --label=trigger >/dev/null 2>&1
+        log "INFO" "Created trigger: $trigger_title"
     done
 }
 

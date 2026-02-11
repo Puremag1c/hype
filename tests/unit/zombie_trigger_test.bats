@@ -92,3 +92,35 @@ load '../helpers/setup'
     missing=$(grep 'bd_safe list.*--json' "$detect_sh" | grep -cv '\-\-limit 0' || true)
     [ "$missing" -eq 0 ]
 }
+
+# =============================================================================
+# Stale trigger cleanup: close old triggers before creating new ones (v2.2.3)
+# =============================================================================
+
+@test "create_tester_triggers: closes stale triggers before creating new ones" {
+    local testers_sh="$SCRIPTS_DIR/run-testers.sh"
+
+    # create_tester_triggers should close old triggers (bd_safe close)
+    local fn_body
+    fn_body=$(sed -n '/^create_tester_triggers/,/^}/p' "$testers_sh")
+
+    # Must have bd_safe close for stale cleanup
+    echo "$fn_body" | grep -q 'bd_safe close.*Stale trigger cleanup'
+
+    # Must always create fresh trigger (unconditional bd_safe create)
+    echo "$fn_body" | grep -q 'bd_safe create.*--label=trigger'
+}
+
+@test "create_analyst_triggers: closes stale triggers before creating new ones" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    # create_analyst_triggers should close old triggers
+    local fn_body
+    fn_body=$(sed -n '/^create_analyst_triggers/,/^}/p' "$hype_sh")
+
+    # Must have bd_safe close for stale cleanup
+    echo "$fn_body" | grep -q 'bd_safe close.*Stale trigger cleanup'
+
+    # Must always create fresh trigger
+    echo "$fn_body" | grep -q 'bd_safe create.*--label=trigger'
+}

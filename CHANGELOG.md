@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.2.3] - 2026-02-11
+
+### Fixed
+
+- **Stale trigger cleanup prevents zombie phase lock** — `create_tester_triggers()` and `create_analyst_triggers()` now close any existing open/in_progress triggers before creating fresh ones. Previously, a zombie trigger from a prior run (e.g. `bd close` wrote `close_reason` but failed to update status due to daemon race condition) would block `detect-phase.sh` — the in_progress trigger counted toward `IN_PROGRESS`, causing phase to return `IMPLEMENTATION` instead of `SMOKE_TEST`. Diagnosed via Doctor on ChatFilter project where previous run's `run-tester-visual` trigger stuck in `in_progress` for 14 hours.
+
+---
+
 ## [2.2.2] - 2026-02-11
 
 ### Fixed

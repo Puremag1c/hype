@@ -173,3 +173,25 @@ load '../helpers/setup'
     # Explicit cleanup in preflight failure
     grep -q 'release_review_lock.*cleanup_reviewer_slot' "$reviewers_sh"
 }
+
+# =============================================================================
+# v2.3.7: Executor race condition guard
+# =============================================================================
+
+@test "reviewers: get_review_tasks excludes tasks with executor label" {
+    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+
+    # get_review_tasks function body must reject executor-labeled tasks
+    local func_body
+    func_body=$(sed -n '/^get_review_tasks()/,/^}/p' "$reviewers_sh")
+    echo "$func_body" | grep -q 'index("executor") | not'
+}
+
+@test "reviewers: main task filter excludes executor label" {
+    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+
+    # The main() inline jq filter must also exclude executor
+    local main_filter
+    main_filter=$(sed -n '/tasks=.*all_in_progress.*jq/p' "$reviewers_sh")
+    echo "$main_filter" | grep -q 'index("executor") | not'
+}

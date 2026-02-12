@@ -10,7 +10,9 @@
 
 - **Executor bd create restriction** — Added explicit rule #9 to executor.md: agents must NOT create tasks via `bd create` (exception: rebase conflict escalation). Prevents meta-task duplication seen in Doctor Report #4 where executor created urgent duplicates of existing work.
 
-- 12 new tests (220 total).
+- **Reviewer-executor race guard** — `get_review_tasks()` and main task filter in `run-reviewers.sh` now exclude tasks with `executor` label. Prevents reviewer from claiming a task while executor is still reworking it after rejection, which could approve stale branch code. Doctor Report #5 root cause.
+
+- 14 new tests (222 total).
 
 ---
 

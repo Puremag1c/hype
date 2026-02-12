@@ -433,7 +433,7 @@ get_review_tasks() {
         echo "$cache"
     else
         bd_safe list --status=in_progress --json --limit 0 2>/dev/null || echo "[]"
-    fi | jq -r '.[] | select((.labels // []) | index("needs-review")) | select((.labels // []) | index("trigger") | not) | select(.title | test("^milestone:") | not) | .id' 2>/dev/null || echo ""
+    fi | jq -r '.[] | select((.labels // []) | index("needs-review")) | select((.labels // []) | index("executor") | not) | select((.labels // []) | index("trigger") | not) | select(.title | test("^milestone:") | not) | .id' 2>/dev/null || echo ""
 }
 
 # === Main ===
@@ -461,7 +461,7 @@ main() {
     fi
 
     local tasks
-    tasks=$(echo "$all_in_progress" | jq -r '.[] | select((.labels // []) | index("needs-review")) | select((.labels // []) | index("trigger") | not) | select(.title | test("^milestone:") | not) | .id' 2>/dev/null || echo "")
+    tasks=$(echo "$all_in_progress" | jq -r '.[] | select((.labels // []) | index("needs-review")) | select((.labels // []) | index("executor") | not) | select((.labels // []) | index("trigger") | not) | select(.title | test("^milestone:") | not) | .id' 2>/dev/null || echo "")
 
     if [ -z "$tasks" ]; then
         log "INFO" "No tasks need review"

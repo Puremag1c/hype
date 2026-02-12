@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.3.8] - 2026-02-12
+
+### Improved
+
+- **Doctor documentation audit** — Synced all Doctor docs with current code state. Fixed outdated doctor-log format in `troubleshooting.md` (added Hypotheses Considered, Collected Data, Evidence Against sections from v2.0.17 rewrite). Fixed 10-vs-11 category count in `PROJECT.md`. Removed obsolete manual fix for label-not-found (fixed since v2.3.3). Added pre-collected data note to `doctor.md` Step 2 to prevent redundant command execution.
+
+---
+
 ## [2.3.7] - 2026-02-12
 
 ### Fixed

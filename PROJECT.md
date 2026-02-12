@@ -6,7 +6,7 @@
 
 Запустите `hype init` в любом проекте, опишите что хотите словами — система сама создаст план, распределит задачи между агентами и выдаст готовый результат.
 
-**Версия:** 2.3.7
+**Версия:** 2.3.8
 
 ## Целевая аудитория
 
@@ -177,7 +177,8 @@ startup_timeout: 30          # Секунды на запуск сервера
 2. `gather_context()` — собирает 11 категорий данных о системе:
    - HYPE version + script health
    - Beads status (daemon + stats)
-   - In-progress / blocked tasks
+   - In-progress tasks (с timestamps)
+   - Blocked tasks
    - Current phase (detect-phase.sh)
    - Running processes
    - Git status + worktrees + locks

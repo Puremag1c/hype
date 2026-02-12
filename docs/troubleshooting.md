@@ -1325,22 +1325,7 @@ rmdir .hype-worktrees/reviewer-N.lock
 
 ### PROBLEM: Doctor report send failure (label not found)
 
-**Fixed in:** 2.3.3
-
-**Симптомы:**
-- `gh issue create` falls с ошибкой "label 'doctor-report' not found"
-- Doctor-log создан, но не отправлен
-
-**Причина:**
-Label `doctor-report` не существовал в GitHub репозитории. `gh issue create --label` не создаёт labels автоматически.
-
-**Решение:**
-Обновиться до 2.3.3+. `send_doctor_report()` теперь вызывает `gh label create "doctor-report"` перед `gh issue create` (idempotent — игнорирует если label уже есть).
-
-**Manual fix (для старых версий):**
-```bash
-gh label create "doctor-report" --repo "Puremag1c/hype" --description "Auto-generated doctor diagnostic report" --color "d4c5f9"
-```
+**Fixed in:** 2.3.3. `send_doctor_report()` вызывает `gh label create "doctor-report"` перед `gh issue create` (idempotent).
 
 ---
 
@@ -1350,21 +1335,30 @@ gh label create "doctor-report" --repo "Puremag1c/hype" --description "Auto-gene
 # Doctor Log
 Date: YYYY-MM-DD HH:MM
 Project: /path/to/project
+HYPE Version: X.Y.Z
 
 ## Reported Symptom
-[Что сказал пользователь]
+[Что сказал пользователь — дословно]
 
-## Diagnosis
-[Что обнаружено]
+## Collected Data
+[ВСЕ результаты диагностических команд]
 
-## Root Cause
-[Почему произошло]
+## Hypotheses Considered
+1. [Гипотеза A]: [статус] — [почему подтвердилась/опровергнута]
+2. [Гипотеза B]: [статус] — [почему подтвердилась/опровергнута]
+3. [Гипотеза C]: [статус] — [почему подтвердилась/опровергнута]
 
-## Affected Component
-[Какой скрипт/функция]
+## Final Diagnosis
+**Root Cause:** [причина с доказательствами]
+**Affected Component:** [скрипт/функция]
+**Confidence:** [high/medium/low]
+**Problem Type:** [runtime-fix | report-only]
 
-## Evidence
-[Логи, команды, вывод]
+## Evidence Supporting Diagnosis
+[Конкретные данные, подтверждающие диагноз]
+
+## Evidence Against (if any)
+[Данные, которые не полностью согласуются — для честности]
 
 ## Suggested Fix
 [Для разработчика HYPE]

@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.3.4] - 2026-02-11
+
+### Fixed
+
+- **Merge queue: hook-poisoned working tree** — Root cause of ChatFilter's 758-cycle (17.5h) run. Target project's beads git hooks (`post-checkout`, `prepare-commit-msg`, `post-merge`, `pre-push`) call `bd` directly, bypassing `bd_safe` mutex. Under daemon load, `prepare-commit-msg` fails → `git commit` aborts → staged changes from `git merge --squash` remain → ALL subsequent merges fail as false "conflicts" → `merge-conflict:N` counter resets (same daemon overload kills `set_counter_label`) → infinite retry loop. Fix: `git_nh()` wrapper runs all git operations with `core.hooksPath=/dev/null`, disabling hooks entirely in merge queue (infrastructure code, not user code).
+
+- **Merge queue: commit failure handling** — `git commit || true` silently swallowed failures, leaving poisoned staged changes. Now: `if ! git_nh commit` → log error → `reset --hard` → return task to executor. Clean working tree guaranteed for next merge.
+
+- **Merge queue: pre-flight dirty tree check** — Before each merge, checks `git status --porcelain`. If dirty (from previous failed commit), resets to clean state. Prevents cascading failures.
+
+- 4 new tests, 2 updated tests (204 total).
+
+---
+
 ## [2.3.3] - 2026-02-11
 
 ### Fixed

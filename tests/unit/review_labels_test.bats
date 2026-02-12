@@ -181,8 +181,8 @@ load '../helpers/setup'
 @test "merge queue: auto-rebase before merge (v2.2.7)" {
     local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
 
-    # Must rebase branch on main before squash merge
-    grep -q 'git rebase.*main_ref' "$merge_sh"
+    # Must rebase branch on main before squash merge (v2.3.4: uses git_nh)
+    grep -q 'git_nh rebase.*main_ref' "$merge_sh"
 
     # Must force-push rebased branch
     grep -q 'force-with-lease' "$merge_sh"

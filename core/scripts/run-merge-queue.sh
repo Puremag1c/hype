@@ -43,6 +43,15 @@ log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') [HYPE MERGE] $level: $msg" >> "$LOGS_DIR/hype.log"
 }
 
+# Git without hooks — merge queue is infrastructure.
+# Target project's bd hooks (post-checkout, prepare-commit-msg, post-merge, pre-push)
+# call `bd` directly, bypassing bd_safe mutex. Under load this overwhelms the daemon,
+# hooks fail, git commit aborts, and staged changes poison the working tree for all
+# subsequent merge attempts. (v2.3.4)
+git_nh() {
+    git -c core.hooksPath=/dev/null "$@"
+}
+
 # Get tasks ready for merge (approved label, in_progress status)
 get_approved_tasks() {
     local cache="${HYPE_IN_PROGRESS_CACHE:-}"
@@ -82,8 +91,17 @@ merge_task() {
     local main_ref
     main_ref=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo "main")
 
+    # Pre-flight: ensure clean working tree (v2.3.4)
+    # Previous failed merge can leave staged changes from git merge --squash.
+    # With dirty tree ALL subsequent git operations fail silently → false "conflicts".
+    if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+        log "WARN" "Dirty working tree — cleaning up before merge (likely from previous failed commit)"
+        git_nh checkout "$main_ref" 2>/dev/null || true
+        git_nh reset --hard "origin/$main_ref" 2>/dev/null || true
+    fi
+
     # Fetch latest
-    git fetch origin 2>/dev/null || true
+    git_nh fetch origin 2>/dev/null || true
 
     # Check branch exists
     if ! git rev-parse --verify "origin/$branch" >/dev/null 2>&1; then
@@ -111,15 +129,15 @@ merge_task() {
     # Most "conflicts" are just stale branches — another task merged while this was in review.
     # Rebase resolves these automatically without wasting a full executor cycle.
     log "INFO" "Merging $task_id ($branch)"
-    git checkout "$main_ref" 2>/dev/null || true
-    git pull origin "$main_ref" 2>/dev/null || true
+    git_nh checkout "$main_ref" 2>/dev/null || true
+    git_nh pull origin "$main_ref" 2>/dev/null || true
 
     # Try rebase: checkout branch, rebase on main, force-push
-    git checkout "origin/$branch" 2>/dev/null || true
-    if ! git rebase "$main_ref" 2>/dev/null; then
+    git_nh checkout "origin/$branch" 2>/dev/null || true
+    if ! git_nh rebase "$main_ref" 2>/dev/null; then
         # Rebase failed — likely timing conflict (another task merged, shifting lines)
-        git rebase --abort 2>/dev/null || true
-        git checkout "$main_ref" 2>/dev/null || true
+        git_nh rebase --abort 2>/dev/null || true
+        git_nh checkout "$main_ref" 2>/dev/null || true
 
         # Use separate merge-conflict:N counter (NOT reject:N — merge conflicts are infra, not code quality)
         local conflict_count
@@ -143,26 +161,33 @@ merge_task() {
     fi
 
     # Rebase succeeded — push rebased branch, then squash merge
-    git push origin HEAD:"$branch" --force-with-lease 2>/dev/null || true
-    git checkout "$main_ref" 2>/dev/null || true
+    git_nh push origin HEAD:"$branch" --force-with-lease 2>/dev/null || true
+    git_nh checkout "$main_ref" 2>/dev/null || true
 
-    if ! git merge --squash "origin/$branch" 2>/dev/null; then
+    if ! git_nh merge --squash "origin/$branch" 2>/dev/null; then
         # Should not happen after successful rebase, but safety net
-        git merge --abort 2>/dev/null || git reset --hard "origin/$main_ref" 2>/dev/null || true
+        git_nh merge --abort 2>/dev/null || git_nh reset --hard "origin/$main_ref" 2>/dev/null || true
         log "ERROR" "Merge failed after successful rebase for $task_id"
         bd_safe update "$task_id" --status=open --remove-label=approved \
             --notes="Unexpected merge failure after rebase. Return to executor." >/dev/null 2>&1 || true
         return 0
     fi
 
-    # Commit and push
-    git commit -m "$task_title
+    # Commit squash merge (v2.3.4: handle failure instead of || true)
+    # If commit fails, staged changes from merge --squash poison the working tree.
+    if ! git_nh commit -m "$task_title
 
-Task: $task_id" 2>/dev/null || true
+Task: $task_id" 2>/dev/null; then
+        log "ERROR" "Commit failed for $task_id — cleaning staged changes"
+        git_nh reset --hard "origin/$main_ref" 2>/dev/null || true
+        bd_safe update "$task_id" --status=open --remove-label=approved \
+            --notes="Commit failed after squash merge. Return to executor." >/dev/null 2>&1 || true
+        return 0
+    fi
 
-    if ! git push origin "$main_ref" 2>/dev/null; then
+    if ! git_nh push origin "$main_ref" 2>/dev/null; then
         # Push failed — another task pushed to main between our merge and push
-        git reset --hard "origin/$main_ref" 2>/dev/null || true
+        git_nh reset --hard "origin/$main_ref" 2>/dev/null || true
 
         local conflict_count
         conflict_count=$(get_counter_value "$task_json" "merge-conflict")
@@ -197,7 +222,7 @@ Task: $task_id" 2>/dev/null || true
     bd_safe update "$task_id" --remove-label=approved --add-label=reviewed >/dev/null 2>&1 || true
 
     # Cleanup remote branch
-    git push origin --delete "$branch" 2>/dev/null || true
+    git_nh push origin --delete "$branch" 2>/dev/null || true
 
     log "SUCCESS" "MERGED: $task_id ($task_title)"
 }

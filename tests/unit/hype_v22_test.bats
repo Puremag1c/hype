@@ -138,7 +138,7 @@ load '../helpers/setup'
 
     # v2.3.3: Push failure uses merge-conflict counter, retries in-place
     local push_block
-    push_block=$(sed -n '/git push.*main_ref.*then/,/fi/p' "$merge_sh")
+    push_block=$(sed -n '/git_nh push.*main_ref.*then/,/fi/p' "$merge_sh")
 
     echo "$push_block" | grep -q 'merge-conflict'
     echo "$push_block" | grep -q 'return 1'

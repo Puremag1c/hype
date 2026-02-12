@@ -587,3 +587,53 @@ load '../helpers/mock_bd'
 @test "doctor.sh: creates label before issue" {
     grep -q 'gh label create.*doctor-report' "$SCRIPTS_DIR/doctor.sh"
 }
+
+# =============================================================================
+# v2.3.4: Hook-safe merge queue + commit failure handling
+# =============================================================================
+
+@test "merge queue: git_nh function disables hooks via core.hooksPath" {
+    grep -q 'core.hooksPath=/dev/null' "$SCRIPTS_DIR/run-merge-queue.sh"
+    grep -q '^git_nh()' "$SCRIPTS_DIR/run-merge-queue.sh"
+}
+
+@test "merge queue: all git checkout/pull/push/rebase/merge use git_nh" {
+    local merge_fn
+    merge_fn=$(sed -n '/^merge_task()/,/^}/p' "$SCRIPTS_DIR/run-merge-queue.sh")
+
+    # git_nh should be used for state-changing operations
+    echo "$merge_fn" | grep -q 'git_nh checkout'
+    echo "$merge_fn" | grep -q 'git_nh pull'
+    echo "$merge_fn" | grep -q 'git_nh push'
+    echo "$merge_fn" | grep -q 'git_nh rebase'
+    echo "$merge_fn" | grep -q 'git_nh merge'
+    echo "$merge_fn" | grep -q 'git_nh commit'
+    echo "$merge_fn" | grep -q 'git_nh fetch'
+
+    # Raw git checkout/pull/push/commit/rebase/merge should NOT appear in merge_task
+    # (only git rev-parse, git symbolic-ref, git status are allowed as read-only)
+    # Exclude comments (lines starting with #) — they reference git in prose
+    ! echo "$merge_fn" | grep -v '^\s*#' | grep -v 'git_nh' | grep -v 'git rev-parse' | grep -v 'git symbolic-ref' | grep -v 'git status' | grep -q 'git '
+}
+
+@test "merge queue: commit failure cleans staged changes (not || true)" {
+    local merge_fn
+    merge_fn=$(sed -n '/^merge_task()/,/^}/p' "$SCRIPTS_DIR/run-merge-queue.sh")
+
+    # Commit should be wrapped in if ! ... not || true
+    echo "$merge_fn" | grep -q 'if ! git_nh commit'
+    # On failure: reset and return to executor
+    echo "$merge_fn" | grep -q 'Commit failed.*cleaning staged'
+    echo "$merge_fn" | grep -q 'reset --hard.*main_ref'
+}
+
+@test "merge queue: pre-flight dirty tree check" {
+    local merge_fn
+    merge_fn=$(sed -n '/^merge_task()/,/^}/p' "$SCRIPTS_DIR/run-merge-queue.sh")
+
+    # Should check git status --porcelain
+    echo "$merge_fn" | grep -q 'git status --porcelain'
+    # Should clean up if dirty
+    echo "$merge_fn" | grep -q 'Dirty working tree'
+    echo "$merge_fn" | grep -q 'git_nh reset --hard'
+}

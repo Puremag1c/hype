@@ -123,6 +123,9 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
   1. Fetch, merge --squash, commit, push
   2. Verify main changed (detect empty squash)
   3. Close task, cleanup remote branch
+- **Hook isolation (v2.3.4):** Все git операции через `git_nh()` (`core.hooksPath=/dev/null`). Target project hooks (beads: post-checkout, prepare-commit-msg, post-merge, pre-push) вызывают `bd` напрямую — под нагрузкой убивают daemon, ломают commit, отравляют working tree
+- **Pre-flight check (v2.3.4):** Проверка `git status --porcelain` перед merge. Dirty tree (от предыдущего failed commit) → reset --hard
+- **Commit failure handling (v2.3.4):** `if ! git_nh commit` → reset → return to executor. Не `|| true`
 - **Конфликты (v2.3.3):** Abort merge, increment `merge-conflict:N` (отдельный от `reject:N`), skip task и попробовать следующий approved. После 6 неудач → return to executor. Не эскалирует модель, не зовёт Troubleshooter
 - **Push failure (v2.3.3):** Та же retry-in-place логика — `merge-conflict:N`, skip, retry next cycle
 - **Empty squash (v2.2.2):** Если merge не даёт изменений (branch already in main) — закрывает задачу с reason, не зацикливается

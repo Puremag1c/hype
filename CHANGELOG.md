@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.3.5] - 2026-02-12
+
+### Fixed
+
+- **Stale PID file skips second SMOKE_TEST round** — When SMOKE_TEST runs twice (regression cycle), the PID file from the first round persists through SMOKE_REVIEW and IMPLEMENTATION. On re-entry, STATE 3 finds a dead PID and treats it as "testers just finished" — declaring "All tests passed" in 1 second without launching testers. Fix: clean PID file at SMOKE_REVIEW entry (testers are definitively done at that point). ChatFilter incident: cycle 417 skipped smoke tests entirely after 240 cycles of IMPLEMENTATION.
+
+- 1 new test (205 total).
+
+---
+
 ## [2.3.4] - 2026-02-11
 
 ### Fixed

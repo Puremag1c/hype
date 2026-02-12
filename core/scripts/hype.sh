@@ -995,6 +995,12 @@ $user_tasks"
             ;;
 
         SMOKE_REVIEW)
+            # Clean stale testers PID file (v2.3.5)
+            # Testers are done when we reach SMOKE_REVIEW. If PID file persists
+            # through IMPLEMENTATION and SMOKE_TEST re-enters, STATE 3 would treat
+            # the dead PID as "testers just finished" — skipping actual test launch.
+            rm -f "$CLAUDEV_DIR/run-testers.pid"
+
             # Architect triages ALL smoke test findings before executors can grab them
             log "INFO" "SMOKE_REVIEW: Processing smoke test findings..."
 

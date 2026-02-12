@@ -216,6 +216,18 @@ load '../helpers/setup'
     grep -q 'rm -f.*run-testers.pid' "$hype_sh"
 }
 
+@test "hype.sh: SMOKE_REVIEW cleans testers PID file (v2.3.5)" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    # SMOKE_REVIEW must remove PID file — testers are done when this phase starts.
+    # Without cleanup, stale PID persists through IMPLEMENTATION and causes
+    # SMOKE_TEST STATE 3 to skip actual test launch on next round.
+    local smoke_review_block
+    smoke_review_block=$(sed -n '/SMOKE_REVIEW)/,/;;/p' "$hype_sh")
+
+    echo "$smoke_review_block" | grep -q 'rm -f.*run-testers.pid'
+}
+
 # =============================================================================
 # Async SMOKE_TEST: non-blocking testers (v2.2.6)
 # =============================================================================

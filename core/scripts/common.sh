@@ -971,7 +971,7 @@ export -f ensure_milestone 2>/dev/null || true
 delete_milestone() {
     local label="$1"
     local task_ids
-    task_ids=$(bd_safe list --json --limit 0 2>/dev/null | \
+    task_ids=$(bd_safe list --json --limit 0 --all 2>/dev/null | \
         jq -r ".[] | select(.labels[]? == \"$label\") | .id" 2>/dev/null || true)
 
     if [ -n "$task_ids" ]; then
@@ -989,7 +989,7 @@ export -f delete_milestone 2>/dev/null || true
 # NOTE: Ищет во ВСЕХ задачах (не только closed) — milestones могут застрять в open
 delete_all_milestones() {
     local pairs
-    pairs=$(bd_safe list --json --limit 0 2>/dev/null | \
+    pairs=$(bd_safe list --json --limit 0 --all 2>/dev/null | \
         jq -r '.[] | .labels as $labels | select($labels != null) | .id as $id | $labels[] | select(test("^milestone:")) | "\($id) \(.)"' 2>/dev/null || true)
 
     local count=0

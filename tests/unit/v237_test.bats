@@ -149,3 +149,23 @@ load '../helpers/setup'
     # The actual bd create in the rebase section still exists
     grep -q 'bd create.*Resolve rebase conflict' "$executor_md"
 }
+
+# =============================================================================
+# P0: delete_milestone --all flag
+# =============================================================================
+
+@test "common.sh: delete_milestone uses --all to find closed milestones" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    local func_body
+    func_body=$(sed -n '/^delete_milestone()/,/^}/p' "$common_sh")
+    echo "$func_body" | grep -q 'bd_safe list.*--all'
+}
+
+@test "common.sh: delete_all_milestones uses --all to find closed milestones" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    local func_body
+    func_body=$(sed -n '/^delete_all_milestones()/,/^}/p' "$common_sh")
+    echo "$func_body" | grep -q 'bd_safe list.*--all'
+}

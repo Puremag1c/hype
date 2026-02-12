@@ -20,7 +20,9 @@
 
 - **Reviewer-executor race guard** — `get_review_tasks()` and main task filter in `run-reviewers.sh` now exclude tasks with `executor` label. Prevents reviewer from claiming a task while executor is still reworking it after rejection, which could approve stale branch code. Doctor Report #5 root cause.
 
-- 14 new tests (222 total).
+- **delete_milestone missing --all flag** — `delete_milestone()` and `delete_all_milestones()` used `bd_safe list` without `--all`, so they never found closed milestones (ensure_milestone closes them immediately). Result: SMOKE_TEST skipped entirely, jumping straight to FINAL_REVIEW. Doctor Report #6 root cause.
+
+- 16 new tests (224 total).
 
 ---
 

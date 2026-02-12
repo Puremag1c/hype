@@ -188,3 +188,34 @@ EOF
     local doctor="$SCRIPTS_DIR/doctor.sh"
     grep -q 'Puremag1c/hype' "$doctor"
 }
+
+@test "doctor.sh: all claude calls use --allowedTools" {
+    local doctor="$SCRIPTS_DIR/doctor.sh"
+    # Every 'claude' invocation inside run_doctor must include --allowedTools
+    # Extract lines with 'claude --model' (actual agent calls, not help/version checks)
+    local claude_calls
+    claude_calls=$(grep -c 'claude --model.*--allowedTools\|claude.*--print.*--allowedTools\|claude.*--allowedTools.*--model' "$doctor")
+    # There should be exactly 2 calls: report-only (--print) and interactive
+    [[ "$claude_calls" -ge 2 ]]
+}
+
+@test "doctor.sh: allowedTools includes safe bd commands" {
+    local doctor="$SCRIPTS_DIR/doctor.sh"
+    grep -q 'Bash(bd list:\*)' "$doctor"
+    grep -q 'Bash(bd show:\*)' "$doctor"
+    grep -q 'Bash(bd stats:\*)' "$doctor"
+    grep -q 'Bash(bd blocked:\*)' "$doctor"
+    grep -q 'Bash(bd sync --status:\*)' "$doctor"
+    grep -q 'Bash(bd daemon status:\*)' "$doctor"
+}
+
+@test "doctor.sh: allowedTools does NOT include unsafe bd commands" {
+    local doctor="$SCRIPTS_DIR/doctor.sh"
+    # allowed_tools must not contain bd update, bd close, bd daemon restart
+    local allowed_block
+    allowed_block=$(sed -n "/local allowed_tools=/,/^$/p" "$doctor")
+    ! echo "$allowed_block" | grep -q 'bd update'
+    ! echo "$allowed_block" | grep -q 'bd close'
+    ! echo "$allowed_block" | grep -q 'bd daemon restart'
+    ! echo "$allowed_block" | grep -q 'pkill'
+}

@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.3.7] - 2026-02-12
+
+### Fixed
+
+- **bd_safe write auto-recovery** — When a write operation (update/close/create/sync) fails, bd_safe now detects the failure, probes daemon health via `bd list --limit 1`, restarts daemon if unhealthy, and retries the write once. Previously, 77+ callers silently swallowed write failures via `|| true`, causing tasks to get stuck in infinite cycles when daemon SQLite connection broke under load. One function change makes all callers resilient. Doctor Report #4 root cause.
+
+- **heal_stuck_tasks before dispatch** — Moved heal_stuck_tasks to run BEFORE dispatch_phase in main loop. Reviewers now see healed tasks (with `needs-review` label) in the same cycle instead of waiting 30s for the next one. Eliminates 1-cycle delay between healing and review pickup.
+
+- **Executor bd create restriction** — Added explicit rule #9 to executor.md: agents must NOT create tasks via `bd create` (exception: rebase conflict escalation). Prevents meta-task duplication seen in Doctor Report #4 where executor created urgent duplicates of existing work.
+
+- 12 new tests (220 total).
+
+---
+
+## [2.3.6] - 2026-02-12
+
+### Improved
+
+- **Doctor: silent diagnostics** — Doctor agent no longer asks permission for every read-only command (`bd list`, `bd show`, `cat`, `tail`, `git status`, etc.). Added `--allowedTools` to `claude` CLI calls with pre-approved safe operations matching the SAFE list in `doctor.md`. Modifications (`bd update`, `bd close`, `rm`, `pkill`) still require user confirmation.
+
+- 3 new tests (208 total).
+
+---
+
 ## [2.3.5] - 2026-02-12
 
 ### Fixed

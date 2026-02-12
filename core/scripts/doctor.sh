@@ -332,10 +332,21 @@ run_doctor() {
     local doctor_model
     doctor_model=$(map_model "${MODEL_DOCTOR:-opus}")
 
+    # Pre-approve safe read-only tools (matches SAFE list in doctor.md)
+    # Modifications (bd update, bd close, rm, pkill) still require user confirmation
+    local allowed_tools='Read,Glob,Grep'
+    allowed_tools+=',Bash(bd list:*),Bash(bd show:*),Bash(bd stats:*)'
+    allowed_tools+=',Bash(bd blocked:*),Bash(bd sync --status:*)'
+    allowed_tools+=',Bash(bd dep cycles:*),Bash(bd daemon status:*)'
+    allowed_tools+=',Bash(pgrep:*),Bash(ps:*),Bash(kill -0:*)'
+    allowed_tools+=',Bash(git status:*),Bash(git worktree list:*),Bash(git branch:*)'
+    allowed_tools+=',Bash(ls:*),Bash(cat:*),Bash(tail:*),Bash(head:*)'
+    allowed_tools+=',Bash(./scripts/detect-phase.sh:*),Bash(mkdir -p .hype:*)'
+
     if [ "$REPORT_ONLY" = true ]; then
         log "INFO" "Report-only mode — non-interactive"
         # Non-interactive: capture output, save, sanitize, send
-        printf '%s' "$prompt" | timeout_cmd 5m claude --model "$doctor_model" --print 2>&1 | tee "$LOGS_DIR/doctor-report.log"
+        printf '%s' "$prompt" | timeout_cmd 5m claude --model "$doctor_model" --print --allowedTools "$allowed_tools" 2>&1 | tee "$LOGS_DIR/doctor-report.log"
 
         local saved_file
         saved_file=$(save_report_output "$LOGS_DIR/doctor-report.log")
@@ -356,7 +367,7 @@ run_doctor() {
         local session_start
         session_start=$(date +%s)
 
-        printf '%s' "$prompt" | claude --model "$doctor_model"
+        printf '%s' "$prompt" | claude --model "$doctor_model" --allowedTools "$allowed_tools"
 
         # Find doctor-log created by the agent during session
         local doctor_log

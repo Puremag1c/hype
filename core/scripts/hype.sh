@@ -1460,10 +1460,15 @@ main() {
         # Show active work (agents with growing log files)
         show_active_work "$phase_json"
 
-        # 4. Dispatch phase-specific actions
+        # 4. Heal stuck tasks BEFORE dispatch — reviewers see healed tasks in same cycle
+        local in_progress_cache
+        in_progress_cache=$(bd_safe list --status=in_progress --json --limit 0 2>/dev/null || echo "[]")
+        heal_stuck_tasks "$in_progress_cache"
+
+        # 5. Dispatch phase-specific actions
         dispatch_phase "$phase" "$phase_json"
 
-        # 5. Check for completion
+        # 6. Check for completion
         if [ "$phase" = "DONE" ]; then
             log "INFO" "=========================================="
             log "INFO" "PROJECT COMPLETE"
@@ -1513,14 +1518,11 @@ main() {
             exit 0
         fi
 
-        # 6. Auto-close completed features and epics
+        # 7. Auto-close completed features and epics
         ./scripts/close-completed-parents.sh 2>/dev/null || true
 
-        # 7-8. Reset stale + heal stuck (shared bd list to reduce daemon load)
-        local in_progress_cache
-        in_progress_cache=$(bd_safe list --status=in_progress --json --limit 0 2>/dev/null || echo "[]")
+        # 8. Reset stale tasks (uses pre-dispatch cache — 600s threshold makes this safe)
         check_stale_tasks "$in_progress_cache"
-        heal_stuck_tasks "$in_progress_cache"
 
         # 9. Cleanup stale worktrees (orphaned from crashed executors)
         cleanup_stale_worktrees

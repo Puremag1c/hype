@@ -58,12 +58,40 @@ bd_safe() {
     timeout_cmd "$BD_TIMEOUT" bd "$@"
     local exit_code=$?
 
-    # Release lock
-    rmdir "$lock_dir" 2>/dev/null || true
-
     if [ $exit_code -eq 124 ]; then
         >&2 echo "ERROR: bd command timeout: bd $*"
     fi
+
+    # Auto-recovery for failed write operations
+    # If a write fails, the daemon SQLite connection may be broken
+    # ("database is closed") — detect, restart daemon, retry once
+    if [ $exit_code -ne 0 ]; then
+        case "$1" in
+            update|close|create|sync)
+                >&2 echo "WARN: bd $1 failed (exit=$exit_code): bd $*"
+
+                # Probe daemon health with a simple read
+                if ! timeout_cmd 5s bd list --limit 1 >/dev/null 2>&1; then
+                    >&2 echo "WARN: Daemon unhealthy, restarting..."
+                    bd daemon restart . &>/dev/null || true
+                    sleep 2
+                fi
+
+                # Retry the failed write once
+                timeout_cmd "$BD_TIMEOUT" bd "$@"
+                local retry_code=$?
+                if [ $retry_code -eq 0 ]; then
+                    >&2 echo "INFO: bd $1 recovered after retry"
+                    exit_code=0
+                else
+                    >&2 echo "ERROR: bd $1 retry failed (exit=$retry_code): bd $*"
+                fi
+                ;;
+        esac
+    fi
+
+    # Release lock
+    rmdir "$lock_dir" 2>/dev/null || true
 
     return $exit_code
 }

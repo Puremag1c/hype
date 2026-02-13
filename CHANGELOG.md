@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.3.15] - 2026-02-13
+
+### Fixed
+
+- **Force SMOKE_TEST while testers running** — `detect-phase.sh` now forces SMOKE_TEST phase when testers PID is alive, regardless of what tasks exist. Previously, testers creating smoke tasks caused `OPEN > 0` which switched phase to IMPLEMENTATION — executors grabbed untriaged smoke tasks, and phase bounced between SMOKE_TEST/IMPLEMENTATION/SMOKE_REVIEW. Now: testers running → SMOKE_TEST (always). Testers done + smoke tasks → SMOKE_REVIEW. Simplifies the SMOKE_REVIEW check (no more TESTERS_STILL_RUNNING variable). (GitHub issue #8, part 3)
+
+- 3 new tests (266 total).
+
+---
+
 ## [2.3.14] - 2026-02-13
 
 ### Fixed
@@ -14,9 +24,9 @@
 
 ### Fixed
 
-- **Force SMOKE_TEST while testers running** — `detect-phase.sh` now forces SMOKE_TEST phase when testers PID is alive, regardless of what tasks exist. Previously, testers creating smoke tasks caused `OPEN > 0` which switched phase to IMPLEMENTATION — executors grabbed untriaged smoke tasks, and phase bounced between SMOKE_TEST/IMPLEMENTATION/SMOKE_REVIEW. Now: testers running → SMOKE_TEST (always). Testers done + smoke tasks → SMOKE_REVIEW. (GitHub issue #8)
+- **Defer SMOKE_REVIEW while testers running** — `detect-phase.sh` checks testers PID file before entering SMOKE_REVIEW. Smoke findings accumulate until all async testers complete, then Architect triages once. (GitHub issue #8)
 
-- 3 new tests (266 total).
+- 3 new tests (265 total).
 
 ---
 

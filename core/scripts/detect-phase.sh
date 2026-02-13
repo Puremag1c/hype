@@ -272,7 +272,14 @@ fi
 
 # SMOKE_REVIEW: smoke/regression tasks найдены - Architect триажит перед executors
 # Предотвращает race condition между Architect и Executor
-if [ "$SMOKE_TRIAGE_OPEN" -gt 0 ]; then
+# v2.3.13: defer SMOKE_REVIEW while testers still running (accumulate all findings first)
+TESTERS_PID_FILE="$PROJECT_ROOT/.hype/run-testers.pid"
+TESTERS_STILL_RUNNING=false
+if [ -f "$TESTERS_PID_FILE" ] && kill -0 "$(cat "$TESTERS_PID_FILE" 2>/dev/null)" 2>/dev/null; then
+    TESTERS_STILL_RUNNING=true
+fi
+
+if [ "$SMOKE_TRIAGE_OPEN" -gt 0 ] && [ "$TESTERS_STILL_RUNNING" = "false" ]; then
     output_json "SMOKE_REVIEW"
     exit 0
 fi

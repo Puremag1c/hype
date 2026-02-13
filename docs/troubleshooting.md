@@ -424,6 +424,21 @@ bd update <id> --remove-label=regression
 
 ---
 
+### PROBLEM: SMOKE_REVIEW phase bouncing (SMOKE_TEST → SMOKE_REVIEW → IMPLEMENTATION loop)
+
+**Симптомы:**
+- Фаза прыгает: SMOKE_TEST → SMOKE_REVIEW → IMPLEMENTATION → SMOKE_REVIEW → IMPLEMENTATION
+- Architect-QA (Opus) вызывается 3-4 раза вместо одного
+- Задачи видны как "крутящиеся" часами
+
+**Причина (≤v2.3.12):**
+`detect-phase.sh` входил в SMOKE_REVIEW как только ЛЮБОЙ тестер создавал smoke задачу, не дожидаясь завершения всех тестеров. Async тестеры (v2.2.6) заканчивают с разницей в 5-8 минут → каждый завершённый тестер триггерил отдельный SMOKE_REVIEW.
+
+**Исправлено в v2.3.13:**
+`detect-phase.sh` проверяет PID файл `run-testers.pid` — пока тестеры работают, SMOKE_REVIEW откладывается. Все findings накапливаются, Architect триажит один раз.
+
+---
+
 ### PROBLEM: Zombie executors
 
 **Симптомы:**

@@ -1044,6 +1044,17 @@ For each task:
 4. ALWAYS remove 'smoke' label after processing. ALWAYS remove 'regression' label after processing."
 
             run_agent_with_mode "architect" ".claude/agents/architect-qa.md" "$arch_model" "smoke_review" "$triage_prompt" "${SMOKE_REVIEW_TIMEOUT:-10m}"
+
+            # v2.3.13: Safety net — force-remove smoke/regression labels architect missed
+            # Without this, leftover labels trigger another SMOKE_REVIEW (2x Opus waste)
+            local remaining_smoke_ids
+            remaining_smoke_ids=$(jq -r '.[] | select(.status == "open") | select((.labels // []) | any(. == "smoke" or . == "regression")) | .id' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "")
+            if [ -n "$remaining_smoke_ids" ]; then
+                log "WARN" "SMOKE_REVIEW: Cleaning up leftover smoke labels (safety net)"
+                for sid in $remaining_smoke_ids; do
+                    bd_safe update "$sid" --remove-label=smoke --remove-label=regression >/dev/null 2>&1 || true
+                done
+            fi
             ;;
 
         IMPLEMENTATION)

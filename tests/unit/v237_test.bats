@@ -607,6 +607,56 @@ load '../helpers/setup'
     done
 }
 
+# === v2.3.13: Defer SMOKE_REVIEW while testers running ===
+
+@test "detect-phase.sh: checks testers PID before SMOKE_REVIEW" {
+    local detect_sh="$SCRIPTS_DIR/detect-phase.sh"
+
+    # Must read PID file
+    grep -q 'run-testers.pid' "$detect_sh"
+
+    # Must check if process is alive (kill -0)
+    grep -q 'kill -0' "$detect_sh"
+
+    # SMOKE_REVIEW condition includes TESTERS_STILL_RUNNING check
+    grep -q 'TESTERS_STILL_RUNNING.*false' "$detect_sh"
+}
+
+@test "detect-phase.sh: SMOKE_REVIEW guarded by testers completion" {
+    local detect_sh="$SCRIPTS_DIR/detect-phase.sh"
+
+    # The SMOKE_TRIAGE_OPEN check must also check testers not running
+    local smoke_review_block
+    smoke_review_block=$(sed -n '/SMOKE_REVIEW.*smoke.*regression/,/exit 0/p' "$detect_sh")
+
+    # Both conditions must be present
+    echo "$smoke_review_block" | grep -q 'SMOKE_TRIAGE_OPEN'
+    echo "$smoke_review_block" | grep -q 'TESTERS_STILL_RUNNING'
+}
+
+@test "detect-phase.sh: TESTERS_STILL_RUNNING defaults to false" {
+    local detect_sh="$SCRIPTS_DIR/detect-phase.sh"
+
+    # Must default to false (safe fallback if no PID file)
+    grep -q 'TESTERS_STILL_RUNNING=false' "$detect_sh"
+}
+
+@test "hype.sh: SMOKE_REVIEW cleans leftover smoke labels (safety net)" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    # Extract SMOKE_REVIEW handler
+    local smoke_block
+    smoke_block=$(sed -n '/SMOKE_REVIEW)/,/;;/p' "$hype_sh")
+
+    # Must read remaining smoke task IDs from tick-cache
+    echo "$smoke_block" | grep -q 'remaining_smoke_ids'
+    echo "$smoke_block" | grep -q 'tick-cache.json'
+
+    # Must force-remove smoke and regression labels
+    echo "$smoke_block" | grep -q 'remove-label=smoke'
+    echo "$smoke_block" | grep -q 'remove-label=regression'
+}
+
 @test "run-merge-queue.sh: FAST_MERGE_ERROR captures failure context" {
     local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
 

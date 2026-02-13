@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.3.13] - 2026-02-13
+
+### Fixed
+
+- **SMOKE_REVIEW phase bouncing** — Two fixes for the same root cause (GitHub issue #8):
+  1. `detect-phase.sh` now checks the testers PID file before entering SMOKE_REVIEW. While testers are still running in background, smoke findings accumulate without triggering Architect triage.
+  2. `hype.sh` SMOKE_REVIEW handler now force-removes `smoke`/`regression` labels after Architect runs (safety net). If Architect-QA missed removing labels, leftover labels no longer trigger a duplicate SMOKE_REVIEW cycle.
+
+  Previously, each async tester completion (spanning 5-8 min) triggered separate SMOKE_REVIEW, and even after testers finished, Architect sometimes left smoke labels causing 2x consecutive Opus calls.
+
+- 4 new tests (266 total).
+
+---
+
 ## [2.3.12] - 2026-02-13
 
 ### Improved

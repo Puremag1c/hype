@@ -559,6 +559,54 @@ load '../helpers/setup'
     echo "$func_body" | grep -q 'status=open.*remove-label=approved'
 }
 
+# === v2.3.12: Task granularity directive in architect agents ===
+
+@test "architect-reviewer.md: has task granularity directive (1-5 min)" {
+    local reviewer="$AGENTS_DIR/architect-reviewer.md"
+
+    # Critical rule about task size
+    grep -q '1-5 минут' "$reviewer"
+
+    # Granularity check in plan_review
+    grep -q '>3 файлов' "$reviewer"
+}
+
+@test "architect-qa.md: has task granularity directive (1-5 min)" {
+    local qa="$AGENTS_DIR/architect-qa.md"
+
+    # Critical rule about task size
+    grep -q '1-5 минут' "$qa"
+
+    # Granularity in smoke_review section G (split subtasks)
+    local section_g
+    section_g=$(sed -n '/Нужно раздробить/,/^---/p' "$qa")
+    echo "$section_g" | grep -q '1-5 минут'
+
+    # Granularity in final_review section 3.5 (create bug tasks)
+    local section_35
+    section_35=$(sed -n '/Шаг 3: Создай новый баг/,/NEEDS_FIXES/p' "$qa")
+    echo "$section_35" | grep -q '1-5 минут'
+}
+
+@test "architect-planner.md: has task granularity directive (baseline)" {
+    local planner="$AGENTS_DIR/architect-planner.md"
+
+    # Both locations
+    grep -q '1-5 минут каждая' "$planner"
+    grep -q '1-5 минут для LLM' "$planner"
+}
+
+@test "all architect agents: consistent granularity rule" {
+    # All three architect agents that create/manage tasks should have the directive
+    for agent in architect-planner.md architect-reviewer.md architect-qa.md; do
+        local file="$AGENTS_DIR/$agent"
+        grep -q '1-5 минут' "$file" || {
+            echo "MISSING in $agent"
+            return 1
+        }
+    done
+}
+
 @test "run-merge-queue.sh: FAST_MERGE_ERROR captures failure context" {
     local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
 

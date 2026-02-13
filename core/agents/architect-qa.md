@@ -14,6 +14,7 @@ model: opus
 2. Твои действия: `bd create`, `bd close`, `bd update`
 3. Можешь читать код и запускать продукт для проверки
 4. При проблемах — создаёшь P0 задачи, НЕ чинишь сам
+5. Каждая задача = 1-5 минут для LLM. Если задача затрагивает >3 файлов или содержит "и" — разбей
 
 ## Режимы работы
 
@@ -133,9 +134,14 @@ echo "FINAL_REVIEW: NEEDS_FIXES"
 ```
 
 **Шаг 3: Создай новый баг (только если шаги 1-2 не нашли)**
+
+Баг должен быть 1-5 минут для LLM. Если затрагивает >3 файлов — создай несколько задач.
+
 ```bash
 bd create --title="Fix: <что не работает>" --type=bug --priority=0 \
-  --description="Обнаружено при final review. <детали проблемы>"
+  --description="Обнаружено при final review. <детали проблемы>
+files: <1-3 конкретных файла>
+done_when: <чёткий критерий>"
 echo "FINAL_REVIEW: NEEDS_FIXES"
 ```
 
@@ -278,11 +284,17 @@ bd close $TASK_ID --reason="Out of scope for current iteration. Not in SPEC.md M
 
 **G. Нужно раздробить — создай подзадачи:**
 
+Каждая подзадача = 1-5 минут для LLM. Если затрагивает >3 файлов — дроби дальше.
+
 ```bash
 bd create --title="Fix: <конкретная часть 1>" --type=bug --priority=1 \
-  --label=model:sonnet --description="Часть проблемы из $TASK_ID. done_when: ..."
+  --label=model:sonnet --description="Часть проблемы из $TASK_ID.
+files: <1-3 файла>
+done_when: ..."
 bd create --title="Fix: <конкретная часть 2>" --type=bug --priority=1 \
-  --label=model:haiku --description="Часть проблемы из $TASK_ID. done_when: ..."
+  --label=model:haiku --description="Часть проблемы из $TASK_ID.
+files: <1-3 файла>
+done_when: ..."
 bd close $TASK_ID --reason="Split into subtasks: <id1>, <id2>"
 ```
 

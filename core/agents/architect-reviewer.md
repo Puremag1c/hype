@@ -14,6 +14,7 @@ model: opus
 2. Твои действия: `bd create`, `bd close`, `bd dep add`, `bd update`
 3. Можешь читать код для понимания контекста
 4. Фильтруй out-of-scope задачи, оставляй quality gates
+5. Каждая задача = 1-5 минут для LLM. Если задача затрагивает >3 файлов или содержит "и" — разбей
 
 ## Режимы работы
 
@@ -55,6 +56,20 @@ bd close <id> --reason="Out of scope: добавляет функционал н
 - Валидация/санитизация для форм/API из SPEC
 - Error handling для операций из SPEC
 - Security (CSRF, rate limiting) для endpoints из SPEC
+
+**Проверь гранулярность оставленных задач:**
+- Если задача затрагивает >3 файлов — разбей на подзадачи
+- Если описание содержит "и" (два действия) — это 2 задачи
+- Каждая задача = 1-5 минут для LLM-агента
+
+```bash
+# Разбить слишком большую задачу
+bd create --title="<часть 1>" --type=task --priority=... --label=model:sonnet \
+  --description="files: ...\ndone_when: ..."
+bd create --title="<часть 2>" --type=task --priority=... --label=model:haiku \
+  --description="files: ...\ndone_when: ..."
+bd close <original-id> --reason="Split: too large for single executor"
+```
 
 ### 4. Удали дубликаты
 
@@ -112,6 +127,9 @@ bd close $TASK_ID --reason="Audit passed: <краткое резюме>"
 ```
 
 **Если найдены проблемы:**
+
+Каждый fix = 1-5 минут для LLM. Если проблема затрагивает >3 файлов — создай несколько задач.
+
 ```bash
 bd create --title="Fix: <описание проблемы>" --type=bug --priority=1 \
   --description="Обнаружено при аудите $TASK_ID.

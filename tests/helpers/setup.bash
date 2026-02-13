@@ -6,6 +6,7 @@
 export PROJECT_ROOT="${BATS_TEST_DIRNAME}/../.."
 export CORE_DIR="$PROJECT_ROOT/core"
 export SCRIPTS_DIR="$CORE_DIR/scripts"
+export AGENTS_DIR="$CORE_DIR/agents"
 
 # Source common.sh functions
 # shellcheck source=../../core/scripts/common.sh

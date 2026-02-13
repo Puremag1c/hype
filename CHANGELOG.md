@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.3.12] - 2026-02-13
+
+### Improved
+
+- **Task granularity directive** — `architect-reviewer.md` (plan_review, audit_review) and `architect-qa.md` (smoke_review, final_review) now enforce "1-5 minutes per task" rule. Tasks touching >3 files or containing "и" (two actions) must be split. Previously only `architect-planner.md` had this directive — reviewers and QA could accept or create oversized tasks that exceeded executor timeouts.
+
+- 4 new tests (262 total).
+
+---
+
 ## [2.3.11] - 2026-02-13
 
 ### Improved

@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.3.11] - 2026-02-13
+
+### Improved
+
+- **Hybrid merge queue** — `run-merge-queue.sh` now uses a two-step approach: fast script path (rebase+squash+push, free and instant) with Claude merger agent fallback on failure. When the script can't merge (conflicts, push race, etc.), a merger agent (`core/agents/merger.md`) understands the conflict context and resolves it intelligently. Replaces the old 6-retry `merge-conflict:N` counter loop that wasted 3+ minutes per task before giving up. One smart agent attempt replaces 6 blind retries.
+
+- **Empty merge detection before agent** — After fast merge failure, checks if branch has any actual diff vs main before launching the agent. Empty merges (branch changes already in main) are closed immediately without wasting an API call.
+
+- 11 new tests, 8 updated (258 total).
+
+---
+
 ## [2.3.10] - 2026-02-13
 
 ### Improved

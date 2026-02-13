@@ -138,19 +138,20 @@ load '../helpers/setup'
     grep -q 'closing without merge' "$merge_sh"
 }
 
-@test "merge queue: handles merge conflicts with retry-in-place" {
+@test "merge queue: handles merge conflicts with agent fallback (v2.3.11)" {
     local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
 
-    # v2.3.3: conflict uses merge-conflict:N counter (not reject:N)
-    local conflict_block
-    conflict_block=$(sed -n '/rebase --abort/,/return 0/p' "$merge_sh")
+    # v2.3.11: conflict triggers merger agent, not retry counter
+    # try_fast_merge returns 1 on rebase failure
+    local fast_fn
+    fast_fn=$(sed -n '/^try_fast_merge()/,/^}/p' "$merge_sh")
+    echo "$fast_fn" | grep -q 'rebase --abort'
+    echo "$fast_fn" | grep -q 'return 1'
 
-    # Uses separate merge-conflict counter
-    echo "$conflict_block" | grep -q 'merge-conflict'
-    # Stays approved for retry (return 1 = skip, not reject)
-    echo "$conflict_block" | grep -q 'return 1'
-    # Only returns to executor after 6 attempts
-    echo "$conflict_block" | grep -q 'conflict_count.*-ge 6'
+    # merge_task calls run_merger_agent on fast merge failure
+    local merge_fn
+    merge_fn=$(sed -n '/^merge_task()/,/^}/p' "$merge_sh")
+    echo "$merge_fn" | grep -q 'run_merger_agent'
 }
 
 @test "merge queue: verifies main changed after merge" {
@@ -188,17 +189,15 @@ load '../helpers/setup'
     grep -q 'force-with-lease' "$merge_sh"
 }
 
-@test "merge queue: rebase failure returns to executor only after 6 retries" {
+@test "merge queue: agent failure returns task to executor (v2.3.11)" {
     local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
 
-    # v2.3.3: After rebase --abort, retry in-place first (return 1)
-    # Only return to executor (status=open) after merge-conflict:N >= 6
-    local rebase_fail_block
-    rebase_fail_block=$(sed -n '/rebase --abort/,/return 0/p' "$merge_sh")
+    # v2.3.11: After agent fails, return to executor with notes
+    local merge_fn
+    merge_fn=$(sed -n '/^merge_task()/,/^}/p' "$merge_sh")
 
-    echo "$rebase_fail_block" | grep -q 'conflict_count'
-    echo "$rebase_fail_block" | grep -q 'return 1'
-    echo "$rebase_fail_block" | grep -q 'status=open'
+    echo "$merge_fn" | grep -q 'Merger agent failed'
+    echo "$merge_fn" | grep -q 'status=open.*remove-label=approved'
 }
 
 @test "merge queue: uses --limit 0 for bd list" {

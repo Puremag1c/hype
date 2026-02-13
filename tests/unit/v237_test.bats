@@ -433,3 +433,145 @@ load '../helpers/setup'
     # Must pass cache to cleanup_stale_trigger
     echo "$func_body" | grep -q 'cleanup_stale_trigger.*\$bd_cache'
 }
+
+# =============================================================================
+# v2.3.11: Hybrid merge queue (script + merger agent fallback)
+# =============================================================================
+
+@test "merger.md: agent prompt exists with required structure" {
+    local merger_md="$SCRIPTS_DIR/../agents/merger.md"
+    [ -f "$merger_md" ]
+
+    # YAML frontmatter
+    grep -q '^name: merger' "$merger_md"
+    grep -q '^model: sonnet' "$merger_md"
+
+    # Required sections
+    grep -q 'TASK_ID' "$merger_md"
+    grep -q 'BRANCH' "$merger_md"
+    grep -q 'MAIN_REF' "$merger_md"
+}
+
+@test "merger.md: requires hook-free git operations" {
+    local merger_md="$SCRIPTS_DIR/../agents/merger.md"
+
+    # Must instruct agent to use git -c core.hooksPath=/dev/null
+    grep -q 'core.hooksPath=/dev/null' "$merger_md"
+}
+
+@test "merger.md: requires bd close on success" {
+    local merger_md="$SCRIPTS_DIR/../agents/merger.md"
+
+    # Must instruct agent to close task on success
+    grep -q 'bd close' "$merger_md"
+}
+
+@test "merger.md: requires bd update on failure" {
+    local merger_md="$SCRIPTS_DIR/../agents/merger.md"
+
+    # Must instruct agent to update task with notes on failure
+    grep -q 'bd update.*--status=open.*--remove-label=approved' "$merger_md"
+}
+
+@test "run-merge-queue.sh: defines try_fast_merge function" {
+    local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
+
+    grep -q '^try_fast_merge()' "$merge_sh"
+
+    local func_body
+    func_body=$(sed -n '/^try_fast_merge()/,/^}/p' "$merge_sh")
+
+    # Must do rebase
+    echo "$func_body" | grep -q 'rebase'
+
+    # Must do squash merge
+    echo "$func_body" | grep -q 'merge --squash'
+
+    # Must push
+    echo "$func_body" | grep -q 'push origin'
+}
+
+@test "run-merge-queue.sh: defines run_merger_agent function" {
+    local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
+
+    grep -q '^run_merger_agent()' "$merge_sh"
+
+    local func_body
+    func_body=$(sed -n '/^run_merger_agent()/,/^}/p' "$merge_sh")
+
+    # Must use run_claude_with_progress
+    echo "$func_body" | grep -q 'run_claude_with_progress'
+
+    # Must load merger.md prompt
+    echo "$func_body" | grep -q 'merger.md'
+
+    # Must verify task was closed after agent
+    echo "$func_body" | grep -q 'post_status'
+}
+
+@test "run-merge-queue.sh: merge_task calls agent on fast merge failure" {
+    local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
+
+    local func_body
+    func_body=$(sed -n '/^merge_task()/,/^}/p' "$merge_sh")
+
+    # Must call try_fast_merge first
+    echo "$func_body" | grep -q 'try_fast_merge'
+
+    # Must call run_merger_agent on failure
+    echo "$func_body" | grep -q 'run_merger_agent'
+
+    # Must clean state between fast merge and agent
+    echo "$func_body" | grep -q 'reset --hard'
+}
+
+@test "run-merge-queue.sh: no merge-conflict counter loop (replaced by agent)" {
+    local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
+
+    # Must NOT have merge-conflict:N counter logic (old retry system)
+    ! grep -q 'merge-conflict' "$merge_sh"
+    ! grep -q 'conflict_count' "$merge_sh"
+    ! grep -q 'get_counter_value.*merge' "$merge_sh"
+    ! grep -q 'set_counter_label.*merge' "$merge_sh"
+}
+
+@test "run-merge-queue.sh: empty merge detection before agent launch" {
+    local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
+
+    local func_body
+    func_body=$(sed -n '/^merge_task()/,/^}/p' "$merge_sh")
+
+    # After fast merge fails, must check if branch has diff
+    echo "$func_body" | grep -q 'has_diff'
+
+    # Empty merge → close task (not call agent)
+    echo "$func_body" | grep -q 'Empty merge.*branch changes already in main'
+}
+
+@test "run-merge-queue.sh: agent failure returns task to executor" {
+    local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
+
+    local func_body
+    func_body=$(sed -n '/^merge_task()/,/^}/p' "$merge_sh")
+
+    # After agent fails: clean state + return to executor
+    echo "$func_body" | grep -q 'Merger agent failed'
+    echo "$func_body" | grep -q 'status=open.*remove-label=approved'
+}
+
+@test "run-merge-queue.sh: FAST_MERGE_ERROR captures failure context" {
+    local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
+
+    # Shared variable defined
+    grep -q '^FAST_MERGE_ERROR=""' "$merge_sh"
+
+    # try_fast_merge captures errors into it
+    local func_body
+    func_body=$(sed -n '/^try_fast_merge()/,/^}/p' "$merge_sh")
+    echo "$func_body" | grep -q 'FAST_MERGE_ERROR='
+
+    # run_merger_agent receives it
+    local agent_call
+    agent_call=$(sed -n '/^merge_task()/,/^}/p' "$merge_sh")
+    echo "$agent_call" | grep -q 'FAST_MERGE_ERROR'
+}

@@ -133,15 +133,17 @@ load '../helpers/setup'
 # merge queue: push failure handling
 # =============================================================================
 
-@test "merge-queue: handles push failure with merge-conflict:N (not reject:N)" {
+@test "merge-queue: push failure in try_fast_merge returns 1 (triggers agent)" {
     local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
 
-    # v2.3.3: Push failure uses merge-conflict counter, retries in-place
-    local push_block
-    push_block=$(sed -n '/git_nh push.*main_ref.*then/,/fi/p' "$merge_sh")
+    # v2.3.11: Push failure in try_fast_merge returns 1, agent takes over
+    local fast_fn
+    fast_fn=$(sed -n '/^try_fast_merge()/,/^}/p' "$merge_sh")
 
-    echo "$push_block" | grep -q 'merge-conflict'
-    echo "$push_block" | grep -q 'return 1'
+    # Push failure → reset → return 1
+    echo "$fast_fn" | grep -q 'push origin.*main_ref'
+    echo "$fast_fn" | grep -q 'reset --hard'
+    echo "$fast_fn" | grep -q 'return 1'
 }
 
 @test "merge-queue: no reject:N increment for infrastructure failures" {

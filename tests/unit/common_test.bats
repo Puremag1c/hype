@@ -553,40 +553,42 @@ load '../helpers/mock_bd'
 # v2.3.3: Merge conflict retry-in-place + doctor label fix
 # =============================================================================
 
-@test "merge queue: uses merge-conflict:N counter (not reject:N)" {
+@test "merge queue: no merge-conflict counter (v2.3.11 agent replaces retries)" {
     local merge_fn
     merge_fn=$(sed -n '/^merge_task()/,/^}/p' "$SCRIPTS_DIR/run-merge-queue.sh")
 
-    # Must use merge-conflict counter for conflicts
-    echo "$merge_fn" | grep -q 'merge-conflict'
-
-    # Must NOT use reject:N for infrastructure failures
+    # v2.3.11: No merge-conflict:N counter — agent handles conflicts
+    ! echo "$merge_fn" | grep -q 'merge-conflict'
+    ! echo "$merge_fn" | grep -q 'conflict_count'
     ! echo "$merge_fn" | grep -q '"reject"'
 }
 
-@test "merge queue: conflict retry returns 1 to try next task" {
-    local merge_fn
-    merge_fn=$(sed -n '/^merge_task()/,/^}/p' "$SCRIPTS_DIR/run-merge-queue.sh")
+@test "merge queue: try_fast_merge returns 1 on failure (triggers agent)" {
+    local fast_fn
+    fast_fn=$(sed -n '/^try_fast_merge()/,/^}/p' "$SCRIPTS_DIR/run-merge-queue.sh")
 
-    # return 1 signals "skip this task, try next"
-    echo "$merge_fn" | grep -q 'return 1.*# Signal\|return 1.*# Try next'
+    # return 1 on rebase failure
+    echo "$fast_fn" | grep -q 'return 1'
+    # Captures error into FAST_MERGE_ERROR
+    echo "$fast_fn" | grep -q 'FAST_MERGE_ERROR'
 }
 
-@test "merge queue: main loop skips conflicting tasks" {
+@test "merge queue: main loop processes tasks sequentially" {
     local main_fn
     main_fn=$(sed -n '/^main()/,/^}/p' "$SCRIPTS_DIR/run-merge-queue.sh")
 
-    # Loop through tasks, not just head -n 1
+    # Loop through tasks
     echo "$main_fn" | grep -q 'for task_id in'
-    # Check return code of merge_task
+    # Call merge_task
     echo "$main_fn" | grep -q 'merge_task.*task_id'
 }
 
-@test "merge queue: persistent conflict returns to executor at threshold 6" {
+@test "merge queue: agent fallback returns to executor on total failure" {
     local merge_fn
     merge_fn=$(sed -n '/^merge_task()/,/^}/p' "$SCRIPTS_DIR/run-merge-queue.sh")
 
-    echo "$merge_fn" | grep -q 'conflict_count.*-ge 6'
+    # After agent fails: status=open (return to executor)
+    echo "$merge_fn" | grep -q 'Merger agent failed'
     echo "$merge_fn" | grep -q 'status=open'
 }
 
@@ -603,34 +605,39 @@ load '../helpers/mock_bd'
     grep -q '^git_nh()' "$SCRIPTS_DIR/run-merge-queue.sh"
 }
 
-@test "merge queue: all git checkout/pull/push/rebase/merge use git_nh" {
+@test "merge queue: all git operations use git_nh (v2.3.11 hybrid)" {
+    local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
+
+    # try_fast_merge has rebase/merge/commit/push/pull via git_nh
+    local fast_fn
+    fast_fn=$(sed -n '/^try_fast_merge()/,/^}/p' "$merge_sh")
+    echo "$fast_fn" | grep -q 'git_nh checkout'
+    echo "$fast_fn" | grep -q 'git_nh pull'
+    echo "$fast_fn" | grep -q 'git_nh push'
+    echo "$fast_fn" | grep -q 'git_nh rebase'
+    echo "$fast_fn" | grep -q 'git_nh merge'
+    echo "$fast_fn" | grep -q 'git_nh commit'
+
+    # merge_task has fetch/checkout/reset/push via git_nh
     local merge_fn
-    merge_fn=$(sed -n '/^merge_task()/,/^}/p' "$SCRIPTS_DIR/run-merge-queue.sh")
-
-    # git_nh should be used for state-changing operations
-    echo "$merge_fn" | grep -q 'git_nh checkout'
-    echo "$merge_fn" | grep -q 'git_nh pull'
-    echo "$merge_fn" | grep -q 'git_nh push'
-    echo "$merge_fn" | grep -q 'git_nh rebase'
-    echo "$merge_fn" | grep -q 'git_nh merge'
-    echo "$merge_fn" | grep -q 'git_nh commit'
+    merge_fn=$(sed -n '/^merge_task()/,/^}/p' "$merge_sh")
     echo "$merge_fn" | grep -q 'git_nh fetch'
+    echo "$merge_fn" | grep -q 'git_nh checkout'
+    echo "$merge_fn" | grep -q 'git_nh reset'
 
-    # Raw git checkout/pull/push/commit/rebase/merge should NOT appear in merge_task
-    # (only git rev-parse, git symbolic-ref, git status are allowed as read-only)
-    # Exclude comments (lines starting with #) — they reference git in prose
-    ! echo "$merge_fn" | grep -v '^\s*#' | grep -v 'git_nh' | grep -v 'git rev-parse' | grep -v 'git symbolic-ref' | grep -v 'git status' | grep -q 'git '
+    # No raw git (except read-only: rev-parse, symbolic-ref, status, diff, and git_nh body)
+    ! grep -v '^\s*#' "$merge_sh" | grep -v 'git_nh' | grep -v 'git rev-parse' | grep -v 'git symbolic-ref' | grep -v 'git status' | grep -v 'git diff' | grep -v 'git -c core' | grep -q 'git '
 }
 
-@test "merge queue: commit failure cleans staged changes (not || true)" {
-    local merge_fn
-    merge_fn=$(sed -n '/^merge_task()/,/^}/p' "$SCRIPTS_DIR/run-merge-queue.sh")
+@test "merge queue: commit failure in try_fast_merge resets and returns 1" {
+    local fast_fn
+    fast_fn=$(sed -n '/^try_fast_merge()/,/^}/p' "$SCRIPTS_DIR/run-merge-queue.sh")
 
-    # Commit should be wrapped in if ! ... not || true
-    echo "$merge_fn" | grep -q 'if ! git_nh commit'
-    # On failure: reset and return to executor
-    echo "$merge_fn" | grep -q 'Commit failed.*cleaning staged'
-    echo "$merge_fn" | grep -q 'reset --hard.*main_ref'
+    # Commit wrapped in FAST_MERGE_ERROR capture
+    echo "$fast_fn" | grep -q 'FAST_MERGE_ERROR=.*git_nh commit'
+    # On failure: reset --hard and return 1 (agent takes over)
+    echo "$fast_fn" | grep -q 'reset --hard.*main_ref'
+    echo "$fast_fn" | grep -q 'return 1'
 }
 
 @test "merge queue: pre-flight dirty tree check" {

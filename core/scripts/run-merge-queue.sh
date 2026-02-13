@@ -1,9 +1,13 @@
 #!/bin/bash
 # core/scripts/run-merge-queue.sh
-# Sequential merge worker — takes approved tasks one at a time.
-# Part of v2.2 parallel review pipeline.
+# Hybrid merge worker — fast script path + Claude merger agent fallback.
+# Part of v2.2 parallel review pipeline, upgraded in v2.3.11.
 #
-# Flow: approved task → merge --squash → push → close → cleanup branch
+# Flow: approved task → try_fast_merge (rebase+squash+push)
+#       → success → close → done
+#       → fail → merger agent resolves conflicts → close → done
+#       → agent fail → return to executor
+#
 # Audit tasks: close without merge (no branch).
 #
 # Usage: ./scripts/run-merge-queue.sh
@@ -17,6 +21,7 @@ source "$SCRIPT_DIR/common.sh"
 PROJECT_DIR=$(pwd)
 LOGS_DIR="$PROJECT_DIR/logs"
 CONFIG_FILE="$PROJECT_DIR/.hype/config.sh"
+MERGER_TIMEOUT="${MERGER_TIMEOUT:-5m}"
 
 # Load config
 if [ -f "$CONFIG_FILE" ]; then
@@ -62,7 +67,153 @@ get_approved_tasks() {
     fi | jq -r '.[] | select((.labels // []) | index("approved")) | select((.labels // []) | index("trigger") | not) | .id' 2>/dev/null || echo ""
 }
 
-# Merge one approved task
+# === Fast merge path (no Claude, pure git) ===
+
+# Shared variable for error context (read by run_merger_agent after failure)
+FAST_MERGE_ERROR=""
+
+try_fast_merge() {
+    local branch=$1
+    local main_ref=$2
+    local task_title=$3
+    local task_id=$4
+
+    FAST_MERGE_ERROR=""
+
+    # Checkout main, pull latest
+    git_nh checkout "$main_ref" 2>/dev/null || return 1
+    git_nh pull origin "$main_ref" 2>/dev/null || return 1
+
+    # Try rebase: checkout branch, rebase on main
+    git_nh checkout "origin/$branch" 2>/dev/null || return 1
+    if ! FAST_MERGE_ERROR=$(git_nh rebase "$main_ref" 2>&1); then
+        git_nh rebase --abort 2>/dev/null || true
+        git_nh checkout "$main_ref" 2>/dev/null || true
+        return 1
+    fi
+
+    # Rebase succeeded — push rebased branch, then squash merge
+    git_nh push origin HEAD:"$branch" --force-with-lease 2>/dev/null || true
+    git_nh checkout "$main_ref" 2>/dev/null || return 1
+
+    if ! FAST_MERGE_ERROR=$(git_nh merge --squash "origin/$branch" 2>&1); then
+        git_nh merge --abort 2>/dev/null || git_nh reset --hard "origin/$main_ref" 2>/dev/null || true
+        return 1
+    fi
+
+    # Commit squash merge
+    if ! FAST_MERGE_ERROR=$(git_nh commit -m "$task_title
+
+Task: $task_id" 2>&1); then
+        git_nh reset --hard "origin/$main_ref" 2>/dev/null || true
+        return 1
+    fi
+
+    # Push to main
+    if ! FAST_MERGE_ERROR=$(git_nh push origin "$main_ref" 2>&1); then
+        git_nh reset --hard "origin/$main_ref" 2>/dev/null || true
+        return 1
+    fi
+
+    return 0
+}
+
+# === Merger agent (Claude resolves conflicts) ===
+
+run_merger_agent() {
+    local task_id=$1
+    local branch=$2
+    local main_ref=$3
+    local task_json=$4
+    local error_context=${5:-"Unknown error"}
+
+    local task_title
+    task_title=$(echo "$task_json" | jq -r '.[0].title // "Task"' 2>/dev/null)
+
+    # Build context for agent: branch diff + error info
+    local branch_diff
+    branch_diff=$(git diff "origin/$main_ref..origin/$branch" 2>/dev/null | head -500 || echo "No diff available")
+    local branch_diff_stat
+    branch_diff_stat=$(git diff --stat "origin/$main_ref..origin/$branch" 2>/dev/null || echo "No stats")
+
+    # Load agent prompt
+    local merger_prompt
+    merger_prompt=$(cat "$PROJECT_DIR/.claude/agents/merger.md" 2>/dev/null || \
+                    cat "$SCRIPT_DIR/../agents/merger.md" 2>/dev/null || echo "")
+
+    if [ -z "$merger_prompt" ]; then
+        log "ERROR" "Merger agent prompt not found"
+        return 1
+    fi
+
+    local full_prompt="$merger_prompt
+
+---
+TASK_ID=$task_id
+TASK_TITLE=$task_title
+BRANCH=$branch
+MAIN_REF=$main_ref
+PROJECT_ROOT=$PROJECT_DIR
+
+## BRANCH CHANGES (diff stat)
+$branch_diff_stat
+
+## BRANCH DIFF (first 500 lines)
+\`\`\`diff
+$branch_diff
+\`\`\`
+
+## CONFLICT INFO (why fast merge failed)
+\`\`\`
+$error_context
+\`\`\`
+
+## YOUR JOB
+1. Fetch latest, checkout main
+2. Resolve the conflict (rebase + resolve, or apply changes manually)
+3. Squash merge into main, push
+4. bd close $task_id on success
+5. bd update $task_id --status=open --remove-label=approved --notes=\"reason\" on failure"
+
+    local output_file="$LOGS_DIR/merger-$task_id.log"
+    local model
+    model=$(map_model "sonnet")
+
+    log "INFO" "Launching merger agent for $task_id (model: $model, timeout: $MERGER_TIMEOUT)"
+    run_claude_with_progress "$full_prompt" "$model" "$MERGER_TIMEOUT" "$output_file" "MERGE" "$LOGS_DIR" || {
+        log "WARN" "Merger agent exited with error for $task_id"
+        return 1
+    }
+
+    # Verify: was task closed by agent?
+    local post_status
+    post_status=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].status // "unknown"' 2>/dev/null)
+
+    if [ "$post_status" = "closed" ]; then
+        return 0
+    fi
+
+    # Agent didn't close task — check if it at least pushed to main
+    local main_after
+    main_after=$(git rev-parse "$main_ref" 2>/dev/null || echo "unknown")
+    git_nh fetch origin 2>/dev/null || true
+    local remote_after
+    remote_after=$(git rev-parse "origin/$main_ref" 2>/dev/null || echo "unknown")
+
+    if [ "$main_after" != "$remote_after" ]; then
+        # Agent pushed but didn't close — close for it
+        git_nh checkout "$main_ref" 2>/dev/null || true
+        git_nh pull origin "$main_ref" 2>/dev/null || true
+        bd_safe close "$task_id" >/dev/null 2>&1 || true
+        bd_safe update "$task_id" --remove-label=approved --add-label=reviewed >/dev/null 2>&1 || true
+        return 0
+    fi
+
+    return 1
+}
+
+# === Main merge logic ===
+
 merge_task() {
     local task_id=$1
 
@@ -92,10 +243,8 @@ merge_task() {
     main_ref=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo "main")
 
     # Pre-flight: ensure clean working tree (v2.3.4)
-    # Previous failed merge can leave staged changes from git merge --squash.
-    # With dirty tree ALL subsequent git operations fail silently → false "conflicts".
     if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-        log "WARN" "Dirty working tree — cleaning up before merge (likely from previous failed commit)"
+        log "WARN" "Dirty working tree — cleaning up before merge"
         git_nh checkout "$main_ref" 2>/dev/null || true
         git_nh reset --hard "origin/$main_ref" 2>/dev/null || true
     fi
@@ -105,7 +254,6 @@ merge_task() {
 
     # Check branch exists
     if ! git rev-parse --verify "origin/$branch" >/dev/null 2>&1; then
-        # Check if task was closed with NO_MERGE by reviewer
         local close_reason
         close_reason=$(echo "$task_json" | jq -r '.[0].close_reason // ""' 2>/dev/null)
         if echo "$close_reason" | grep -q "NO_MERGE:"; then
@@ -115,7 +263,6 @@ merge_task() {
         fi
 
         log "ERROR" "Branch $branch not found for $task_id"
-        # Remove approved, reopen for executor to fix
         bd_safe update "$task_id" --status=open --remove-label=approved \
             --notes="Merge failed: branch $branch not found" >/dev/null 2>&1 || true
         return 0
@@ -125,106 +272,62 @@ merge_task() {
     local main_before
     main_before=$(git rev-parse "$main_ref" 2>/dev/null || echo "unknown")
 
-    # Auto-rebase branch on main before merge (v2.2.7)
-    # Most "conflicts" are just stale branches — another task merged while this was in review.
-    # Rebase resolves these automatically without wasting a full executor cycle.
+    # === Step 1: Try fast merge (pure git, no Claude) ===
     log "INFO" "Merging $task_id ($branch)"
-    git_nh checkout "$main_ref" 2>/dev/null || true
-    git_nh pull origin "$main_ref" 2>/dev/null || true
 
-    # Try rebase: checkout branch, rebase on main, force-push
-    git_nh checkout "origin/$branch" 2>/dev/null || true
-    if ! git_nh rebase "$main_ref" 2>/dev/null; then
-        # Rebase failed — likely timing conflict (another task merged, shifting lines)
-        git_nh rebase --abort 2>/dev/null || true
-        git_nh checkout "$main_ref" 2>/dev/null || true
+    if try_fast_merge "$branch" "$main_ref" "$task_title" "$task_id"; then
+        # Fast merge succeeded — verify not empty squash
+        local main_after
+        main_after=$(git rev-parse "$main_ref" 2>/dev/null || echo "unknown")
 
-        # Use separate merge-conflict:N counter (NOT reject:N — merge conflicts are infra, not code quality)
-        local conflict_count
-        conflict_count=$(get_counter_value "$task_json" "merge-conflict")
-        ((conflict_count++))
-        set_counter_label "$task_id" "merge-conflict" "$conflict_count" "$task_json"
-
-        if [ "$conflict_count" -ge 6 ]; then
-            # Real persistent conflict — return to executor for manual rebase
-            log "WARN" "Merge conflict for $task_id (attempt $conflict_count) — returning to executor"
-            bd_safe update "$task_id" --status=open --remove-label=approved \
-                --notes="Persistent merge conflict on $branch after $conflict_count attempts. Rebase on $main_ref and resolve conflicts manually." >/dev/null 2>&1 || true
-        else
-            # Timing conflict — stay approved, skip this cycle, try next task
-            # Next cycle merge queue will retry after other tasks have merged
-            log "INFO" "Merge conflict for $task_id (attempt $conflict_count/6) — skipping, will retry next cycle"
-            bd_safe update "$task_id" --notes="Merge conflict (attempt $conflict_count/6). Waiting for other merges to complete." >/dev/null 2>&1 || true
-            return 1  # Signal to main() to try next approved task
+        if [ "$main_before" != "unknown" ] && [ "$main_before" = "$main_after" ]; then
+            log "WARN" "Empty squash for $task_id — closing (no changes to merge)"
+            bd_safe close "$task_id" --reason="Empty merge — branch changes already in main" >/dev/null 2>&1 || true
+            bd_safe update "$task_id" --remove-label=approved --add-label=reviewed >/dev/null 2>&1 || true
+            return 0
         fi
+
+        # Close task
+        bd_safe close "$task_id" >/dev/null 2>&1 || true
+        bd_safe update "$task_id" --remove-label=approved --add-label=reviewed >/dev/null 2>&1 || true
+        git_nh push origin --delete "$branch" 2>/dev/null || true
+        log "SUCCESS" "MERGED: $task_id ($task_title)"
         return 0
     fi
 
-    # Rebase succeeded — push rebased branch, then squash merge
-    git_nh push origin HEAD:"$branch" --force-with-lease 2>/dev/null || true
+    # === Step 2: Fast merge failed — clean state ===
+    log "INFO" "Fast merge failed for $task_id — checking if agent needed"
     git_nh checkout "$main_ref" 2>/dev/null || true
+    git_nh reset --hard "origin/$main_ref" 2>/dev/null || true
 
-    if ! git_nh merge --squash "origin/$branch" 2>/dev/null; then
-        # Should not happen after successful rebase, but safety net
-        git_nh merge --abort 2>/dev/null || git_nh reset --hard "origin/$main_ref" 2>/dev/null || true
-        log "ERROR" "Merge failed after successful rebase for $task_id"
-        bd_safe update "$task_id" --status=open --remove-label=approved \
-            --notes="Unexpected merge failure after rebase. Return to executor." >/dev/null 2>&1 || true
-        return 0
-    fi
-
-    # Commit squash merge (v2.3.4: handle failure instead of || true)
-    # If commit fails, staged changes from merge --squash poison the working tree.
-    if ! git_nh commit -m "$task_title
-
-Task: $task_id" 2>/dev/null; then
-        log "ERROR" "Commit failed for $task_id — cleaning staged changes"
-        git_nh reset --hard "origin/$main_ref" 2>/dev/null || true
-        bd_safe update "$task_id" --status=open --remove-label=approved \
-            --notes="Commit failed after squash merge. Return to executor." >/dev/null 2>&1 || true
-        return 0
-    fi
-
-    if ! git_nh push origin "$main_ref" 2>/dev/null; then
-        # Push failed — another task pushed to main between our merge and push
-        git_nh reset --hard "origin/$main_ref" 2>/dev/null || true
-
-        local conflict_count
-        conflict_count=$(get_counter_value "$task_json" "merge-conflict")
-        ((conflict_count++))
-        set_counter_label "$task_id" "merge-conflict" "$conflict_count" "$task_json"
-
-        if [ "$conflict_count" -ge 6 ]; then
-            log "ERROR" "Push failed for $task_id (attempt $conflict_count) — returning to executor"
-            bd_safe update "$task_id" --status=open --remove-label=approved \
-                --notes="Push to $main_ref failed $conflict_count times. Rebase on $main_ref and retry." >/dev/null 2>&1 || true
-        else
-            log "INFO" "Push failed for $task_id (attempt $conflict_count/6) — will retry next cycle"
-            bd_safe update "$task_id" --notes="Push failed (attempt $conflict_count/6). Will retry." >/dev/null 2>&1 || true
-            return 1  # Try next approved task
-        fi
-        return 0
-    fi
-
-    # Verify main actually changed
-    local main_after
-    main_after=$(git rev-parse "$main_ref" 2>/dev/null || echo "unknown")
-
-    if [ "$main_before" != "unknown" ] && [ "$main_before" = "$main_after" ]; then
+    # Check if branch has any actual changes vs main (empty merge detection)
+    local has_diff
+    has_diff=$(git diff --stat "origin/$main_ref..origin/$branch" 2>/dev/null | tail -1 || echo "")
+    if [ -z "$has_diff" ]; then
         log "WARN" "Empty squash for $task_id — closing (no changes to merge)"
         bd_safe close "$task_id" --reason="Empty merge — branch changes already in main" >/dev/null 2>&1 || true
         bd_safe update "$task_id" --remove-label=approved --add-label=reviewed >/dev/null 2>&1 || true
         return 0
     fi
 
-    # Close task
-    bd_safe close "$task_id" >/dev/null 2>&1 || true
-    bd_safe update "$task_id" --remove-label=approved --add-label=reviewed >/dev/null 2>&1 || true
+    # === Step 3: Launch merger agent ===
+    log "INFO" "Launching merger agent for $task_id"
 
-    # Cleanup remote branch
-    git_nh push origin --delete "$branch" 2>/dev/null || true
+    if run_merger_agent "$task_id" "$branch" "$main_ref" "$task_json" "$FAST_MERGE_ERROR"; then
+        # Agent succeeded
+        git_nh push origin --delete "$branch" 2>/dev/null || true
+        log "SUCCESS" "MERGED (agent): $task_id ($task_title)"
+        return 0
+    fi
 
-    log "SUCCESS" "MERGED: $task_id ($task_title)"
+    # === Step 4: Agent failed — return to executor ===
+    log "WARN" "Merger agent failed for $task_id — returning to executor"
+    # Clean state in case agent left dirty tree
+    git_nh checkout "$main_ref" 2>/dev/null || true
+    git_nh reset --hard "origin/$main_ref" 2>/dev/null || true
+    bd_safe update "$task_id" --status=open --remove-label=approved \
+        --notes="Merge failed (script + agent). Rebase $branch on $main_ref and resolve conflicts manually." >/dev/null 2>&1 || true
+    return 0
 }
 
 # Main
@@ -241,20 +344,14 @@ main() {
         exit 0
     fi
 
-    # Try to merge one task per call (sequential, safe)
-    # On conflict (return 1), skip to next approved task instead of blocking the queue
+    # Process one task per call (sequential, safe)
     local task_id
     for task_id in $tasks; do
         log "INFO" "Merge: $task_id"
-        if merge_task "$task_id"; then
-            # return 0 = merged or returned to executor — done for this cycle
-            bd_safe sync 2>/dev/null || true
-            return
-        fi
-        # return 1 = conflict, task stays approved — try next task
-        log "INFO" "Skipped $task_id (conflict), trying next..."
+        merge_task "$task_id"
+        bd_safe sync 2>/dev/null || true
+        return
     done
-    bd_safe sync 2>/dev/null || true
 }
 
 main "$@"

@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.3.16] - 2026-02-13
+
+### Fixed
+
+- **Executor vs troubleshooter race condition** — 3 fixes for concurrent access to the same task:
+  1. `get_ready_tasks` now excludes tasks with `blocked:*` labels (executor no longer picks up tasks routed to troubleshooter)
+  2. `check_and_route_troubleshoot` does fresh `bd_safe show` before dispatch (skips if task already closed or executor is running)
+  3. Reviewer "no action" reject:4 now cleanly transitions: sets `status=open`, removes `reviewing`/`needs-review` labels, adds `blocked:troubleshoot` (previously left inconsistent state: `in_progress` + `reviewing` + `blocked:troubleshoot`)
+
+- 8 new tests (311 total).
+
+---
+
 ## [2.3.15] - 2026-02-13
 
 ### Fixed

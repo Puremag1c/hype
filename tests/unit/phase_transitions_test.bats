@@ -447,3 +447,26 @@ get_phase() {
     ]'
     [ "$(get_phase)" = "SMOKE_TEST" ]
 }
+
+# ============================================================
+# v2.3.16: blocked:* tasks stay in IMPLEMENTATION (not DONE)
+# ============================================================
+
+@test "scenario: blocked:troubleshoot task keeps phase in IMPLEMENTATION" {
+    set_all_milestones
+    set_tasks '[
+        {"id":"t1","title":"Impl X","status":"open","priority":2,"labels":["blocked:troubleshoot"]},
+        {"id":"t2","title":"done","status":"closed","priority":2,"labels":[]}
+    ]'
+    # blocked:troubleshoot is still open — phase must not jump to DONE/SMOKE_TEST
+    [ "$(get_phase)" = "IMPLEMENTATION" ]
+}
+
+@test "scenario: blocked:escalated task keeps phase in IMPLEMENTATION" {
+    set_all_milestones
+    set_tasks '[
+        {"id":"t1","title":"Impl Y","status":"open","priority":2,"labels":["blocked:escalated"]},
+        {"id":"t2","title":"done","status":"closed","priority":2,"labels":[]}
+    ]'
+    [ "$(get_phase)" = "IMPLEMENTATION" ]
+}

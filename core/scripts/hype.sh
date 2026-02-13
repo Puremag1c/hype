@@ -449,10 +449,25 @@ check_and_route_troubleshoot() {
     troubleshooter_prompt=$(cat "$troubleshooter_file")
 
     for task_id in $troubleshoot_ids; do
+        # v2.3.16: Fresh state check — tick-cache is stale after dispatch
+        local fresh_json fresh_status has_executor_label
+        fresh_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
+        fresh_status=$(echo "$fresh_json" | jq -r '.[0].status // "unknown"' 2>/dev/null || echo "unknown")
+        has_executor_label=$(echo "$fresh_json" | jq -r '[.[0].labels[]? | select(. == "executor")] | length' 2>/dev/null || echo "0")
+
+        if [ "$fresh_status" = "closed" ]; then
+            log "INFO" "Troubleshoot skip $task_id: already closed"
+            continue
+        fi
+        if [ "$fresh_status" = "in_progress" ] && [ "$has_executor_label" != "0" ]; then
+            log "INFO" "Troubleshoot skip $task_id: executor already running (in_progress + executor label)"
+            continue
+        fi
+
         log "INFO" "Routing $task_id to Troubleshooter..."
 
         local task_json
-        task_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
+        task_json="$fresh_json"
 
         local output_file="$LOGS_DIR/troubleshooter-$task_id.log"
         local full_prompt="$troubleshooter_prompt

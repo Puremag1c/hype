@@ -396,7 +396,10 @@ $context
         set_counter_label "$task_id" "reject" "$reject_count" "$updated_json"
 
         if [ "$reject_count" -ge 4 ]; then
-            bd_safe update "$task_id" --add-label=blocked:troubleshoot \
+            # v2.3.16: Clean state — remove reviewing/needs-review, set open so troubleshooter finds it
+            bd_safe update "$task_id" --status=open \
+                --remove-label=reviewing --remove-label=needs-review \
+                --add-label=blocked:troubleshoot \
                 --notes="Reviewer failed to act after $reject_count attempts." >/dev/null 2>&1 || true
             log "WARN" "TROUBLESHOOT: $task_id - no review action (reject:$reject_count)"
         elif [ "$reject_count" -ge 2 ]; then

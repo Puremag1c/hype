@@ -679,3 +679,71 @@ load '../helpers/setup'
     agent_call=$(sed -n '/^merge_task()/,/^}/p' "$merge_sh")
     echo "$agent_call" | grep -q 'FAST_MERGE_ERROR'
 }
+
+# =============================================================================
+# v2.3.16: Race condition fixes — executor vs troubleshooter
+# =============================================================================
+
+@test "v2.3.16: get_ready_tasks excludes tasks with blocked: labels" {
+    local executors_sh="$SCRIPTS_DIR/run-executors.sh"
+
+    # jq filter in get_ready_tasks must exclude blocked:* labels
+    local func_body
+    func_body=$(sed -n '/^get_ready_tasks()/,/^}/p' "$executors_sh")
+    echo "$func_body" | grep -q 'startswith("blocked:")'
+    echo "$func_body" | grep -q '| not'
+}
+
+@test "v2.3.16: check_and_route_troubleshoot does fresh bd_safe show before dispatch" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    # Must do bd_safe show for fresh state before troubleshooter launch
+    local func_body
+    func_body=$(sed -n '/^check_and_route_troubleshoot()/,/^}/p' "$hype_sh")
+
+    # Fresh show must come BEFORE "Routing.*to Troubleshooter" log
+    local show_line route_line
+    show_line=$(echo "$func_body" | grep -n 'bd_safe show.*--json' | head -1 | cut -d: -f1)
+    route_line=$(echo "$func_body" | grep -n 'Routing.*to Troubleshooter' | head -1 | cut -d: -f1)
+    [ "$show_line" -lt "$route_line" ]
+}
+
+@test "v2.3.16: check_and_route_troubleshoot checks executor label" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    local func_body
+    func_body=$(sed -n '/^check_and_route_troubleshoot()/,/^}/p' "$hype_sh")
+
+    # Must check for executor label
+    echo "$func_body" | grep -q 'executor'
+    # Must skip if in_progress + executor
+    echo "$func_body" | grep -q 'in_progress.*executor\|executor.*in_progress'
+}
+
+@test "v2.3.16: reject:4 no-review-action removes reviewing label" {
+    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+
+    # Find the reject_count >= 4 block
+    local block
+    block=$(sed -n '/reject_count.*-ge 4/,/TROUBLESHOOT/p' "$reviewers_sh")
+
+    echo "$block" | grep -q -- '--remove-label=reviewing'
+}
+
+@test "v2.3.16: reject:4 no-review-action sets status=open" {
+    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+
+    local block
+    block=$(sed -n '/reject_count.*-ge 4/,/TROUBLESHOOT/p' "$reviewers_sh")
+
+    echo "$block" | grep -q -- '--status=open'
+}
+
+@test "v2.3.16: reject:4 no-review-action adds blocked:troubleshoot" {
+    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+
+    local block
+    block=$(sed -n '/reject_count.*-ge 4/,/TROUBLESHOOT/p' "$reviewers_sh")
+
+    echo "$block" | grep -q -- '--add-label=blocked:troubleshoot'
+}

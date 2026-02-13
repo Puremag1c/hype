@@ -1245,6 +1245,9 @@ cmd_reset_phase() {
     # Write force-phase file (detect-phase.sh will read and delete it)
     echo "$target_phase" > .hype/force-phase
 
+    # v2.3.9: remove stale tick-cache (will be regenerated on next cycle)
+    rm -f .hype/tick-cache.json 2>/dev/null || true
+
     # Clean up milestones/state for consistency
     # Delete milestones AFTER target phase, create milestones BEFORE target phase
     case "$target_phase" in
@@ -1315,6 +1318,21 @@ cmd_reset_phase() {
             delete_milestone "milestone:project-done"
             ;;
     esac
+
+    # v2.3.9: Clean legacy bd milestone labels (≤v2.3.8 and agent-created milestones)
+    # Without this, detect-phase.sh fallback finds old bd milestones that should be deleted
+    local all_bd_tasks
+    all_bd_tasks=$(bd_safe list --all --json --limit 0 2>/dev/null || echo "[]")
+    for milestone_label in "milestone:planning-done" "milestone:analysts-done" "milestone:plan-reviewed" "milestone:smoke-test-done" "milestone:project-done"; do
+        # Only clean if this milestone was DELETED (not if it was ensured)
+        if ! has_milestone "$milestone_label"; then
+            local legacy_ids
+            legacy_ids=$(echo "$all_bd_tasks" | jq -r ".[] | select(.labels[]? == \"$milestone_label\") | .id" 2>/dev/null || true)
+            for mid in $legacy_ids; do
+                bd_safe update "$mid" --remove-label="$milestone_label" >/dev/null 2>&1 || true
+            done
+        fi
+    done
 
     success "Phase set to $target_phase"
     echo ""

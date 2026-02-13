@@ -314,3 +314,52 @@ load '../helpers/setup'
     echo "$func_body" | grep -q 'tick-cache.json'
     ! echo "$func_body" | grep -q 'bd_safe list'
 }
+
+# =============================================================================
+# v2.3.9: reset-phase cleans legacy bd milestone labels
+# =============================================================================
+
+@test "bin/hype: reset-phase cleans legacy bd milestone labels" {
+    local hype_bin="$PROJECT_ROOT/bin/hype"
+
+    # cmd_reset_phase must have legacy bd milestone cleanup
+    local func_body
+    func_body=$(sed -n '/^cmd_reset_phase()/,/^}/p' "$hype_bin")
+
+    # Must iterate over all 5 milestone labels
+    echo "$func_body" | grep -q 'milestone:planning-done'
+    echo "$func_body" | grep -q 'milestone:plan-reviewed'
+    echo "$func_body" | grep -q 'milestone:project-done'
+
+    # Must check has_milestone (only clean deleted ones)
+    echo "$func_body" | grep -q 'has_milestone'
+
+    # Must remove labels from bd tasks
+    echo "$func_body" | grep -q 'remove-label.*milestone_label'
+}
+
+@test "bin/hype: reset-phase deletes tick-cache.json" {
+    local hype_bin="$PROJECT_ROOT/bin/hype"
+
+    local func_body
+    func_body=$(sed -n '/^cmd_reset_phase()/,/^}/p' "$hype_bin")
+    echo "$func_body" | grep -q 'tick-cache.json'
+}
+
+@test "common.sh: cleanup_iteration deletes tick-cache.json" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    local func_body
+    func_body=$(sed -n '/^cleanup_iteration()/,/^}/p' "$common_sh")
+    echo "$func_body" | grep -q 'tick-cache.json'
+}
+
+@test "common.sh: cleanup_iteration counts file milestones in preview" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    local func_body
+    func_body=$(sed -n '/^cleanup_iteration()/,/^}/p' "$common_sh")
+
+    # Must check file milestones (not just bd)
+    echo "$func_body" | grep -q 'milestone-\*'
+}

@@ -1023,9 +1023,16 @@ cleanup_iteration() {
     task_count=$(bd_safe list --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo 0)
     [ "$task_count" -gt 0 ] && echo "  • $task_count beads task(s)"
 
-    # Milestones
-    local milestone_count
-    milestone_count=$(bd_safe list --status=closed --json --limit 0 2>/dev/null | jq '[.[] | select(.labels[]? | test("^milestone:"))] | length' 2>/dev/null || echo 0)
+    # Milestones (v2.3.9: file-based + legacy bd check)
+    local milestone_count=0
+    local hype_dir="${HYPE_DIR:-.hype}"
+    for f in "$hype_dir"/milestone-*; do
+        [ -f "$f" ] && ((milestone_count++)) || true
+    done
+    # Also count legacy bd milestones (≤v2.3.8 projects)
+    local bd_milestone_count
+    bd_milestone_count=$(bd_safe list --status=closed --json --limit 0 2>/dev/null | jq '[.[] | select(.labels[]? | test("^milestone:"))] | length' 2>/dev/null || echo 0)
+    milestone_count=$((milestone_count + bd_milestone_count))
     [ "$milestone_count" -gt 0 ] && echo "  • $milestone_count milestone(s)"
 
     # Worktrees
@@ -1067,11 +1074,13 @@ cleanup_iteration() {
     # Run cleanup and show result (was silently failing before)
     bd_safe admin cleanup --force || true
 
-    # 4. Delete all milestones (using function from this file)
+    # 4. Delete all milestones + tick-cache (using function from this file)
     echo "  → Deleting milestones..."
     local deleted_count
     deleted_count=$(delete_all_milestones)
     [ "$deleted_count" -gt 0 ] && echo "    Deleted $deleted_count milestone(s)"
+    # v2.3.9: clean stale tick-cache
+    rm -f "$project_dir/.hype/tick-cache.json" 2>/dev/null || true
 
     # 5. Clean git stash and worktrees
     echo "  → Cleaning stashes and worktrees..."

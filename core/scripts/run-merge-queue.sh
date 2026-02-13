@@ -177,7 +177,7 @@ $error_context
 
     local output_file="$LOGS_DIR/merger-$task_id.log"
     local model
-    model=$(map_model "sonnet")
+    model=$(map_model "opus")
 
     log "INFO" "Launching merger agent for $task_id (model: $model, timeout: $MERGER_TIMEOUT)"
     run_claude_with_progress "$full_prompt" "$model" "$MERGER_TIMEOUT" "$output_file" "MERGE" "$LOGS_DIR" || {

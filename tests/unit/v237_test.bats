@@ -444,7 +444,7 @@ load '../helpers/setup'
 
     # YAML frontmatter
     grep -q '^name: merger' "$merger_md"
-    grep -q '^model: sonnet' "$merger_md"
+    grep -q '^model: opus' "$merger_md"
 
     # Required sections
     grep -q 'TASK_ID' "$merger_md"

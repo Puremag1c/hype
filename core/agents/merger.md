@@ -1,7 +1,7 @@
 ---
 name: merger
 description: Resolves merge conflicts and merges feature branch into main
-model: sonnet
+model: opus
 ---
 
 # Роль: Merger

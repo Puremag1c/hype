@@ -1,16 +1,22 @@
 # Changelog
 
+## [2.3.14] - 2026-02-13
+
+### Fixed
+
+- **Smoke label safety net** — `hype.sh` SMOKE_REVIEW handler now force-removes `smoke`/`regression` labels after Architect-QA runs. If the agent missed removing labels, leftover labels no longer trigger a duplicate SMOKE_REVIEW cycle (2x Opus waste). (GitHub issue #8, part 2)
+
+- 1 new test (266 total).
+
+---
+
 ## [2.3.13] - 2026-02-13
 
 ### Fixed
 
-- **SMOKE_REVIEW phase bouncing** — Two fixes for the same root cause (GitHub issue #8):
-  1. `detect-phase.sh` now checks the testers PID file before entering SMOKE_REVIEW. While testers are still running in background, smoke findings accumulate without triggering Architect triage.
-  2. `hype.sh` SMOKE_REVIEW handler now force-removes `smoke`/`regression` labels after Architect runs (safety net). If Architect-QA missed removing labels, leftover labels no longer trigger a duplicate SMOKE_REVIEW cycle.
+- **Force SMOKE_TEST while testers running** — `detect-phase.sh` now forces SMOKE_TEST phase when testers PID is alive, regardless of what tasks exist. Previously, testers creating smoke tasks caused `OPEN > 0` which switched phase to IMPLEMENTATION — executors grabbed untriaged smoke tasks, and phase bounced between SMOKE_TEST/IMPLEMENTATION/SMOKE_REVIEW. Now: testers running → SMOKE_TEST (always). Testers done + smoke tasks → SMOKE_REVIEW. (GitHub issue #8)
 
-  Previously, each async tester completion (spanning 5-8 min) triggered separate SMOKE_REVIEW, and even after testers finished, Architect sometimes left smoke labels causing 2x consecutive Opus calls.
-
-- 4 new tests (266 total).
+- 3 new tests (266 total).
 
 ---
 

@@ -607,9 +607,9 @@ load '../helpers/setup'
     done
 }
 
-# === v2.3.13: Defer SMOKE_REVIEW while testers running ===
+# === v2.3.13: Force SMOKE_TEST while testers running ===
 
-@test "detect-phase.sh: checks testers PID before SMOKE_REVIEW" {
+@test "detect-phase.sh: forces SMOKE_TEST when testers PID alive" {
     local detect_sh="$SCRIPTS_DIR/detect-phase.sh"
 
     # Must read PID file
@@ -618,27 +618,33 @@ load '../helpers/setup'
     # Must check if process is alive (kill -0)
     grep -q 'kill -0' "$detect_sh"
 
-    # SMOKE_REVIEW condition includes TESTERS_STILL_RUNNING check
-    grep -q 'TESTERS_STILL_RUNNING.*false' "$detect_sh"
+    # PID alive → output SMOKE_TEST and exit
+    # This block must come BEFORE SMOKE_REVIEW check
+    local pid_block
+    pid_block=$(sed -n '/testers actively running/,/exit 0/p' "$detect_sh")
+    echo "$pid_block" | grep -q 'SMOKE_TEST'
 }
 
-@test "detect-phase.sh: SMOKE_REVIEW guarded by testers completion" {
+@test "detect-phase.sh: SMOKE_REVIEW only reachable when testers done" {
     local detect_sh="$SCRIPTS_DIR/detect-phase.sh"
 
-    # The SMOKE_TRIAGE_OPEN check must also check testers not running
-    local smoke_review_block
-    smoke_review_block=$(sed -n '/SMOKE_REVIEW.*smoke.*regression/,/exit 0/p' "$detect_sh")
+    # PID check (exits with SMOKE_TEST) must come BEFORE SMOKE_REVIEW
+    local pid_line smoke_review_line
+    pid_line=$(grep -n 'testers actively running' "$detect_sh" | head -1 | cut -d: -f1)
+    smoke_review_line=$(grep -n 'SMOKE_TRIAGE_OPEN.*-gt 0' "$detect_sh" | head -1 | cut -d: -f1)
 
-    # Both conditions must be present
-    echo "$smoke_review_block" | grep -q 'SMOKE_TRIAGE_OPEN'
-    echo "$smoke_review_block" | grep -q 'TESTERS_STILL_RUNNING'
+    [ "$pid_line" -lt "$smoke_review_line" ]
 }
 
-@test "detect-phase.sh: TESTERS_STILL_RUNNING defaults to false" {
+@test "detect-phase.sh: SMOKE_REVIEW check is simple (no testers guard needed)" {
     local detect_sh="$SCRIPTS_DIR/detect-phase.sh"
 
-    # Must default to false (safe fallback if no PID file)
-    grep -q 'TESTERS_STILL_RUNNING=false' "$detect_sh"
+    # SMOKE_REVIEW condition should be simple — testers check is upstream
+    local smoke_block
+    smoke_block=$(sed -n '/SMOKE_TRIAGE_OPEN.*-gt 0/,/exit 0/p' "$detect_sh" | head -5)
+    echo "$smoke_block" | grep -q 'SMOKE_REVIEW'
+    # No TESTERS_STILL_RUNNING in the SMOKE_REVIEW block itself
+    ! echo "$smoke_block" | grep -q 'TESTERS_STILL_RUNNING'
 }
 
 @test "hype.sh: SMOKE_REVIEW cleans leftover smoke labels (safety net)" {

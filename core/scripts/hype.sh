@@ -1045,7 +1045,7 @@ For each task:
 
             run_agent_with_mode "architect" ".claude/agents/architect-qa.md" "$arch_model" "smoke_review" "$triage_prompt" "${SMOKE_REVIEW_TIMEOUT:-10m}"
 
-            # v2.3.13: Safety net — force-remove smoke/regression labels architect missed
+            # v2.3.14: Safety net — force-remove smoke/regression labels architect missed
             # Without this, leftover labels trigger another SMOKE_REVIEW (2x Opus waste)
             local remaining_smoke_ids
             remaining_smoke_ids=$(jq -r '.[] | select(.status == "open") | select((.labels // []) | any(. == "smoke" or . == "regression")) | .id' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "")

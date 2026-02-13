@@ -270,16 +270,18 @@ if [ "$USER_ESCALATION_COUNT" -gt 0 ]; then
     exit 0
 fi
 
-# SMOKE_REVIEW: smoke/regression tasks найдены - Architect триажит перед executors
-# Предотвращает race condition между Architect и Executor
-# v2.3.13: defer SMOKE_REVIEW while testers still running (accumulate all findings first)
+# SMOKE_TEST: testers actively running — stay in SMOKE_TEST regardless of new tasks
+# v2.3.13: prevents phase switch to IMPLEMENTATION while testers create findings
 TESTERS_PID_FILE="$PROJECT_ROOT/.hype/run-testers.pid"
-TESTERS_STILL_RUNNING=false
 if [ -f "$TESTERS_PID_FILE" ] && kill -0 "$(cat "$TESTERS_PID_FILE" 2>/dev/null)" 2>/dev/null; then
-    TESTERS_STILL_RUNNING=true
+    output_json "SMOKE_TEST"
+    exit 0
 fi
 
-if [ "$SMOKE_TRIAGE_OPEN" -gt 0 ] && [ "$TESTERS_STILL_RUNNING" = "false" ]; then
+# SMOKE_REVIEW: smoke/regression tasks найдены - Architect триажит перед executors
+# Предотвращает race condition между Architect и Executor
+# Reached only when testers are NOT running (PID check above)
+if [ "$SMOKE_TRIAGE_OPEN" -gt 0 ]; then
     output_json "SMOKE_REVIEW"
     exit 0
 fi

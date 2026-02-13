@@ -113,20 +113,22 @@ load '../helpers/mock_bd'
 }
 
 # =============================================================================
-# has_milestone tests (with mock bd)
+# has_milestone tests (v2.3.9: file-based)
 # =============================================================================
 
 @test "has_milestone returns true when milestone exists" {
-    mock_bd_init "planning"
+    # v2.3.9: file-based milestones
+    export HYPE_DIR=$(mktemp -d)
+    touch "$HYPE_DIR/milestone-planning-done"
     run has_milestone "milestone:planning-done"
-    mock_bd_cleanup
+    rm -rf "$HYPE_DIR"
     [[ "$status" -eq 0 ]]
 }
 
 @test "has_milestone returns false when milestone missing" {
-    mock_bd_init "empty"
+    export HYPE_DIR=$(mktemp -d)
     run has_milestone "milestone:planning-done"
-    mock_bd_cleanup
+    rm -rf "$HYPE_DIR"
     [[ "$status" -eq 1 ]]
 }
 
@@ -189,65 +191,69 @@ load '../helpers/mock_bd'
 }
 
 # =============================================================================
-# ensure_milestone tests
+# ensure_milestone tests (v2.3.9: file-based)
 # =============================================================================
 
 @test "ensure_milestone creates milestone when missing" {
-    mock_bd_init "empty"
-    # ensure_milestone calls bd create + bd close
-    ensure_milestone "milestone:test-done" "Test complete" || true
-    run assert_bd_called "create"
-    [[ "$status" -eq 0 ]]
-    mock_bd_cleanup
+    export HYPE_DIR=$(mktemp -d)
+    ensure_milestone "milestone:test-done" "Test complete"
+    # File should exist
+    [ -f "$HYPE_DIR/milestone-test-done" ]
+    rm -rf "$HYPE_DIR"
 }
 
 @test "ensure_milestone is idempotent" {
-    mock_bd_init "planning"  # Has milestone:planning-done
-    # Should not create again
+    export HYPE_DIR=$(mktemp -d)
+    echo "first" > "$HYPE_DIR/milestone-planning-done"
     ensure_milestone "milestone:planning-done" "Planning complete"
-    run assert_bd_not_called "create"
-    [[ "$status" -eq 0 ]]
-    mock_bd_cleanup
+    # Content should NOT change (idempotent)
+    local content
+    content=$(cat "$HYPE_DIR/milestone-planning-done")
+    [ "$content" = "first" ]
+    rm -rf "$HYPE_DIR"
 }
 
 # =============================================================================
-# delete_milestone tests
+# delete_milestone tests (v2.3.9: file-based)
 # =============================================================================
 
 @test "delete_milestone removes milestone task" {
-    mock_bd_init "planning"
-    # delete_milestone calls bd delete for matching tasks
+    export HYPE_DIR=$(mktemp -d)
+    touch "$HYPE_DIR/milestone-planning-done"
     run delete_milestone "milestone:planning-done"
     [[ "$status" -eq 0 ]]
-    mock_bd_cleanup
+    ! [ -f "$HYPE_DIR/milestone-planning-done" ]
+    rm -rf "$HYPE_DIR"
 }
 
 @test "delete_milestone handles missing milestone" {
-    mock_bd_init "empty"
+    export HYPE_DIR=$(mktemp -d)
     run delete_milestone "milestone:nonexistent"
     [[ "$status" -eq 0 ]]  # Should not fail
-    mock_bd_cleanup
+    rm -rf "$HYPE_DIR"
 }
 
 # =============================================================================
-# delete_all_milestones tests
+# delete_all_milestones tests (v2.3.9: file-based)
 # =============================================================================
 
 @test "delete_all_milestones removes all milestones" {
-    mock_bd_init "implementation"  # Has multiple milestones
+    export HYPE_DIR=$(mktemp -d)
+    touch "$HYPE_DIR/milestone-planning-done"
+    touch "$HYPE_DIR/milestone-analysts-done"
     run delete_all_milestones
     [[ "$status" -eq 0 ]]
-    # Should return count (may be 0 if mock doesn't track deletes)
-    [[ "$output" =~ ^[0-9]+$ ]]
-    mock_bd_cleanup
+    [[ "$output" == "2" ]]
+    ! [ -f "$HYPE_DIR/milestone-planning-done" ]
+    rm -rf "$HYPE_DIR"
 }
 
 @test "delete_all_milestones returns 0 for empty beads" {
-    mock_bd_init "empty"
+    export HYPE_DIR=$(mktemp -d)
     run delete_all_milestones
     [[ "$status" -eq 0 ]]
     [[ "$output" == "0" ]]
-    mock_bd_cleanup
+    rm -rf "$HYPE_DIR"
 }
 
 # =============================================================================
@@ -439,18 +445,18 @@ load '../helpers/mock_bd'
     ! sed -n '/^check_beads()/,/^}/p' "$SCRIPTS_DIR/common.sh" | grep -q 'bd sync --status'
 }
 
-@test "delete_milestone uses --remove-label not delete" {
+@test "delete_milestone uses rm -f (v2.3.9 file-based)" {
     local body
     body=$(sed -n '/^delete_milestone()/,/^}/p' "$SCRIPTS_DIR/common.sh")
-    echo "$body" | grep -q 'remove-label'
-    ! echo "$body" | grep -q 'bd_safe delete'
+    echo "$body" | grep -q 'rm -f'
+    ! echo "$body" | grep -q 'bd_safe'
 }
 
-@test "delete_all_milestones uses --remove-label not delete" {
+@test "delete_all_milestones globs milestone-* (v2.3.9 file-based)" {
     local body
     body=$(sed -n '/^delete_all_milestones()/,/^}/p' "$SCRIPTS_DIR/common.sh")
-    echo "$body" | grep -q 'remove-label'
-    ! echo "$body" | grep -q 'bd_safe delete'
+    echo "$body" | grep -q 'milestone-\*'
+    ! echo "$body" | grep -q 'bd_safe'
 }
 
 @test "hype.sh calls ensure_single_daemon at startup" {
@@ -490,8 +496,8 @@ load '../helpers/mock_bd'
 }
 
 @test "hype.sh shares in_progress cache between check_stale and heal_stuck" {
-    # Should fetch once and pass to both
-    grep -q 'in_progress_cache.*bd_safe list' "$SCRIPTS_DIR/hype.sh"
+    # v2.3.9: Should extract from tick-cache and pass to both
+    grep -q 'in_progress_cache.*tick-cache' "$SCRIPTS_DIR/hype.sh"
     grep -q 'check_stale_tasks "\$in_progress_cache"' "$SCRIPTS_DIR/hype.sh"
     grep -q 'heal_stuck_tasks "\$in_progress_cache"' "$SCRIPTS_DIR/hype.sh"
 }

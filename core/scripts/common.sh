@@ -902,103 +902,69 @@ export -f cleanup_stale_trigger 2>/dev/null || true
 # =============================================================================
 # Milestone Management Functions
 # =============================================================================
-# Milestones are marker tasks with labels like "milestone:planning-done"
-# They track phase completion and are stored as closed tasks in beads.
+# v2.3.9: Milestones are FILES in .hype/ directory (not beads tasks).
+# This eliminates: --all queries, tombstones, daemon dependency for phase detection.
 #
-# IMPORTANT: All functions use --limit 0 to handle projects with >50 tasks.
+# File format: .hype/milestone-{name}  (e.g. .hype/milestone-planning-done)
+# Backward compat: detect-phase.sh also checks beads tasks for projects started on ≤v2.3.8.
 # =============================================================================
+
+# _milestone_file - returns path to milestone file
+_milestone_file() {
+    local label="$1"
+    # "milestone:planning-done" → ".hype/milestone-planning-done"
+    local name="${label#milestone:}"
+    echo "${HYPE_DIR:-.hype}/milestone-${name}"
+}
 
 # has_milestone - проверяет существование milestone
 # Использование: has_milestone "milestone:planning-done"
 # Возвращает: 0 (true) если milestone существует, 1 (false) если нет
-# NOTE: Ищет во ВСЕХ задачах (не только closed) — milestone существует = фаза завершена
 has_milestone() {
     local label="$1"
-    local found
-    found=$(bd_safe list --json --limit 0 --all 2>/dev/null | \
-        jq -r ".[] | select(.labels[]? == \"$label\") | .id" 2>/dev/null | head -1)
-    [ -n "$found" ]
+    [ -f "$(_milestone_file "$label")" ]
 }
 export -f has_milestone 2>/dev/null || true
+export -f _milestone_file 2>/dev/null || true
 
 # ensure_milestone - создаёт milestone если не существует (идемпотентно)
 # Использование: ensure_milestone "milestone:planning-done" "Planning complete"
-# Создаёт task с label, закрывает, синхронизирует и проверяет visibility.
-# v1.9.6: Added sync + verify to prevent phase detection race condition.
+# v2.3.9: touch file instead of bd create+close. Zero bd calls, zero tombstones.
 ensure_milestone() {
     local label="$1"
     local title="$2"
 
-    if has_milestone "$label"; then
+    local mfile
+    mfile=$(_milestone_file "$label")
+    if [ -f "$mfile" ]; then
         return 0
     fi
 
-    # Create and immediately close
-    local new_id
-    new_id=$(bd_safe create --title="$title" --type=task --labels="$label" 2>&1 | \
-        grep -oE '[A-Za-z]+-[a-z0-9]+' | head -1)
-    if [ -n "$new_id" ]; then
-        bd_safe close "$new_id" --reason="Phase milestone" >/dev/null 2>&1 || true
-    fi
-
-    # Force sync to flush writes and invalidate daemon cache
-    bd_safe sync --force >/dev/null 2>&1 || true
-    sleep 1  # Give daemon time to reload
-
-    # Verify milestone is visible (retry up to 10 times with sync between attempts)
-    # Prevents race condition where next cycle's bd list doesn't see the milestone
-    local attempts=0
-    while [ $attempts -lt 10 ]; do
-        if has_milestone "$label"; then
-            return 0
-        fi
-        ((attempts++))
-        bd_safe sync --force >/dev/null 2>&1 || true
-        sleep 1
-    done
-
-    # Milestone not visible after retries — log warning but don't fail
-    # Next cycle will retry ensure_milestone anyway
-    >&2 echo "WARN: Milestone $label created but not visible after 10s"
-    return 1
+    mkdir -p "$(dirname "$mfile")"
+    echo "$title" > "$mfile"
+    >&2 echo "INFO: Milestone created: $label"
 }
 export -f ensure_milestone 2>/dev/null || true
 
-# delete_milestone - removes milestone visibility by stripping its label
+# delete_milestone - удаляет один milestone
 # Использование: delete_milestone "milestone:planning-done"
-# Uses --remove-label instead of bd delete to avoid tombstone accumulation.
-# NOTE: Ищет во ВСЕХ задачах (не только closed) — milestone может застрять в open при ошибке bd close
 delete_milestone() {
     local label="$1"
-    local task_ids
-    task_ids=$(bd_safe list --json --limit 0 --all 2>/dev/null | \
-        jq -r ".[] | select(.labels[]? == \"$label\") | .id" 2>/dev/null || true)
-
-    if [ -n "$task_ids" ]; then
-        for task_id in $task_ids; do
-            bd_safe update "$task_id" --remove-label="$label" >/dev/null 2>&1 || true
-        done
-    fi
+    rm -f "$(_milestone_file "$label")"
 }
 export -f delete_milestone 2>/dev/null || true
 
-# delete_all_milestones - strips milestone labels from all milestone tasks
+# delete_all_milestones - удаляет все milestones
 # Использование: delete_all_milestones
 # Используется при начале новой итерации (INIT phase).
-# Uses --remove-label instead of bd delete to avoid tombstone accumulation.
-# NOTE: Ищет во ВСЕХ задачах (не только closed) — milestones могут застрять в open
 delete_all_milestones() {
-    local pairs
-    pairs=$(bd_safe list --json --limit 0 --all 2>/dev/null | \
-        jq -r '.[] | .labels as $labels | select($labels != null) | .id as $id | $labels[] | select(test("^milestone:")) | "\($id) \(.)"' 2>/dev/null || true)
-
+    local hype_dir="${HYPE_DIR:-.hype}"
     local count=0
-    if [ -n "$pairs" ]; then
-        while IFS=' ' read -r task_id label; do
-            bd_safe update "$task_id" --remove-label="$label" >/dev/null 2>&1 || true
-            ((count++)) || true
-        done <<< "$pairs"
-    fi
+    for f in "$hype_dir"/milestone-*; do
+        [ -f "$f" ] || continue
+        rm -f "$f"
+        ((count++)) || true
+    done
     echo "$count"
 }
 export -f delete_all_milestones 2>/dev/null || true

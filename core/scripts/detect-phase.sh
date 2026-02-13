@@ -55,8 +55,7 @@ if ! command -v jq &> /dev/null; then
 fi
 
 # Собираем статистику из beads (1 запрос, всё через jq)
-# --all включает closed tasks, не нужен отдельный bd list --status=closed
-# ВАЖНО: --limit 0 для unlimited (по умолчанию 50, что ломает milestone detection)
+# ВАЖНО: --limit 0 для unlimited (по умолчанию 50)
 ALL_TASKS_JSON=$(bd_safe list --json --limit 0 --all 2>/dev/null)
 if [ $? -ne 0 ] || ! echo "$ALL_TASKS_JSON" | jq -e 'type == "array"' >/dev/null 2>&1; then
     echo '{"phase":"ERROR","stats":{},"progress_pct":0,"in_progress_ids":[],"regression_count":0,"p0_bugs":0,"error":"bd list failed or returned invalid JSON"}'
@@ -64,19 +63,30 @@ if [ $? -ne 0 ] || ! echo "$ALL_TASKS_JSON" | jq -e 'type == "array"' >/dev/null
     exit 1
 fi
 
-# Статистика из кэшированных данных (всё из одного bd вызова, --all включает closed)
-TOTAL=$(echo "$ALL_TASKS_JSON" | jq 'length' 2>/dev/null || echo "0")
+# v2.3.9: Пишем tick-cache для всех скриптов (run-reviewers, heal, merge queue)
+# Один bd call за цикл — остальные читают из файла
+echo "$ALL_TASKS_JSON" > "$PROJECT_ROOT/.hype/tick-cache.json" 2>/dev/null || true
+
+# Статистика из кэшированных данных
 OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open") | select((.labels // []) | index("trigger") | not)] | length' 2>/dev/null || echo "0")
 IN_PROGRESS=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "in_progress") | select((.labels // []) | index("trigger") | not)] | length' 2>/dev/null || echo "0")
 CLOSED=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "closed")] | length' 2>/dev/null || echo "0")
 
-# Milestones (из ALL tasks — если milestone существует, фаза завершена, статус open/closed неважен)
-# Это предотвращает race condition когда bd close падает и milestone застревает в open
-HAS_PLANNING_DONE=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.labels[]? == "milestone:planning-done")] | length' 2>/dev/null || echo "0")
-HAS_ANALYSTS_DONE=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.labels[]? == "milestone:analysts-done")] | length' 2>/dev/null || echo "0")
-HAS_PLAN_REVIEWED=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.labels[]? == "milestone:plan-reviewed")] | length' 2>/dev/null || echo "0")
-HAS_PROJECT_DONE=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.labels[]? == "milestone:project-done")] | length' 2>/dev/null || echo "0")
-HAS_SMOKE_TEST_DONE=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.labels[]? == "milestone:smoke-test-done")] | length' 2>/dev/null || echo "0")
+# Milestones — v2.3.9: файлы в .hype/ (не beads задачи)
+# Backward compat: проверяем beads для проектов начатых на ≤v2.3.8
+HYPE_DIR="$PROJECT_ROOT/.hype"
+_check_milestone() {
+    local name="$1"
+    # File-based (v2.3.9+)
+    if [ -f "$HYPE_DIR/milestone-${name}" ]; then echo 1; return; fi
+    # Legacy: beads task with milestone label (≤v2.3.8)
+    echo "$ALL_TASKS_JSON" | jq '[.[] | select(.labels[]? == "milestone:'"$name"'")] | length' 2>/dev/null || echo "0"
+}
+HAS_PLANNING_DONE=$(_check_milestone "planning-done")
+HAS_ANALYSTS_DONE=$(_check_milestone "analysts-done")
+HAS_PLAN_REVIEWED=$(_check_milestone "plan-reviewed")
+HAS_PROJECT_DONE=$(_check_milestone "project-done")
+HAS_SMOKE_TEST_DONE=$(_check_milestone "smoke-test-done")
 
 # P0 bugs (block SMOKE_TEST milestone)
 # Trigger tasks have label "trigger" - exclude them from P0 bug count
@@ -101,7 +111,8 @@ IN_PROGRESS_IDS=$(echo "$ALL_TASKS_JSON" | jq -c '[.[] | select(.status == "in_p
 REVIEWING=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "in_progress") | select((.labels // []) | index("reviewing"))] | length' 2>/dev/null || echo "0")
 APPROVED=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "in_progress") | select((.labels // []) | index("approved"))] | length' 2>/dev/null || echo "0")
 
-# Progress percentage (TOTAL from ALL_TASKS doesn't include closed, so calculate real total)
+# Progress percentage
+TOTAL=$(echo "$ALL_TASKS_JSON" | jq 'length' 2>/dev/null || echo "0")
 REAL_TOTAL=$((OPEN + IN_PROGRESS + CLOSED))
 if [ "$REAL_TOTAL" -gt 0 ]; then
     PROGRESS_PCT=$(( (CLOSED * 100) / REAL_TOTAL ))
@@ -202,6 +213,12 @@ if [ "$HAS_PROJECT_DONE" -gt 0 ]; then
 fi
 
 if [ "$TOTAL" -eq 0 ] && [ "$CLOSED" -eq 0 ]; then
+    # v2.3.9: Если есть файловые milestones — daemon вернул пустой ответ, не новый проект
+    if [ "$HAS_PLANNING_DONE" -gt 0 ]; then
+        >&2 echo "ERROR: bd returned 0 tasks but milestones exist — daemon returned empty response"
+        output_json "ERROR"
+        exit 1
+    fi
     if [ -f "$PROJECT_ROOT/.hype/needs-spec" ]; then
         # После завершённой итерации, нужен новый SPEC
         output_json "INIT"
@@ -229,6 +246,8 @@ fi
 PENDING_ANALYST_TRIGGERS=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open" or .status == "in_progress") | select(.title | test("^run-analyst-"))] | length' 2>/dev/null || echo "0")
 if [ "$PENDING_ANALYST_TRIGGERS" -gt 0 ] && [ "$HAS_ANALYSTS_DONE" -gt 0 ]; then
     >&2 echo "SELF-HEAL: Removing premature milestone:analysts-done ($PENDING_ANALYST_TRIGGERS triggers pending)"
+    # v2.3.9: delete file milestone (+ legacy bd cleanup)
+    rm -f "$HYPE_DIR/milestone-analysts-done" 2>/dev/null || true
     MILESTONE_IDS=$(echo "$ALL_TASKS_JSON" | jq -r '.[] | select(.labels[]? == "milestone:analysts-done") | .id' 2>/dev/null || true)
     for mid in $MILESTONE_IDS; do
         bd_safe update "$mid" --remove-label="milestone:analysts-done" >/dev/null 2>&1 || true

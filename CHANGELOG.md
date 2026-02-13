@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.3.9] - 2026-02-12
+
+### Fixed
+
+- **File-based milestones** — Milestones (planning-done, analysts-done, smoke-test-done, etc.) are now simple files in `.hype/` instead of beads tasks. Eliminates: (1) tombstone accumulation from create+close cycles (1400+ tombstones found in production), (2) `--all` queries needed to find closed milestones, (3) daemon dependency for phase detection. Backward compatible: detect-phase.sh checks files first, falls back to beads labels for projects started on <=v2.3.8.
+
+- **tick-cache.json** — detect-phase.sh writes all task data to `.hype/tick-cache.json` after its single `bd list` call. All other scripts (heal_stuck_tasks, dispatch_phase, check_and_route_troubleshoot, check_problems_and_consult_manager, generate_iteration_stats) read from this file instead of making separate daemon calls. Reduces IMPLEMENTATION cycle from ~15 bd calls (v2.3.2) to 2 (detect-phase + check_beads). Root cause fix for daemon overload introduced in v2.2.0 Parallel Review Pipeline.
+
+- **Empty bd response guard** — detect-phase.sh now detects when daemon returns 0 tasks but file milestones exist (daemon returned empty response) and outputs ERROR instead of regressing to PLANNING phase. Fixes Doctor Report #7 phase regression.
+
+- 14 new tests, 6 updated (238 total).
+
+---
+
 ## [2.3.8] - 2026-02-12
 
 ### Improved

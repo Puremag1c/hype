@@ -15,6 +15,7 @@ source "$SCRIPT_DIR/common.sh"
 
 PROJECT_DIR=$(pwd)
 CLAUDEV_DIR="$PROJECT_DIR/.hype"
+export HYPE_DIR="$CLAUDEV_DIR"  # v2.3.9: milestone functions use this for file-based milestones
 LOGS_DIR="$PROJECT_DIR/logs"
 LOCK_FILE="$CLAUDEV_DIR/hype.lock"
 CONFIG_FILE="$CLAUDEV_DIR/config.sh"
@@ -422,8 +423,9 @@ check_and_create_done_milestone() {
 # === Route blocked:troubleshoot tasks to Architect Troubleshooter ===
 
 check_and_route_troubleshoot() {
+    # v2.3.9: read from tick-cache (written by detect-phase.sh this cycle)
     local bd_cache
-    bd_cache=$(bd_safe list --json --limit 0 2>/dev/null || echo "[]")
+    bd_cache=$(cat "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "[]")
 
     # Find tasks with blocked:troubleshoot label
     local troubleshoot_ids
@@ -482,9 +484,9 @@ check_problems_and_consult_manager() {
     # First: route troubleshoot tasks to dedicated Troubleshooter agent
     check_and_route_troubleshoot
 
-    # Cache bd list once (v1.9.0 optimization - was 4 calls, now 1)
+    # v2.3.9: read from tick-cache (written by detect-phase.sh this cycle)
     local bd_cache
-    bd_cache=$(bd_safe list --json --limit 0 2>/dev/null || echo "[]")
+    bd_cache=$(cat "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "[]")
 
     # Count blocked tasks EXCLUDING troubleshoot (handled above)
     local blocked_count
@@ -777,11 +779,11 @@ generate_iteration_stats() {
         duration="${dur_hours}h ${dur_minutes}m"
     fi
 
-    # Get task stats from beads
+    # v2.3.9: read from tick-cache (written by detect-phase.sh this cycle, includes --all)
     local total closed blocked
-    total=$(bd_safe list --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
-    closed=$(bd_safe list --status=closed --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
-    blocked=$(bd_safe list --json --limit 0 2>/dev/null | jq '[.[] | select(.labels[]? | startswith("blocked:"))] | length' 2>/dev/null || echo "0")
+    total=$(jq 'length' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "0")
+    closed=$(jq '[.[] | select(.status == "closed")] | length' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "0")
+    blocked=$(jq '[.[] | select(.labels[]? | startswith("blocked:"))] | length' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "0")
 
     # Count agent runs from logs
     local manager_runs architect_runs executor_runs analyst_runs senior_runs
@@ -798,7 +800,8 @@ generate_iteration_stats() {
 
     # Get blocked tasks details
     local blocked_details
-    blocked_details=$(bd_safe list --json --limit 0 2>/dev/null | jq -r '.[] | select(.labels[]? | startswith("blocked:")) | "- `\(.id)`: \(.title)"' 2>/dev/null || echo "- none")
+    # v2.3.9: read from tick-cache
+    blocked_details=$(jq -r '.[] | select(.labels[]? | startswith("blocked:")) | "- `\(.id)`: \(.title)"' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "- none")
 
     # Generate report
     cat > "$stats_file" << EOF
@@ -915,6 +918,7 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
 
             # Ensure milestone exists (architect may forget step 7)
             local task_count
+            # Fresh bd call needed: architect just ran and may have created tasks
             task_count=$(bd_safe list --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
             if [ "$task_count" -gt 0 ]; then
                 if ! has_milestone "milestone:planning-done"; then
@@ -934,6 +938,7 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             # Must check BOTH open AND in_progress to prevent race condition:
             # If trigger is in_progress during check, milestone would be created prematurely
             local pending_triggers
+            # Fresh bd call needed: analysts just ran and may have closed triggers
             pending_triggers=$(bd_safe list --json --limit 0 2>/dev/null | \
                 jq '[.[] | select(.status == "open" or .status == "in_progress") | select(.title | startswith("run-analyst-"))] | length' 2>/dev/null || echo "0")
             if [ "$pending_triggers" -eq 0 ]; then
@@ -960,8 +965,8 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             log "INFO" "USER_REVIEW: Tasks require human decision, generating report..."
 
             local user_tasks
-            user_tasks=$(bd_safe list --status=open --json --limit 0 2>/dev/null | \
-                jq -r '.[] | select((.labels // []) | index("user-escalation")) | "\(.id): \(.title)\n  Notes: \(.notes // "none")"' 2>/dev/null || echo "")
+            # v2.3.9: read from tick-cache (written by detect-phase.sh this cycle)
+            user_tasks=$(jq -r '.[] | select(.status == "open") | select((.labels // []) | index("user-escalation")) | "\(.id): \(.title)\n  Notes: \(.notes // "none")"' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "")
 
             # Run tech-writer-review agent if available
             local tw_review_file=".claude/agents/tech-writer-review.md"
@@ -1013,7 +1018,8 @@ $user_tasks"
 
             # Collect ALL tasks needing triage (smoke label OR regression label)
             local smoke_tasks regression_tasks triage_prompt
-            smoke_tasks=$(bd_safe list --status=open --json --limit 0 2>/dev/null | jq -r '.[] | select((.labels // []) | any(. == "smoke" or . == "regression")) | "\(.id): \(.title) [labels: \(.labels | join(", "))]"' 2>/dev/null || echo "")
+            # v2.3.9: read from tick-cache (written by detect-phase.sh this cycle)
+            smoke_tasks=$(jq -r '.[] | select(.status == "open") | select((.labels // []) | any(. == "smoke" or . == "regression")) | "\(.id): \(.title) [labels: \(.labels | join(", "))]"' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "")
             triage_prompt="
 SMOKE TEST FINDINGS TO TRIAGE:
 $smoke_tasks
@@ -1037,12 +1043,10 @@ For each task:
 
             ./scripts/run-executors.sh || log "ERROR" "run-executors.sh failed (exit $?)"
 
-            # Shared in_progress cache for reviewers + merge queue (disjoint label filters)
-            # SAFE: reviewers launch background subshells that can't approve in <1s
-            local impl_cache
-            impl_cache=$(bd_safe list --status=in_progress --json --limit 0 2>/dev/null || echo "[]")
-            HYPE_IN_PROGRESS_CACHE="$impl_cache" ./scripts/run-reviewers.sh || log "ERROR" "run-reviewers.sh failed (exit $?)"
-            HYPE_IN_PROGRESS_CACHE="$impl_cache" ./scripts/run-merge-queue.sh || log "ERROR" "run-merge-queue.sh failed (exit $?)"
+            # v2.3.9: reviewers + merge queue read from tick-cache.json (written by detect-phase.sh)
+            # No extra bd call needed — tick-cache has all in_progress tasks
+            HYPE_IN_PROGRESS_CACHE="$in_progress_cache" ./scripts/run-reviewers.sh || log "ERROR" "run-reviewers.sh failed (exit $?)"
+            HYPE_IN_PROGRESS_CACHE="$in_progress_cache" ./scripts/run-merge-queue.sh || log "ERROR" "run-merge-queue.sh failed (exit $?)"
             ;;
 
         SMOKE_TEST)
@@ -1069,8 +1073,8 @@ For each task:
 
                 # Check for orphaned triggers (crash case — re-launch)
                 local tester_triggers
-                tester_triggers=$(bd_safe list --json --limit 0 2>/dev/null | \
-                    jq '[.[] | select(.status == "open" or .status == "in_progress") | select(.title | startswith("run-tester-"))] | length' 2>/dev/null || echo "0")
+                # v2.3.9: read from tick-cache (written by detect-phase.sh this cycle)
+                tester_triggers=$(jq '[.[] | select(.status == "open" or .status == "in_progress") | select(.title | startswith("run-tester-"))] | length' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "0")
 
                 if [ "$tester_triggers" -gt 0 ]; then
                     log "WARN" "SMOKE_TEST: orphaned tester triggers ($tester_triggers), re-launching..."
@@ -1080,8 +1084,8 @@ For each task:
                 else
                     # Testers done — check results
                     local pending_tasks
-                    pending_tasks=$(bd_safe list --json --limit 0 2>/dev/null | \
-                        jq '[.[] | select(.status == "open" or .status == "in_progress") | select((.labels // []) | index("trigger") | not)] | length' 2>/dev/null || echo "0")
+                    # v2.3.9: read from tick-cache (written by detect-phase.sh this cycle)
+                    pending_tasks=$(jq '[.[] | select(.status == "open" or .status == "in_progress") | select((.labels // []) | index("trigger") | not)] | length' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "0")
 
                     if [ "$pending_tasks" -gt 0 ]; then
                         log "WARN" "SMOKE_TEST: $pending_tasks pending task(s) found"
@@ -1210,7 +1214,8 @@ For each task:
             log "INFO" "Attempt $blocked_count/3 to fix cycles..."
 
             # Create P0 task for Architect (if not exists)
-            if ! bd_safe list --json --limit 0 2>/dev/null | jq -e '.[] | select(.title == "Fix dependency cycles")' > /dev/null 2>&1; then
+            # v2.3.9: read from tick-cache (written by detect-phase.sh this cycle)
+            if ! jq -e '.[] | select(.title == "Fix dependency cycles")' "$CLAUDEV_DIR/tick-cache.json" > /dev/null 2>&1; then
                 bd_safe create --title="Fix dependency cycles" --type=task --priority=0 \
                     --description="bd dep cycles detected circular dependencies. Fix before IMPLEMENTATION can proceed.
 
@@ -1461,8 +1466,9 @@ main() {
         show_active_work "$phase_json"
 
         # 4. Heal stuck tasks BEFORE dispatch — reviewers see healed tasks in same cycle
+        # v2.3.9: extract in_progress from tick-cache (written by detect-phase.sh), no extra bd call
         local in_progress_cache
-        in_progress_cache=$(bd_safe list --status=in_progress --json --limit 0 2>/dev/null || echo "[]")
+        in_progress_cache=$(jq -c '[.[] | select(.status == "in_progress")]' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "[]")
         heal_stuck_tasks "$in_progress_cache"
 
         # 5. Dispatch phase-specific actions

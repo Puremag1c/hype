@@ -245,12 +245,14 @@ $spec_content"
 }
 
 # Create tester trigger tasks, closing stale ones from previous runs
+# v2.3.10: accepts optional bd_cache to avoid N separate bd_safe list calls
 create_tester_triggers() {
     local testers=$1
+    local bd_cache="${2:-}"
 
     for tester in $testers; do
         local trigger_title="run-tester-$tester"
-        cleanup_stale_trigger "$trigger_title"
+        cleanup_stale_trigger "$trigger_title" "$bd_cache"
         bd_safe create --title="$trigger_title" --type=task --priority=0 --label=trigger >/dev/null 2>&1
         log "INFO" "Created trigger: $trigger_title"
     done
@@ -557,7 +559,7 @@ main() {
     local bd_cache
     bd_cache=$(bd_safe list --json --limit 0 2>/dev/null || echo "[]")
 
-    # Create trigger tasks (pass cache)
+    # Create trigger tasks (v2.3.10: pass cache to avoid N bd_safe list calls)
     create_tester_triggers "$testers" "$bd_cache"
 
     # Refresh cache after creating triggers

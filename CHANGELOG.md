@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.3.10] - 2026-02-13
+
+### Improved
+
+- **Batch cleanup_stale_trigger** — `cleanup_stale_trigger()` now accepts optional cache parameter. All callers (`create_analyst_triggers`, `create_tester_triggers`, PLAN_REVIEW/SMOKE_REVIEW/FINAL_REVIEW dispatch) read tick-cache.json once and pass it, eliminating 12 separate `bd_safe list` calls per iteration.
+
+- **Skip close-completed-parents when no features/epics** — Main loop checks tick-cache.json for open features/epics before calling `close-completed-parents.sh`. When none exist (common case), saves 2-3 bd calls per cycle.
+
+- 5 new tests (247 total).
+
+---
+
 ## [2.3.9] - 2026-02-12
 
 ### Fixed

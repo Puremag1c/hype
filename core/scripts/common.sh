@@ -886,12 +886,21 @@ export -f compact_beads_if_large 2>/dev/null || true
 
 # cleanup_stale_trigger - close any existing open/in_progress triggers with given title
 # Usage: cleanup_stale_trigger "run-smoke-review"
+# Usage: cleanup_stale_trigger "run-smoke-review" "$bd_cache"  # skip bd_safe list
 # Prevents zombie triggers from previous runs blocking phase detection.
+# Optional $2: pre-fetched bd JSON (e.g. tick-cache.json content with --all).
+# v2.3.10: cache parameter saves ~12 bd_safe list calls per iteration.
 cleanup_stale_trigger() {
     local trigger_title="$1"
+    local bd_cache="${2:-}"
     local old_ids
-    old_ids=$(bd_safe list --json --limit 0 2>/dev/null | \
-        jq -r ".[] | select(.title == \"$trigger_title\") | .id" 2>/dev/null || true)
+    if [ -n "$bd_cache" ]; then
+        # Cache includes --all (closed too), filter to open/in_progress only
+        old_ids=$(echo "$bd_cache" | jq -r ".[] | select(.status != \"closed\") | select(.title == \"$trigger_title\") | .id" 2>/dev/null || true)
+    else
+        old_ids=$(bd_safe list --json --limit 0 2>/dev/null | \
+            jq -r ".[] | select(.title == \"$trigger_title\") | .id" 2>/dev/null || true)
+    fi
     for old_id in $old_ids; do
         >&2 echo "WARN: Closing stale trigger $trigger_title ($old_id)"
         bd_safe close "$old_id" --reason="Stale trigger cleanup (new run)" >/dev/null 2>&1 || true

@@ -259,7 +259,8 @@ load '../helpers/setup'
     smoke_review_block=$(sed -n '/^        SMOKE_REVIEW)/,/;;$/p' "$hype_sh")
 
     echo "$smoke_review_block" | grep -q 'tick-cache.json'
-    ! echo "$smoke_review_block" | grep -q 'bd_safe list'
+    # No bd_safe list calls (excluding comments)
+    ! echo "$smoke_review_block" | grep -v '^[[:space:]]*#' | grep -q 'bd_safe list'
 }
 
 @test "hype.sh: dispatch_phase reads tick-cache for USER_REVIEW" {
@@ -362,4 +363,73 @@ load '../helpers/setup'
 
     # Must check file milestones (not just bd)
     echo "$func_body" | grep -q 'milestone-\*'
+}
+
+# =============================================================================
+# v2.3.10: Batch bd call optimizations
+# =============================================================================
+
+@test "common.sh: cleanup_stale_trigger accepts optional cache parameter" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    local func_body
+    func_body=$(sed -n '/^cleanup_stale_trigger()/,/^}/p' "$common_sh")
+
+    # Must have optional cache parameter
+    echo "$func_body" | grep -q 'bd_cache=.*{2:-}'
+
+    # Must filter cache by status != closed (tick-cache has --all)
+    echo "$func_body" | grep -q 'status.*!=.*closed'
+
+    # Must still have fallback bd_safe list when no cache
+    echo "$func_body" | grep -q 'bd_safe list'
+}
+
+@test "hype.sh: create_analyst_triggers reads tick-cache once (not N bd_safe list)" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    local func_body
+    func_body=$(sed -n '/^create_analyst_triggers()/,/^}/p' "$hype_sh")
+
+    # Must read tick-cache.json once
+    echo "$func_body" | grep -q 'tick-cache.json'
+
+    # Must pass cache to cleanup_stale_trigger
+    echo "$func_body" | grep -q 'cleanup_stale_trigger.*\$bd_cache'
+
+    # Must NOT have its own bd_safe list call (excluding comments)
+    ! echo "$func_body" | grep -v '^[[:space:]]*#' | grep -q 'bd_safe list'
+}
+
+@test "hype.sh: dispatch_phase passes tick-cache to single trigger cleanups" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    # PLAN_REVIEW: passes cache
+    local plan_block
+    plan_block=$(sed -n '/^        PLAN_REVIEW)/,/;;$/p' "$hype_sh")
+    echo "$plan_block" | grep -q 'cleanup_stale_trigger "run-plan-review" "\$bd_cache"'
+
+    # FINAL_REVIEW: versioner passes cache
+    grep -q 'cleanup_stale_trigger "run-versioning" "\$bd_cache"' "$hype_sh"
+}
+
+@test "hype.sh: close-completed-parents skipped when no features/epics" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    # Must check tick-cache for features/epics before calling script
+    grep -q 'issue_type.*feature.*epic' "$hype_sh"
+    grep -q 'close-completed-parents.sh' "$hype_sh"
+}
+
+@test "run-testers.sh: create_tester_triggers accepts cache parameter" {
+    local testers_sh="$SCRIPTS_DIR/run-testers.sh"
+
+    local func_body
+    func_body=$(sed -n '/^create_tester_triggers()/,/^}/p' "$testers_sh")
+
+    # Must accept cache as $2
+    echo "$func_body" | grep -q 'bd_cache=.*{2:-}'
+
+    # Must pass cache to cleanup_stale_trigger
+    echo "$func_body" | grep -q 'cleanup_stale_trigger.*\$bd_cache'
 }

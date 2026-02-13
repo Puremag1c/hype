@@ -384,9 +384,13 @@ $changelog_context
 create_analyst_triggers() {
     local analysts=("ux" "security" "ops" "reliability" "architecture")
 
+    # v2.3.10: single cache read for all trigger cleanups (was 5 separate bd_safe list calls)
+    local bd_cache
+    bd_cache=$(cat "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "[]")
+
     for analyst in "${analysts[@]}"; do
         local trigger_title="run-analyst-$analyst"
-        cleanup_stale_trigger "$trigger_title"
+        cleanup_stale_trigger "$trigger_title" "$bd_cache"
         bd_safe create --title="$trigger_title" --type=task --priority=1 --label=trigger >/dev/null 2>&1 || true
         log "INFO" "Created trigger: $trigger_title"
     done
@@ -955,7 +959,10 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             local arch_model
             arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
             # Close stale triggers from previous runs, create fresh
-            cleanup_stale_trigger "run-plan-review"
+            # v2.3.10: pass tick-cache to avoid bd_safe list call
+            local bd_cache
+            bd_cache=$(cat "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "[]")
+            cleanup_stale_trigger "run-plan-review" "$bd_cache"
             bd_safe create --title="run-plan-review" --type=task --priority=0 --label=trigger >/dev/null 2>&1 || true
             run_agent_with_mode "architect" ".claude/agents/architect-reviewer.md" "$arch_model" "plan_review" "" "${PLAN_REVIEW_TIMEOUT:-10m}"
             ;;
@@ -1013,7 +1020,10 @@ $user_tasks"
             arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
 
             # Close stale triggers from previous runs, create fresh
-            cleanup_stale_trigger "run-smoke-review"
+            # v2.3.10: pass tick-cache to avoid bd_safe list call
+            local bd_cache
+            bd_cache=$(cat "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "[]")
+            cleanup_stale_trigger "run-smoke-review" "$bd_cache"
             bd_safe create --title="run-smoke-review" --type=task --priority=0 --label=trigger >/dev/null 2>&1 || true
 
             # Collect ALL tasks needing triage (smoke label OR regression label)
@@ -1148,7 +1158,10 @@ For each task:
                 log "INFO" "FINAL_REVIEW passed, running versioner..."
 
                 # Close stale triggers from previous runs, create fresh
-                cleanup_stale_trigger "run-versioning"
+                # v2.3.10: pass tick-cache to avoid bd_safe list call
+                local bd_cache
+                bd_cache=$(cat "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "[]")
+                cleanup_stale_trigger "run-versioning" "$bd_cache"
                 local versioner_trigger
                 versioner_trigger=$(bd_safe create --title="run-versioning" --type=task --priority=0 --label=trigger 2>&1 | grep -oE '[A-Za-z]+-[a-z0-9]+' | head -1)
 
@@ -1525,7 +1538,12 @@ main() {
         fi
 
         # 7. Auto-close completed features and epics
-        ./scripts/close-completed-parents.sh 2>/dev/null || true
+        # v2.3.10: skip if no open features/epics (saves 2-3 bd calls per cycle)
+        local has_parents
+        has_parents=$(jq '[.[] | select(.status == "open") | select(.issue_type == "feature" or .issue_type == "epic")] | length' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "1")
+        if [ "$has_parents" -gt 0 ]; then
+            ./scripts/close-completed-parents.sh 2>/dev/null || true
+        fi
 
         # 8. Reset stale tasks (uses pre-dispatch cache — 600s threshold makes this safe)
         check_stale_tasks "$in_progress_cache"

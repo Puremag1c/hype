@@ -116,19 +116,17 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 - **Backpressure:** Lock-based (`reviewer-N.lock`), stale cleanup >20 min
 - **Escalation:** reject:1→retry, reject:2-3→model, reject:4→troubleshooter
 
-### Merge Queue (v2.2, sequential)
+### Merge Queue (v2.2 → v2.3.11, hybrid)
 - **Роль:** Squash merge approved задач в main
 - **Управление:** `run-merge-queue.sh`, одна задача за вызов (sequential, safe)
-- **Workflow:**
-  1. Fetch, merge --squash, commit, push
-  2. Verify main changed (detect empty squash)
-  3. Close task, cleanup remote branch
-- **Hook isolation (v2.3.4):** Все git операции через `git_nh()` (`core.hooksPath=/dev/null`). Target project hooks (beads: post-checkout, prepare-commit-msg, post-merge, pre-push) вызывают `bd` напрямую — под нагрузкой убивают daemon, ломают commit, отравляют working tree
-- **Pre-flight check (v2.3.4):** Проверка `git status --porcelain` перед merge. Dirty tree (от предыдущего failed commit) → reset --hard
-- **Commit failure handling (v2.3.4):** `if ! git_nh commit` → reset → return to executor. Не `|| true`
-- **Конфликты (v2.3.3):** Abort merge, increment `merge-conflict:N` (отдельный от `reject:N`), skip task и попробовать следующий approved. После 6 неудач → return to executor. Не эскалирует модель, не зовёт Troubleshooter
-- **Push failure (v2.3.3):** Та же retry-in-place логика — `merge-conflict:N`, skip, retry next cycle
-- **Empty squash (v2.2.2):** Если merge не даёт изменений (branch already in main) — закрывает задачу с reason, не зацикливается
+- **Hybrid workflow (v2.3.11):**
+  1. **Fast path** (`try_fast_merge`): rebase → squash → commit → push. Бесплатно, ~5 сек
+  2. **Agent fallback** (`run_merger_agent`): если fast path fails — запускает Claude merger agent (opus) с контекстом конфликта. Агент понимает diff, разрешает конфликты, мержит
+  3. **Executor fallback**: если и агент не справился — задача возвращается executor с подробными notes
+  4. **Empty merge detection**: между fast path и agent — проверка diff. Если branch changes уже в main → close без agent call
+- **Hook isolation (v2.3.4):** Все git операции через `git_nh()` (`core.hooksPath=/dev/null`). Target project hooks вызывают `bd` напрямую — под нагрузкой убивают daemon
+- **Pre-flight check (v2.3.4):** Проверка `git status --porcelain` перед merge. Dirty tree → reset --hard
+- **Merger agent (`merger.md`, v2.3.11):** Получает branch diff, conflict info, error context. Использует `git -c core.hooksPath=/dev/null`. Закрывает задачу через `bd close` при успехе
 - **Audit tasks:** Close without merge
 
 ### Auditor (Sonnet → Opus)
@@ -329,7 +327,7 @@ bd daemon start
 - `milestone:*` — маркер завершения фазы
 - `retry:N` — счётчик timeout/failure при execution
 - `reject:N` — счётчик отказов code review (escalation ladder: 1→retry, 2-3→escalate model, 4→troubleshooter). Только для quality rejections от Reviewer
-- `merge-conflict:N` — счётчик git конфликтов при merge (v2.3.3). Отдельный от `reject:N` — retry-in-place, после 6 → executor. Не эскалирует модель, не зовёт Troubleshooter
+- `merge-conflict:N` — (убран в v2.3.11). Заменён hybrid merge queue: fast script path + merger agent fallback. Нет больше 6-retry loop
 - `regress:N` — счётчик regression cycles (script-driven)
 - `smoke` — баг из SMOKE_TEST, ждёт тriage от Architect
 - `regression` — баг который вернулся после fix
@@ -424,7 +422,7 @@ bd dep cycles  # Проверка циклов
 ### Retry & escalation logic
 - Execution failures: `retry:N` (timeout, crash)
 - Review rejections: `reject:N` — только code quality отказы от Reviewer
-- Merge conflicts: `merge-conflict:N` (v2.3.3) — отдельный счётчик для git infrastructure. Retry-in-place в merge queue, после 6 → executor
+- Merge conflicts (v2.3.11): fast script merge → agent fallback → executor. Нет counter loop — один умный attempt агентом вместо 6 слепых retry
 - Escalation ladder (reject:N): 1→retry, 2-3→escalate model (haiku→sonnet→opus), 4→Troubleshooter
 - Troubleshooter: reformulate / split / remove / escalate to user
 - Max 2 reformulations (label `reformulated`), then only reduce/remove/user

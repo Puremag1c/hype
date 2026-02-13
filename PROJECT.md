@@ -53,7 +53,7 @@ hype/
 │   │   ├── run-analysts.sh      # Параллельный запуск аналитиков
 │   │   ├── run-executors.sh     # Параллельный запуск исполнителей
 │   │   ├── run-reviewers.sh       # Parallel code review (v2.2)
-│   │   ├── run-merge-queue.sh    # Sequential merge queue (v2.2)
+│   │   ├── run-merge-queue.sh    # Hybrid merge queue: script + agent (v2.3.11)
 │   │   ├── run-testers.sh       # Параллельный запуск тестеров
 │   │   └── ...
 │   └── commands/            # Slash-команды (/start, /status)
@@ -203,7 +203,7 @@ startup_timeout: 30          # Секунды на запуск сервера
 ## v2.2.0: Parallel Review Pipeline (завершено)
 
 - **Parallel Reviewers** — `run-reviewers.sh` запускает до `MAX_PARALLEL_REVIEWERS` ревьюеров одновременно
-- **Merge Queue** — `run-merge-queue.sh` последовательно мержит approved задачи (squash merge)
+- **Merge Queue** — `run-merge-queue.sh` hybrid: fast script path (rebase+squash+push) → merger agent fallback (opus) → executor (v2.3.11)
 - **Reviewer agent** — `reviewer.md` — review-only промпт (без merge/push)
 - **Label state machine** — `needs-review` → `reviewing` → `approved` → `reviewed` (closed)
 - **Atomic claims** — `try_claim_for_review()` через mkdir lock + bd label
@@ -213,7 +213,7 @@ startup_timeout: 30          # Секунды на запуск сервера
 
 ## v2.1.0: Review Escalation & Model Switching (завершено)
 
-- **reject:N counter** — счётчик code quality отказов от Reviewer (с v2.3.3 отделён от merge-conflict:N)
+- **reject:N counter** — счётчик code quality отказов от Reviewer (merge конфликты обрабатываются hybrid merge queue с v2.3.11)
 - **Model escalation ladder** — автоматическая эскалация: reject:1→retry, reject:2-3→upgrade model, reject:4→Troubleshooter
 - **Architect Troubleshooter** — новый агент для persistent failures (reformulate / split / remove / escalate to user)
 - **USER_REVIEW phase** — daemon stops, tech-writer-review генерирует отчёт для пользователя

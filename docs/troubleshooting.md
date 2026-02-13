@@ -1090,8 +1090,8 @@ grep "MERGE" logs/hype.log | tail -10
 bd update <id> --remove-label=approved --add-label=needs-review
 ```
 
-**Auto-recovery (v2.2.1+):**
-`heal_stuck_tasks()`: предупреждение при >5 минут, recovery при >10 минут (remove approved, increment reject:N, return to executor). Если empty squash (v2.2.2) — задача закрывается автоматически с reason.
+**Auto-recovery (v2.3.11+):**
+`heal_stuck_tasks()`: предупреждение при >5 минут. Merge queue (v2.3.11) использует hybrid подход: fast script path → agent fallback → executor. Если empty squash — задача закрывается автоматически с reason.
 
 ---
 
@@ -1126,35 +1126,33 @@ bd update <id> --remove-label=approved --add-label=reviewed
 
 ---
 
-### PROBLEM: Merge conflict loop (approved → conflict → retry → conflict)
+### PROBLEM: Merge conflict (approved → fast merge fails → agent fallback)
 
 **Симптомы:**
-- `merge-conflict:N` растёт (видно в labels задачи)
-- В логах: "Merge conflict" / "CONFLICT — retry-in-place" повторяется
-- Задача остаётся `approved`, merge queue пропускает её и пробует следующую
+- В логах: "Fast merge failed for <id>" → "Launching merger agent"
+- Задача задерживается в `approved` пока agent работает (~2-5 мин)
+- После agent: "MERGED (agent)" или "Merger agent failed — returning to executor"
 
 **Причина:**
-1. Другая задача мержится между ребейзом и мержем (race condition)
+1. Другая задача мержится между ребейзом и пушем (race condition)
 2. Ветка слишком разошлась с main
 3. Конфликт в auto-generated файлах (lock files, build artifacts)
 
 **Диагностика:**
 ```bash
 bd show <id> --json | jq '.[0] | {id, title, labels, notes}'
-# Проверить merge-conflict:N counter
-bd show <id> --json | jq '.[0].labels[] | select(startswith("merge-conflict:"))'
-grep "Merge conflict\|CONFLICT" logs/hype.log | grep <id>
+grep "MERGE\|merger agent\|Fast merge" logs/hype.log | grep <id>
+cat logs/merger-<id>.log  # лог агента-мёрджера
 git log --oneline origin/main | head -10
 ```
 
-**Auto-recovery (v2.3.3+):**
-Merge queue использует retry-in-place:
-1. Конфликт → `merge-conflict:N++`, задача остаётся `approved`, skip to next
-2. Следующий цикл HYPE → merge queue пробует снова (main мог измениться)
-3. После 6 неудач (`merge-conflict:6`) → return to executor для полного rebase
-4. `merge-conflict:N` **НЕ** эскалирует модель и **НЕ** зовёт Troubleshooter — это бесполезно для git конфликтов
+**Auto-recovery (v2.3.11+):**
+Hybrid merge queue — два уровня:
+1. **Fast path** (`try_fast_merge`): rebase → squash → push. Если OK → задача закрыта. Бесплатно, ~5 сек
+2. **Agent fallback** (`run_merger_agent`): если fast path fails — Claude opus agent получает diff + conflict context, разрешает конфликты, мержит, закрывает задачу. ~2-5 мин
+3. **Executor fallback**: если и agent не справился → задача возвращается executor (`--status=open --remove-label=approved`) с подробными notes
 
-**Решение (runtime-fix, если автоматика не справляется):**
+**Решение (runtime-fix, если обе автоматики не справились):**
 ```bash
 # Вариант 1: Ручной мерж
 git fetch origin
@@ -1201,7 +1199,7 @@ bd update <id> --description="<более точное описание>"
 **Auto-recovery (v2.2+):**
 Escalation ladder: reject:2-3 → model escalation (haiku→sonnet→opus), reject:4 → Troubleshooter. Circuit breaker (v2.1.8+) через `last-reject:{TYPE}` label обнаруживает same-reason loops после reformulation и эскалирует к user-escalation.
 
-**Note (v2.3.3+):** `reject:N` теперь только для code quality rejections. Merge конфликты используют отдельный `merge-conflict:N` counter — не эскалируют модель и не зовут Troubleshooter.
+**Note (v2.3.11+):** `reject:N` только для code quality rejections. Merge конфликты обрабатываются hybrid merge queue (fast script → agent fallback → executor). Counter `merge-conflict:N` убран.
 
 ---
 

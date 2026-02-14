@@ -716,8 +716,8 @@ load '../helpers/setup'
 
     # Must check for executor label
     echo "$func_body" | grep -q 'executor'
-    # Must skip if in_progress + executor
-    echo "$func_body" | grep -q 'in_progress.*executor\|executor.*in_progress'
+    # Must skip if executor label present (v2.3.19: regardless of status)
+    echo "$func_body" | grep -q 'has_executor_label'
 }
 
 @test "v2.3.16: reject:4 no-review-action removes reviewing label" {
@@ -810,4 +810,34 @@ load '../helpers/setup'
     echo "$func_body" | grep -q 'executor.*needs-review\|needs-review.*executor'
     # Must remove executor label to break deadlock
     echo "$func_body" | grep -q 'remove-label=executor'
+}
+
+# =============================================================================
+# v2.3.19: Reviewer vs executor race condition
+# =============================================================================
+
+@test "v2.3.19: reviewer post-processing checks executor label before acting" {
+    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+
+    # Ownership check must happen BEFORE the decision tree (closed/approved/open/else)
+    local post_proc
+    post_proc=$(sed -n '/Post-processing: check what reviewer did/,/if.*task_status.*closed/p' "$reviewers_sh")
+
+    # Must check for executor label
+    echo "$post_proc" | grep -q 'executor'
+    # Must skip post-processing if executor present
+    echo "$post_proc" | grep -q 'skipping post-processing\|return 0'
+}
+
+@test "v2.3.19: troubleshooter guard checks executor label regardless of status" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    local func_body
+    func_body=$(sed -n '/^check_and_route_troubleshoot()/,/^}/p' "$hype_sh")
+
+    # Must NOT require in_progress for executor check (no "in_progress.*executor" AND guard)
+    # Should check executor label independently
+    local guard_line
+    guard_line=$(echo "$func_body" | grep 'has_executor_label.*!=.*0' | grep -v 'fresh_status')
+    [ -n "$guard_line" ]
 }

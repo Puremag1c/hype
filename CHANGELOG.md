@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.3.19] - 2026-02-14
+
+### Fixed
+
+- **Reviewer vs executor race condition** — Two fixes for concurrent access when reviewer claude rejects a task (sets `status=open`) and executor claims it before reviewer bash post-processing reads state:
+  1. Reviewer post-processing now checks for `executor` label before acting. If executor claimed the task during review, post-processing is skipped entirely (previously interpreted as "no action" → incremented reject:N → escalated to troubleshooter).
+  2. Troubleshooter guard now checks `executor` label regardless of task status (previously only checked `in_progress + executor`, missing `open + executor` case). (GitHub issue #10)
+
+- 2 new tests (319 total).
+
+---
+
 ## [2.3.17] - 2026-02-14
 
 ### Fixed

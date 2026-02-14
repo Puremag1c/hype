@@ -349,6 +349,19 @@ $context
     # Post-processing: check what reviewer did
     local updated_json
     updated_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
+
+    # v2.3.19: Ownership check — if executor label appeared, another process claimed the task
+    # (reviewer claude rejects → sets open → executor claims → in_progress+executor)
+    local has_executor
+    has_executor=$(echo "$updated_json" | jq -r '[.[0].labels[]? | select(. == "executor")] | length' 2>/dev/null || echo "0")
+    if [ "$has_executor" != "0" ]; then
+        log "WARN" "Review lost ownership of $task_id (executor label present), skipping post-processing"
+        release_review_lock "$task_id" "$WORKTREES_DIR"
+        cleanup_reviewer_slot "$slot"
+        trap - EXIT INT TERM
+        return 0
+    fi
+
     local task_status
     task_status=$(echo "$updated_json" | jq -r '.[0].status // "unknown"' 2>/dev/null)
     local has_approved

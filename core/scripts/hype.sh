@@ -459,8 +459,9 @@ check_and_route_troubleshoot() {
             log "INFO" "Troubleshoot skip $task_id: already closed"
             continue
         fi
-        if [ "$fresh_status" = "in_progress" ] && [ "$has_executor_label" != "0" ]; then
-            log "INFO" "Troubleshoot skip $task_id: executor already running (in_progress + executor label)"
+        # v2.3.19: Check executor label regardless of status (open+executor = executor claimed during review)
+        if [ "$has_executor_label" != "0" ]; then
+            log "INFO" "Troubleshoot skip $task_id: executor label present (status=$fresh_status)"
             continue
         fi
 

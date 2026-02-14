@@ -747,3 +747,55 @@ load '../helpers/setup'
 
     echo "$block" | grep -q -- '--add-label=blocked:troubleshoot'
 }
+
+# =============================================================================
+# v2.3.17: Evidence cleanup + gitignore sanitization
+# =============================================================================
+
+@test "v2.3.17: cleanup_iteration deletes .hype/evidence directory" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    local func_body
+    func_body=$(sed -n '/^cleanup_iteration()/,/^}/p' "$common_sh")
+
+    echo "$func_body" | grep -q 'rm -rf.*\.hype/evidence'
+}
+
+@test "v2.3.17: cleanup_iteration previews evidence files" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    local func_body
+    func_body=$(sed -n '/^cleanup_iteration()/,/^}/p' "$common_sh")
+
+    echo "$func_body" | grep -q 'evidence'
+    echo "$func_body" | grep -q '\.hype/evidence'
+}
+
+@test "v2.3.17: update_gitignore removes !.hype/ exceptions" {
+    local hype_bin="$PROJECT_ROOT/bin/hype"
+
+    local func_body
+    func_body=$(sed -n '/^update_gitignore()/,/^}/p' "$hype_bin")
+
+    # Must detect and remove !.hype/ exceptions
+    echo "$func_body" | grep -q '!.*\.hype'
+    # Must use sed to delete them
+    echo "$func_body" | grep -q "sed.*'.*!.*hype.*d'"
+}
+
+@test "v2.3.17: update_gitignore normalizes .hype/* to .hype/" {
+    local hype_bin="$PROJECT_ROOT/bin/hype"
+
+    local func_body
+    func_body=$(sed -n '/^update_gitignore()/,/^}/p' "$hype_bin")
+
+    echo "$func_body" | grep -q '\.hype/\*'
+}
+
+@test "v2.3.17: executor.md prohibits .gitignore modification" {
+    local executor_md="$AGENTS_DIR/executor.md"
+    [ -f "$executor_md" ]
+
+    grep -q '\.gitignore' "$executor_md"
+    grep -q 'НИКОГДА.*gitignore\|gitignore.*НИКОГДА' "$executor_md"
+}

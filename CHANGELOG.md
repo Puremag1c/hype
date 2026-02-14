@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.3.17] - 2026-02-14
+
+### Fixed
+
+- **Evidence cleanup** — `cleanup_iteration()` now deletes `.hype/evidence/` directory (smoke test artifacts, screenshots, reports). Previously left behind after cleanup, polluting `git status` in projects where gitignore was corrupted.
+
+- **Gitignore sanitization on upgrade** — `hype upgrade` now removes `!.hype/` exceptions from `.gitignore` (agents can add these to un-ignore evidence or other hype internals). Also normalizes `.hype/*` → `.hype/` (glob form misses nested directories).
+
+- **Executor .gitignore restriction** — `executor.md` now explicitly prohibits modifying `.gitignore`, especially adding `!` exceptions for `.hype/`. Root cause: executor agent added `!.hype/evidence/` to track test artifacts in git.
+
+- 5 new tests (316 total).
+
+---
+
 ## [2.3.16] - 2026-02-13
 
 ### Fixed

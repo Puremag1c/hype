@@ -1057,6 +1057,13 @@ cleanup_iteration() {
     stash_count=$(git stash list 2>/dev/null | wc -l | tr -d ' ')
     [ "$stash_count" -gt 0 ] && echo "  • $stash_count git stash(es)"
 
+    # Evidence
+    if [ -d "$project_dir/.hype/evidence" ]; then
+        local evidence_count
+        evidence_count=$(find "$project_dir/.hype/evidence" -type f 2>/dev/null | wc -l | tr -d ' ')
+        [ "$evidence_count" -gt 0 ] && echo "  • $evidence_count evidence file(s) in .hype/evidence/"
+    fi
+
     # SPEC.md
     [ -f "$project_dir/SPEC.md" ] && echo "  • SPEC.md → SPEC.prev.md (archived)"
 
@@ -1090,6 +1097,12 @@ cleanup_iteration() {
     [ "$deleted_count" -gt 0 ] && echo "    Deleted $deleted_count milestone(s)"
     # v2.3.9: clean stale tick-cache
     rm -f "$project_dir/.hype/tick-cache.json" 2>/dev/null || true
+
+    # 4b. Delete evidence (v2.3.17: smoke test artifacts)
+    if [ -d "$project_dir/.hype/evidence" ]; then
+        echo "  → Deleting evidence..."
+        rm -rf "$project_dir/.hype/evidence"
+    fi
 
     # 5. Clean git stash and worktrees
     echo "  → Cleaning stashes and worktrees..."

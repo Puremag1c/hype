@@ -799,3 +799,15 @@ load '../helpers/setup'
     grep -q '\.gitignore' "$executor_md"
     grep -q 'НИКОГДА.*gitignore\|gitignore.*НИКОГДА' "$executor_md"
 }
+
+@test "v2.3.17: heal_stuck_tasks detects executor+needs-review deadlock" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    local func_body
+    func_body=$(sed -n '/^heal_stuck_tasks()/,/^}/p' "$hype_sh")
+
+    # Must check for both executor AND needs-review simultaneously
+    echo "$func_body" | grep -q 'executor.*needs-review\|needs-review.*executor'
+    # Must remove executor label to break deadlock
+    echo "$func_body" | grep -q 'remove-label=executor'
+}

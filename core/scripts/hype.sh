@@ -633,6 +633,20 @@ heal_stuck_tasks() {
         fi
     done
 
+    # v2.3.17: Heal executor+needs-review deadlock
+    # When executor agent adds needs-review but safety net fails to remove executor label,
+    # task becomes invisible to both executor pipeline and review pipeline.
+    local deadlock_ids
+    deadlock_ids=$(echo "$in_progress_json" | jq -r '.[] | select(
+        ((.labels // []) | index("executor")) and
+        ((.labels // []) | index("needs-review"))
+    ) | .id' 2>/dev/null || true)
+
+    for task_id in $deadlock_ids; do
+        log "WARN" "HEAL: $task_id has executor+needs-review deadlock, removing executor label"
+        bd_safe update "$task_id" --remove-label=executor >/dev/null 2>&1 || true
+    done
+
     # v2.2: Heal tasks stuck in reviewing (reviewer crashed, >3 min)
     local reviewing_threshold=180
     local reviewing_ids

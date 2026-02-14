@@ -10,9 +10,17 @@
 
 - **Executor .gitignore restriction** — `executor.md` now explicitly prohibits modifying `.gitignore`, especially adding `!` exceptions for `.hype/`. Root cause: executor agent added `!.hype/evidence/` to track test artifacts in git.
 
+- 5 new tests (316 total).
+
+---
+
+## [2.3.18] - 2026-02-14
+
+### Fixed
+
 - **Executor+needs-review label deadlock** — `heal_stuck_tasks()` now detects tasks with both `executor` and `needs-review` labels simultaneously and removes `executor`. Previously, if the safety net in `run_executor()` failed to remove `executor` (bd_safe timeout after 3 retries), the task became invisible to both executor pipeline (`get_review_tasks` excludes `executor`) and heal logic (skips `needs-review`). Deadlock lasted until manual intervention. (GitHub issue #9)
 
-- 6 new tests (317 total).
+- 1 new test (317 total).
 
 ---
 

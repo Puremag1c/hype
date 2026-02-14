@@ -633,7 +633,7 @@ heal_stuck_tasks() {
         fi
     done
 
-    # v2.3.17: Heal executor+needs-review deadlock
+    # v2.3.18: Heal executor+needs-review deadlock
     # When executor agent adds needs-review but safety net fails to remove executor label,
     # task becomes invisible to both executor pipeline and review pipeline.
     local deadlock_ids

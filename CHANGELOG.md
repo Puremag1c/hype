@@ -8,9 +8,17 @@
   1. Reviewer post-processing now checks for `executor` label before acting. If executor claimed the task during review, post-processing is skipped entirely (previously interpreted as "no action" → incremented reject:N → escalated to troubleshooter).
   2. Troubleshooter guard now checks `executor` label regardless of task status (previously only checked `in_progress + executor`, missing `open + executor` case). (GitHub issue #10)
 
+- 2 new tests (319 total).
+
+---
+
+## [2.3.20] - 2026-02-16
+
+### Fixed
+
 - **Cleanup stale tasks** — `cleanup_iteration()` now runs a second `bd admin cleanup` pass if tasks remain after the first. `bd admin cleanup --force` can miss tasks on a single run (likely daemon flush timing).
 
-- 3 new tests (320 total).
+- 1 new test (320 total).
 
 ---
 

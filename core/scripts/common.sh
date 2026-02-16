@@ -1089,7 +1089,7 @@ cleanup_iteration() {
     done
     # Run cleanup and show result (was silently failing before)
     bd_safe admin cleanup --force || true
-    # v2.3.19: Second pass — bd admin cleanup can miss tasks on first run
+    # v2.3.20: Second pass — bd admin cleanup can miss tasks on first run
     local remaining
     remaining=$(bd_safe list --all --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
     if [ "$remaining" -gt 0 ]; then

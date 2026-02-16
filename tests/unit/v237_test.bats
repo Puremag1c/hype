@@ -842,14 +842,16 @@ load '../helpers/setup'
     [ -n "$guard_line" ]
 }
 
-@test "v2.3.19: cleanup_iteration runs second bd admin cleanup pass" {
+@test "v2.3.20: cleanup_iteration retries bd admin cleanup in loop" {
     local common_sh="$SCRIPTS_DIR/common.sh"
 
     local func_body
     func_body=$(sed -n '/^cleanup_iteration()/,/^}/p' "$common_sh")
 
-    # Must check remaining tasks after first cleanup
-    echo "$func_body" | grep -q 'bd_safe list --all'
-    # Must run second cleanup if remaining > 0
-    echo "$func_body" | grep -q 'remaining.*-gt 0'
+    # Must have retry loop for cleanup
+    echo "$func_body" | grep -q 'cleanup_pass.*-lt'
+    # Must check remaining tasks with bd list --all
+    echo "$func_body" | grep -q 'bd list --all'
+    # Must sleep between retries (daemon flush)
+    echo "$func_body" | grep -q 'sleep'
 }

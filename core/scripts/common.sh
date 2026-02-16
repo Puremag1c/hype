@@ -1087,14 +1087,18 @@ cleanup_iteration() {
     for task_id in $open_ids; do
         bd_safe close "$task_id" --reason="Closed by hype clear" 2>/dev/null || true
     done
-    # Run cleanup and show result (was silently failing before)
-    bd_safe admin cleanup --force || true
-    # v2.3.20: Second pass — bd admin cleanup can miss tasks on first run
-    local remaining
-    remaining=$(bd_safe list --all --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
-    if [ "$remaining" -gt 0 ]; then
-        bd_safe admin cleanup --force >/dev/null 2>&1 || true
-    fi
+    # Run cleanup with retry loop — bd admin cleanup can miss tasks due to daemon flush timing
+    local cleanup_pass=0
+    while [ $cleanup_pass -lt 3 ]; do
+        bd_safe admin cleanup --force 2>&1 || true
+        sleep 1
+        local remaining
+        remaining=$(bd list --all --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+        if [ "$remaining" -eq 0 ]; then
+            break
+        fi
+        ((cleanup_pass++))
+    done
 
     # 4. Delete all milestones + tick-cache (using function from this file)
     echo "  → Deleting milestones..."

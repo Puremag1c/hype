@@ -841,3 +841,15 @@ load '../helpers/setup'
     guard_line=$(echo "$func_body" | grep 'has_executor_label.*!=.*0' | grep -v 'fresh_status')
     [ -n "$guard_line" ]
 }
+
+@test "v2.3.19: cleanup_iteration runs second bd admin cleanup pass" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    local func_body
+    func_body=$(sed -n '/^cleanup_iteration()/,/^}/p' "$common_sh")
+
+    # Must check remaining tasks after first cleanup
+    echo "$func_body" | grep -q 'bd_safe list --all'
+    # Must run second cleanup if remaining > 0
+    echo "$func_body" | grep -q 'remaining.*-gt 0'
+}

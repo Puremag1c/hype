@@ -1088,6 +1088,9 @@ For each task:
             ;;
 
         IMPLEMENTATION)
+            # v2.3.21: Clean stale testers PID file (covers SMOKE_TEST→IMPL→SMOKE_TEST path)
+            rm -f "$CLAUDEV_DIR/run-testers.pid"
+
             # Streaming: launch executors + reviewers + merge queue (all non-blocking)
             # Note: regression tasks are handled in SMOKE_REVIEW phase before reaching here
             log "INFO" "IMPLEMENTATION: Streaming cycle..."

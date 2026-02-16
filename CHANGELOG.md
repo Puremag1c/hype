@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.3.21] - 2026-02-16
+
+### Fixed
+
+- **SMOKE_TEST skipped after regression fix** — IMPLEMENTATION handler now cleans stale `run-testers.pid` file. On the path `SMOKE_TEST → IMPLEMENTATION → SMOKE_TEST` (bypassing SMOKE_REVIEW), a dead PID file from the previous smoke run persisted, causing STATE 3 to declare "all tests passed" without launching testers. v2.3.5 only covered the `SMOKE_REVIEW` cleanup path. (GitHub issue #11)
+
+- 1 new test (321 total).
+
+---
+
 ## [2.3.19] - 2026-02-14
 
 ### Fixed

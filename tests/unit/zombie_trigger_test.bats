@@ -228,6 +228,17 @@ load '../helpers/setup'
     echo "$smoke_review_block" | grep -q 'rm -f.*run-testers.pid'
 }
 
+@test "hype.sh: IMPLEMENTATION cleans stale testers PID file (v2.3.21)" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    # IMPLEMENTATION must remove PID file — covers SMOKE_TEST→IMPL→SMOKE_TEST path
+    # that bypasses SMOKE_REVIEW (v2.3.5 only covers the SMOKE_REVIEW path)
+    local impl_block
+    impl_block=$(sed -n '/IMPLEMENTATION)/,/;;/p' "$hype_sh")
+
+    echo "$impl_block" | grep -q 'rm -f.*run-testers.pid'
+}
+
 # =============================================================================
 # Async SMOKE_TEST: non-blocking testers (v2.2.6)
 # =============================================================================

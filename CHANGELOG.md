@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.3.22] - 2026-02-21
+
+### Fixed
+
+- **Tester orphan process on timeout** — `run_claude_with_progress` used `timeout_cmd ... bash -c 'claude ...'` without `exec`, so timeout sent SIGTERM to `bash` (intermediate shell) which died, but `claude` (child process) became an orphan reparented to PID 1 and ran forever. The stuck orphan blocked `run-testers.sh` sequential pipeline (functional → visual), preventing subsequent testers from launching. Fixed by adding `exec` before `claude` in the `bash -c` command — bash replaces itself with claude, so timeout sends SIGTERM directly to the claude process. (GitHub issue #12)
+
+- 1 new test (322 total).
+
+---
+
 ## [2.3.21] - 2026-02-16
 
 ### Fixed

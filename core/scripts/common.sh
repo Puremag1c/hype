@@ -446,7 +446,7 @@ run_claude_with_progress() {
     # Use PIPESTATUS to get timeout_cmd exit code (not tee's)
     printf '%s' "$prompt" | \
         CLAUDE_WORKDIR="$workdir" CLAUDE_MODEL="$model" \
-        timeout_cmd "$timeout" bash -c 'cd "$CLAUDE_WORKDIR" && claude --print --verbose --permission-mode bypassPermissions --model "$CLAUDE_MODEL" --output-format stream-json' 2>&1 | \
+        timeout_cmd "$timeout" bash -c 'cd "$CLAUDE_WORKDIR" && exec claude --print --verbose --permission-mode bypassPermissions --model "$CLAUDE_MODEL" --output-format stream-json' 2>&1 | \
         tee "$raw_output" >/dev/null
     local exit_code=${PIPESTATUS[1]}
 

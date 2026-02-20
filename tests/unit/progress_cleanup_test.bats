@@ -108,6 +108,19 @@ load '../helpers/setup'
 # Behavioral: real pipeline cleanup (catches the 38-minute hang bug)
 # =============================================================================
 
+# =============================================================================
+# v2.3.22: exec before claude prevents orphan on timeout
+# =============================================================================
+
+@test "run_claude_with_progress uses exec to prevent orphan on timeout" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    # The bash -c command must use exec before claude
+    # Without exec: timeout kills bash, claude becomes orphan
+    # With exec: bash replaces itself with claude, timeout kills claude directly
+    grep -q "exec claude --print" "$common_sh"
+}
+
 @test "behavioral: progress pipeline dies within 5 seconds after cleanup" {
     local tmpfile
     tmpfile=$(mktemp)

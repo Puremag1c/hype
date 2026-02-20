@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.3.23] - 2026-02-21
+
+### Fixed
+
+- **`hype clear` leaves tasks behind** — `bd admin cleanup --force` can miss closed tasks (especially triggers) even after 3 retry passes. Added individual `bd delete` fallback: after the retry loop, any remaining tasks are deleted one by one. (GitHub issue #13)
+
+- 1 new test (323 total).
+
+---
+
 ## [2.3.22] - 2026-02-21
 
 ### Fixed

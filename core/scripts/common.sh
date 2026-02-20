@@ -1089,16 +1089,24 @@ cleanup_iteration() {
     done
     # Run cleanup with retry loop — bd admin cleanup can miss tasks due to daemon flush timing
     local cleanup_pass=0
+    local remaining=0
     while [ $cleanup_pass -lt 3 ]; do
         bd_safe admin cleanup --force 2>&1 || true
         sleep 1
-        local remaining
         remaining=$(bd list --all --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
         if [ "$remaining" -eq 0 ]; then
             break
         fi
         ((cleanup_pass++))
     done
+    # Fallback: if bd admin cleanup missed tasks, delete them individually
+    if [ "$remaining" -gt 0 ]; then
+        local leftover_ids
+        leftover_ids=$(bd list --all --json --limit 0 2>/dev/null | jq -r '.[].id' 2>/dev/null || true)
+        for leftover_id in $leftover_ids; do
+            bd delete "$leftover_id" --force 2>/dev/null || true
+        done
+    fi
 
     # 4. Delete all milestones + tick-cache (using function from this file)
     echo "  → Deleting milestones..."

@@ -216,6 +216,17 @@ load '../helpers/setup'
     grep -q 'ALL_TASKS_JSON.*milestone:' "$detect_sh"
 }
 
+@test "detect-phase.sh: auto-recovery with bd sync --import-only on stale DB" {
+    local detect_sh="$SCRIPTS_DIR/detect-phase.sh"
+
+    # Must attempt bd sync --import-only before giving up
+    grep -q 'bd sync --import-only' "$detect_sh"
+    # Must retry bd_safe list after recovery
+    local recovery_block
+    recovery_block=$(sed -n '/import-only recovery/,/recovery succeeded/p' "$detect_sh")
+    echo "$recovery_block" | grep -q 'bd_safe list'
+}
+
 @test "detect-phase.sh: empty bd response guard (prevents phase regression)" {
     local detect_sh="$SCRIPTS_DIR/detect-phase.sh"
 

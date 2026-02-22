@@ -58,9 +58,17 @@ fi
 # ВАЖНО: --limit 0 для unlimited (по умолчанию 50)
 ALL_TASKS_JSON=$(bd_safe list --json --limit 0 --all 2>/dev/null)
 if [ $? -ne 0 ] || ! echo "$ALL_TASKS_JSON" | jq -e 'type == "array"' >/dev/null 2>&1; then
-    echo '{"phase":"ERROR","stats":{},"progress_pct":0,"in_progress_ids":[],"regression_count":0,"p0_bugs":0,"error":"bd list failed or returned invalid JSON"}'
-    >&2 echo "bd list вернул невалидный JSON или ошибку"
-    exit 1
+    # v2.3.24: auto-recovery for stale beads DB (e.g. "Database out of sync with JSONL")
+    >&2 echo "bd list failed, attempting bd sync --import-only recovery..."
+    bd sync --import-only >/dev/null 2>&1 || true
+    sleep 1
+    ALL_TASKS_JSON=$(bd_safe list --json --limit 0 --all 2>/dev/null)
+    if [ $? -ne 0 ] || ! echo "$ALL_TASKS_JSON" | jq -e 'type == "array"' >/dev/null 2>&1; then
+        echo '{"phase":"ERROR","stats":{},"progress_pct":0,"in_progress_ids":[],"regression_count":0,"p0_bugs":0,"error":"bd list failed or returned invalid JSON"}'
+        >&2 echo "bd list вернул невалидный JSON или ошибку (after recovery attempt)"
+        exit 1
+    fi
+    >&2 echo "bd sync --import-only recovery succeeded"
 fi
 
 # v2.3.9: Пишем tick-cache для всех скриптов (run-reviewers, heal, merge queue)

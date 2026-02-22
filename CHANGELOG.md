@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.3.24] - 2026-02-22
+
+### Fixed
+
+- **detect-phase.sh fails on stale beads DB** — When beads SQLite is out of sync with JSONL (e.g. after long sessions with many tombstones), `bd list` returns an error JSON instead of an array. Previously this caused phase UNKNOWN and blocked the main loop. Now detect-phase.sh auto-recovers: runs `bd sync --import-only` and retries before giving up. (GitHub issue #14)
+
+- 1 new test (324 total).
+
+---
+
 ## [2.3.23] - 2026-02-21
 
 ### Fixed

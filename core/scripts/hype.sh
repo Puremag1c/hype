@@ -931,7 +931,7 @@ dispatch_phase() {
             if [ -f ".claude/agents/manager.md" ]; then
                 log "INFO" "PREPARING: Starting Manager (interactive)..."
                 local tw_model
-                tw_model=$(map_model "${MODEL_MANAGER:-${MODEL_TECH_WRITER:-opus}}")
+                tw_model=$(map_model "${MODEL_MANAGER:-opus}")
                 if ! run_interactive_agent "manager" ".claude/agents/manager.md" "$tw_model"; then
                     log "WARN" "Manager exited with error. Check SPEC.draft.md for progress."
                     if [ -f "$PROJECT_DIR/SPEC.draft.md" ]; then
@@ -1033,7 +1033,7 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
                 tw_prompt=$(cat "$tw_review_file")
                 local output_file="$LOGS_DIR/user-review-$(date +%s).log"
                 local tw_model
-                tw_model=$(map_model "${MODEL_MANAGER:-${MODEL_TECH_WRITER:-sonnet}}")
+                tw_model=$(map_model "${MODEL_MANAGER:-sonnet}")
 
                 local full_prompt="$tw_prompt
 
@@ -1364,11 +1364,11 @@ show_active_work() {
         fi
     done
 
-    # Check reviewer logs (REVIEW)
-    for log_file in "$LOGS_DIR"/reviewer-*.log; do
+    # Check senior logs (REVIEW)
+    for log_file in "$LOGS_DIR"/senior-*.log; do
         [ -f "$log_file" ] || continue
         local task_id size mtime age status
-        task_id=$(basename "$log_file" .log | sed 's/reviewer-//')
+        task_id=$(basename "$log_file" .log | sed 's/senior-//')
 
         # Skip if task is not in_progress (using cached list, no bd show)
         is_in_progress "$task_id" || continue

@@ -4,9 +4,9 @@ description: Реализует одну задачу в своей git ветк
 model: по задаче (label model:*)
 ---
 
-# Роль: Executor
+# Роль: Coder
 
-Ты Executor — реализуешь ОДНУ задачу из beads. Работаешь в своей git ветке, коммитишь, пушишь.
+Ты Coder — реализуешь ОДНУ задачу из beads. Работаешь в своей git ветке, коммитишь, пушишь.
 
 ## КРИТИЧЕСКИЕ ПРАВИЛА
 
@@ -23,8 +23,8 @@ model: по задаче (label model:*)
 
 ## Контекст (используй эти переменные)
 
-- `TASK_ID` — ID задачи из run-executors.sh
-- `TASK` — JSON задачи из run-executors.sh
+- `TASK_ID` — ID задачи из run-coders.sh
+- `TASK` — JSON задачи из run-coders.sh
 - `PROJECT_ROOT` — корень проекта
 - `WORKTREE_PATH` — путь к изолированному worktree (если задан)
 - `Retry Context` — если есть, содержит информацию о предыдущих попытках
@@ -99,7 +99,7 @@ TASK_JSON=$(bd show $TASK_ID --json)
 TASK_TITLE=$(echo "$TASK_JSON" | jq -r '.[0].title')
 TASK_NOTES=$(echo "$TASK_JSON" | jq -r '.[0].notes // ""')
 
-# КРИТИЧНО: Проверяем был ли feedback от reviewer
+# КРИТИЧНО: Проверяем был ли feedback от senior
 if echo "$TASK_NOTES" | grep -qi "review failed\|returned\|fix and resubmit"; then
     echo "=== REVIEW FEEDBACK DETECTED ==="
     echo "$TASK_NOTES"
@@ -145,7 +145,7 @@ fi
 - `files:` — какие файлы трогать
 - `done_when:` — критерий готовности
 
-**Если есть feedback от reviewer (в notes):**
+**Если есть feedback от senior (в notes):**
 - Внимательно прочитай ПРИЧИНУ возврата
 - Посмотри текущий код в ветке (git diff origin/main)
 - ИСПРАВЬ конкретную проблему, не переделывай всё заново

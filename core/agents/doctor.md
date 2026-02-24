@@ -279,7 +279,7 @@ Doctor-log: .hype/logs/doctor-XXXXXX.md
 - `rm .git/index.lock`
 - `rm .hype/hype.lock`
 - `rm .hype/needs-spec`
-- `rm -rf .hype-worktrees/executor-N`
+- `rm -rf .hype-worktrees/coder-N`
 - `pkill` (любой)
 
 ### FORBIDDEN (никогда)

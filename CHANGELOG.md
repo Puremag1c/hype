@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.4.3] - 2026-02-24
+
+### Fixed
+
+- **Broken backpressure in run-seniors.sh** — `count_active_seniors()` scanned for `reviewer-*.lock` but locks were created as `senior-*.lock`. Counter always returned 0, bypassing `MAX_PARALLEL_SENIORS` limit. Could spawn up to 20 parallel senior agents instead of configured limit (default 3).
+
+- **Blind review monitoring** — `show_active_work()` in hype.sh scanned for `reviewer-*.log` but run-seniors.sh writes `senior-*.log`. Active reviews were never shown in status display.
+
+- **Troubleshooter can't find coder logs** — `troubleshooter.md` instructed agent to look for `executor-*.log` but logs are now `coder-*.log`. Troubleshooter couldn't diagnose failures.
+
+- **Doctor worktree cleanup** — `doctor.md` referenced `executor-N` worktrees instead of `coder-N`. Doctor couldn't clean up stale worktrees.
+
+- **Dead MODEL_TECH_WRITER fallback** — Removed unused `${MODEL_TECH_WRITER:-...}` fallback in hype.sh (variable removed in v2.4.2, `MODEL_MANAGER` always defined).
+
+### Changed
+
+- **Agent role titles** — Updated prompt headers: Executor→Coder, Reviewer→Senior Coder, Tech Writer→Manager. Updated all internal references to old agent/script names across 7 prompt files.
+
+- **Config migration** — Added `migrations/2.4.1-to-2.4.2.sh` to rename config variables during `hype upgrade`: `MAX_PARALLEL_EXECUTORS`→`MAX_PARALLEL_CODERS`, `MAX_PARALLEL_REVIEWERS`→`MAX_PARALLEL_SENIORS`, `MODEL_TECH_WRITER`→`MODEL_MANAGER`, `MODEL_REVIEWER`→`MODEL_SENIOR`. Preserves user's custom values.
+
+- **Function rename in run-seniors.sh** — `count_active_reviewers`→`count_active_seniors`, `find_free_reviewer_slot`→`find_free_senior_slot`, `cleanup_reviewer_slot`→`cleanup_senior_slot`.
+
+- **CLAUDE.template.md** — `executor` log reference → `coder`.
+
+- 335 tests (no regressions).
+
+---
+
 ## [2.4.2] - 2026-02-24
 
 ### Changed

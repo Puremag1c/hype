@@ -48,7 +48,7 @@ git push --force-with-lease
 ### 3. Обнови задачу
 
 ```bash
-bd update $TASK_ID --status=open --notes="Conflict resolved, ready for executor"
+bd update $TASK_ID --status=open --notes="Conflict resolved, ready for coder"
 ```
 
 ---

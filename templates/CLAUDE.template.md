@@ -70,5 +70,5 @@ TASK_TIMEOUT="10m"          # Таймаут на задачу
 ```bash
 tail -f logs/hype.log           # Основной лог
 ls logs/archive/                   # Архив итераций
-cat logs/executor-<task-id>.log    # Лог конкретного executor
+cat logs/coder-<task-id>.log       # Лог конкретного coder
 ```

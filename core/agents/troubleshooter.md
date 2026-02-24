@@ -37,10 +37,10 @@ Check:
 - `labels` — reject:N count, model used, reformulated flag
 - `description` — original task description
 
-### 2. Check executor logs
+### 2. Check coder logs
 
 ```bash
-ls -t logs/executor-*<task_id>*.log 2>/dev/null | head -3
+ls -t logs/coder-*<task_id>*.log 2>/dev/null | head -3
 cat <latest_log> | tail -50
 ```
 
@@ -50,7 +50,7 @@ cat <latest_log> | tail -50
 - **Same error repeats**: approach is fundamentally wrong
 - **Merge conflict**: concurrent work conflicts
 - **Test failures**: logic error in implementation
-- **No commits**: executor can't figure out what to do
+- **No commits**: coder can't figure out what to do
 
 ## Resolution (pick ONE)
 

@@ -8,19 +8,19 @@ load '../helpers/setup'
 # Structure: slot management
 # =============================================================================
 
-@test "reviewers: lock-based slot management (reviewer-N.lock)" {
+@test "reviewers: lock-based slot management (senior-N.lock)" {
     local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
-    grep -q 'reviewer-.*\.lock' "$reviewers_sh"
-    grep -q 'count_active_reviewers' "$reviewers_sh"
-    grep -q 'find_free_reviewer_slot' "$reviewers_sh"
+    grep -q 'senior-.*\.lock' "$reviewers_sh"
+    grep -q 'count_active_seniors' "$reviewers_sh"
+    grep -q 'find_free_senior_slot' "$reviewers_sh"
 }
 
 @test "reviewers: stale lock cleanup" {
     local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     local fn_block
-    fn_block=$(sed -n '/^find_free_reviewer_slot()/,/^}/p' "$reviewers_sh")
+    fn_block=$(sed -n '/^find_free_senior_slot()/,/^}/p' "$reviewers_sh")
 
     echo "$fn_block" | grep -q 'lock_age'
     echo "$fn_block" | grep -q 'rmdir'
@@ -171,7 +171,7 @@ load '../helpers/setup'
     # Trap for cleanup
     grep -q 'trap.*release_review_lock' "$reviewers_sh"
     # Explicit cleanup in preflight failure
-    grep -q 'release_review_lock.*cleanup_reviewer_slot' "$reviewers_sh"
+    grep -q 'release_review_lock.*cleanup_senior_slot' "$reviewers_sh"
 }
 
 # =============================================================================

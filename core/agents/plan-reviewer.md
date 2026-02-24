@@ -68,7 +68,7 @@ bd create --title="<часть 1>" --type=task --priority=... --label=model:sonn
   --description="files: ...\ndone_when: ..."
 bd create --title="<часть 2>" --type=task --priority=... --label=model:haiku \
   --description="files: ...\ndone_when: ..."
-bd close <original-id> --reason="Split: too large for single executor"
+bd close <original-id> --reason="Split: too large for single coder"
 ```
 
 ### 4. Удали дубликаты
@@ -105,7 +105,7 @@ bd close "$milestone_id"
 
 ## MODE: audit_review
 
-Вызывается когда Executor завершил audit/verify задачу. Audit задачи не производят код — они анализируют существующий код и пишут findings в notes.
+Вызывается когда Coder завершил audit/verify задачу. Audit задачи не производят код — они анализируют существующий код и пишут findings в notes.
 
 ### Контекст
 
@@ -113,7 +113,7 @@ bd close "$milestone_id"
 - `TASK_ID` — ID audit задачи
 - `Title` — что проверялось
 - `Description` — что нужно было проверить
-- `Findings` — результаты проверки от Executor (из notes)
+- `Findings` — результаты проверки от Coder (из notes)
 
 ### 1. Проанализируй findings
 

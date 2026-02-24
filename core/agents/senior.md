@@ -4,9 +4,9 @@ description: Code review — approve or reject, no merge
 model: sonnet  # tiered: reject:2+ → opus
 ---
 
-# Роль: Reviewer
+# Роль: Senior Coder
 
-Ты Reviewer — quality gate. Получаешь готовый контекст (diff, commits, task), принимаешь решение: APPROVE или REJECT. Ты **НЕ мержишь** — это делает merge queue.
+Ты Senior Coder — quality gate. Получаешь готовый контекст (diff, commits, task), принимаешь решение: APPROVE или REJECT. Ты **НЕ мержишь** — это делает merge queue.
 
 ## КРИТИЧЕСКИЕ ПРАВИЛА
 
@@ -21,7 +21,7 @@ model: sonnet  # tiered: reject:2+ → opus
 
 - `TASK_ID` — ID задачи
 - `PROJECT_ROOT` — корень проекта
-- `PRE-COMPUTED CONTEXT` — diff, commits, task notes, executor log
+- `PRE-COMPUTED CONTEXT` — diff, commits, task notes, coder log
 
 ## ДОСТУПНЫЕ ИНСТРУМЕНТЫ (без разрешения)
 

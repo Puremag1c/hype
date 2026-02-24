@@ -4,7 +4,7 @@
 # Runs up to MAX_PARALLEL_SENIORS concurrent code reviews.
 #
 # Each reviewer: claim → build context → claude review → handle result
-# Lock-based backpressure via .hype-worktrees/reviewer-N.lock
+# Lock-based backpressure via .hype-worktrees/senior-N.lock
 #
 # Usage: ./scripts/run-seniors.sh
 
@@ -49,20 +49,20 @@ log() {
 
 # === Slot management (lock-based backpressure) ===
 
-count_active_reviewers() {
+count_active_seniors() {
     local count=0
-    for lock in "$WORKTREES_DIR"/reviewer-*.lock; do
+    for lock in "$WORKTREES_DIR"/senior-*.lock; do
         [ -d "$lock" ] && ((count++)) || true
     done 2>/dev/null
     echo "$count"
 }
 
-find_free_reviewer_slot() {
+find_free_senior_slot() {
     local slot=0
     while true; do
         local lock_dir="$WORKTREES_DIR/senior-$slot.lock"
 
-        # Stale lock cleanup (>20 minutes = crashed reviewer)
+        # Stale lock cleanup (>20 minutes = crashed senior)
         if [ -d "$lock_dir" ]; then
             local lock_age
             lock_age=$(( $(date +%s) - $(stat -f %m "$lock_dir" 2>/dev/null || stat -c %Y "$lock_dir" 2>/dev/null || echo 0) ))
@@ -83,7 +83,7 @@ find_free_reviewer_slot() {
     done
 }
 
-cleanup_reviewer_slot() {
+cleanup_senior_slot() {
     local slot=$1
     rmdir "$WORKTREES_DIR/senior-$slot.lock" 2>/dev/null || true
 }
@@ -225,12 +225,12 @@ run_reviewer() {
     # Atomic claim (lock + label)
     if ! try_claim_for_review "$task_id" "$WORKTREES_DIR"; then
         log "INFO" "Task $task_id already claimed by another reviewer"
-        cleanup_reviewer_slot "$slot"
+        cleanup_senior_slot "$slot"
         return 0
     fi
 
     # Ensure cleanup on exit
-    trap "release_review_lock '$task_id' '$WORKTREES_DIR'; cleanup_reviewer_slot '$slot'" EXIT INT TERM
+    trap "release_review_lock '$task_id' '$WORKTREES_DIR'; cleanup_senior_slot '$slot'" EXIT INT TERM
 
     # Fetch latest (shared, but safe for reads)
     git fetch origin 2>/dev/null || true
@@ -245,7 +245,7 @@ run_reviewer() {
             log "INFO" "Audit task $task_id — approving"
             approve_task "$task_id"
             release_review_lock "$task_id" "$WORKTREES_DIR"
-            cleanup_reviewer_slot "$slot"
+            cleanup_senior_slot "$slot"
             trap - EXIT INT TERM
             return 0
             ;;
@@ -297,7 +297,7 @@ run_reviewer() {
             fi
 
             release_review_lock "$task_id" "$WORKTREES_DIR"
-            cleanup_reviewer_slot "$slot"
+            cleanup_senior_slot "$slot"
             trap - EXIT INT TERM
             return 0
             ;;
@@ -341,7 +341,7 @@ $context
         log "WARN" "REVIEW TIMEOUT: $task_id (${REVIEW_TIMEOUT}) — returning to queue"
         bd_safe update "$task_id" --add-label=needs-review --remove-label=reviewing >/dev/null 2>&1 || true
         release_review_lock "$task_id" "$WORKTREES_DIR"
-        cleanup_reviewer_slot "$slot"
+        cleanup_senior_slot "$slot"
         trap - EXIT INT TERM
         return 0
     fi
@@ -357,7 +357,7 @@ $context
     if [ "$has_coder" != "0" ]; then
         log "WARN" "Review lost ownership of $task_id (coder label present), skipping post-processing"
         release_review_lock "$task_id" "$WORKTREES_DIR"
-        cleanup_reviewer_slot "$slot"
+        cleanup_senior_slot "$slot"
         trap - EXIT INT TERM
         return 0
     fi
@@ -437,7 +437,7 @@ $context
 
     # Cleanup
     release_review_lock "$task_id" "$WORKTREES_DIR"
-    cleanup_reviewer_slot "$slot"
+    cleanup_senior_slot "$slot"
     trap - EXIT INT TERM
 }
 
@@ -459,7 +459,7 @@ main() {
     echo "" >> "$LOGS_DIR/hype.log"
 
     local active
-    active=$(count_active_reviewers)
+    active=$(count_active_seniors)
 
     if [ "$active" -ge "$MAX_PARALLEL" ]; then
         log "INFO" "Review queue full ($active/$MAX_PARALLEL)"
@@ -495,7 +495,7 @@ main() {
         fi
 
         local slot
-        slot=$(find_free_reviewer_slot) || {
+        slot=$(find_free_senior_slot) || {
             log "ERROR" "No reviewer slots available"
             break
         }

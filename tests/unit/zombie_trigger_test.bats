@@ -85,6 +85,22 @@ load '../helpers/setup'
     [ "$missing" -eq 0 ]
 }
 
+@test "hype.sh: all bd_safe query --json calls use --limit 0" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    local missing
+    missing=$(grep 'bd_safe query.*--json' "$hype_sh" | grep -cv '\-\-limit 0' || true)
+    [ "$missing" -eq 0 ]
+}
+
+@test "common.sh: all bd_safe query --json calls use --limit 0" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    local missing
+    missing=$(grep 'bd_safe query.*--json' "$common_sh" | grep -cv '\-\-limit 0' || true)
+    [ "$missing" -eq 0 ]
+}
+
 @test "detect-phase.sh: all bd_safe list calls use --limit 0" {
     local detect_sh="$SCRIPTS_DIR/detect-phase.sh"
 
@@ -153,7 +169,7 @@ load '../helpers/setup'
     local passed_block
     passed_block=$(sed -n '/VALIDATING: PASSED/,/final_review_success=true/p' "$hype_sh")
 
-    echo "$passed_block" | grep -q 'bd_safe list.*--status=open'
+    echo "$passed_block" | grep -q 'bd_safe query.*status=open'
     echo "$passed_block" | grep -q 'NEEDS_FIXES'
 }
 
@@ -199,11 +215,8 @@ load '../helpers/setup'
     local cleanup_block
     cleanup_block=$(sed -n '/orphaned triggers/,/^$/p' "$hype_sh")
 
-    # Must use bd_safe list with --limit 0
-    echo "$cleanup_block" | grep -q 'bd_safe list.*--limit 0'
-
-    # Must filter for trigger label
-    echo "$cleanup_block" | grep -q 'index("trigger")'
+    # Must use bd_safe query for trigger label (server-side filter)
+    echo "$cleanup_block" | grep -q 'bd_safe query.*trigger'
 
     # Must close with reason
     echo "$cleanup_block" | grep -q 'bd_safe close.*--reason'
@@ -404,7 +417,7 @@ load '../helpers/setup'
     cleanup_block=$(sed -n '/Run cleanup with retry/,/fi$/p' "$common_sh" | head -30)
 
     # remaining= must use bd_safe, not bare bd
-    echo "$cleanup_block" | grep 'remaining=' | grep -q 'bd_safe list'
+    echo "$cleanup_block" | grep 'remaining=' | grep -q 'bd_safe count'
 }
 
 @test "cleanup_iteration: fallback delete uses bd_safe (not direct bd)" {

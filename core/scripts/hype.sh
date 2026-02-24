@@ -405,10 +405,8 @@ check_and_create_done_milestone() {
     if [ -n "$latest_log" ] && grep -q "VALIDATING: PASSED" "$latest_log" 2>/dev/null; then
         # Safety: verify no open/in_progress tasks remain before marking DONE
         local remaining_tasks
-        remaining_tasks=$(bd_safe list --json --limit 0 2>/dev/null | \
-            jq '[.[] | select(.status == "open" or .status == "in_progress") |
-                select((.labels // []) | any(test("^milestone:")) | not) |
-                select((.labels // []) | index("trigger") | not)] | length' 2>/dev/null || echo "0")
+        remaining_tasks=$(bd_safe query "(status=open OR status=in_progress) AND NOT label=trigger" --json --limit 0 2>/dev/null | \
+            jq '[.[] | select((.labels // []) | any(test("^milestone:")) | not)] | length' 2>/dev/null || echo "0")
 
         if [ "$remaining_tasks" -gt 0 ]; then
             log "WARN" "VALIDATING passed but $remaining_tasks task(s) still open, deferring DONE milestone"
@@ -993,8 +991,8 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             # If trigger is in_progress during check, milestone would be created prematurely
             local pending_triggers
             # Fresh bd call needed: analysts just ran and may have closed triggers
-            pending_triggers=$(bd_safe list --json --limit 0 2>/dev/null | \
-                jq '[.[] | select(.status == "open" or .status == "in_progress") | select(.title | startswith("run-analyst-"))] | length' 2>/dev/null || echo "0")
+            pending_triggers=$(bd_safe query "(status=open OR status=in_progress) AND title=run-analyst-" --json --limit 0 2>/dev/null | \
+                jq 'length' 2>/dev/null || echo "0")
 
             # v2.4.5: Recovery — run-analysts.sh finished (all 5 processes exited),
             # but some triggers stayed open due to bd_safe close failure under contention.
@@ -1002,15 +1000,15 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             if [ "$pending_triggers" -gt 0 ]; then
                 log "WARN" "ANALYZE: $pending_triggers triggers still open after analysts finished, force-closing"
                 local orphan_ids
-                orphan_ids=$(bd_safe list --json --limit 0 2>/dev/null | \
-                    jq -r '.[] | select(.status == "open" or .status == "in_progress") | select(.title | startswith("run-analyst-")) | .id' 2>/dev/null || true)
+                orphan_ids=$(bd_safe query "(status=open OR status=in_progress) AND title=run-analyst-" --json --limit 0 2>/dev/null | \
+                    jq -r '.[].id' 2>/dev/null || true)
                 for oid in $orphan_ids; do
                     bd_safe close "$oid" --reason="Force cleanup: analysts finished" >/dev/null 2>&1 || true
                 done
                 sleep 1
                 # Re-check
-                pending_triggers=$(bd_safe list --json --limit 0 2>/dev/null | \
-                    jq '[.[] | select(.status == "open" or .status == "in_progress") | select(.title | startswith("run-analyst-"))] | length' 2>/dev/null || echo "0")
+                pending_triggers=$(bd_safe query "(status=open OR status=in_progress) AND title=run-analyst-" --json --limit 0 2>/dev/null | \
+                    jq 'length' 2>/dev/null || echo "0")
             fi
 
             if [ "$pending_triggers" -eq 0 ]; then
@@ -1208,8 +1206,8 @@ For each task:
                     if [ -n "$latest_log" ] && grep -q "VALIDATING: PASSED" "$latest_log" 2>/dev/null; then
                         # Defense: check if architect also created tasks (contradicts PASSED)
                         local new_open_count
-                        new_open_count=$(bd_safe list --status=open --json --limit 0 2>/dev/null | \
-                            jq '[.[] | select((.labels // []) | index("trigger") | not)] | length' 2>/dev/null || echo "0")
+                        new_open_count=$(bd_safe query "status=open AND NOT label=trigger" --json --limit 0 2>/dev/null | \
+                            jq 'length' 2>/dev/null || echo "0")
                         if [ "$new_open_count" -gt 0 ]; then
                             log "WARN" "VALIDATING: PASSED but $new_open_count new task(s) created — treating as NEEDS_FIXES"
                             delete_milestone "milestone:testing-done"
@@ -1220,7 +1218,7 @@ For each task:
                     fi
                     # Agent ran but didn't write PASSED - might have created tasks
                     local open_count
-                    open_count=$(bd_safe list --status=open --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+                    open_count=$(bd_safe count --status=open 2>/dev/null || echo "0")
                     if [ "$open_count" -gt 0 ]; then
                         log "INFO" "VALIDATING: Architect created $open_count task(s), returning to CODING"
                         # Invalidate testing-done milestone — need to re-test after fix
@@ -1246,7 +1244,7 @@ For each task:
             if [ "$validating_success" = false ]; then
                 local latest_log open_count
                 latest_log=$(ls -t "$LOGS_DIR"/architect-*.log 2>/dev/null | head -1)
-                open_count=$(bd_safe list --status=open --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+                open_count=$(bd_safe count --status=open 2>/dev/null || echo "0")
 
                 if [ "$open_count" -eq 0 ] && { [ -z "$latest_log" ] || ! grep -q "VALIDATING: PASSED" "$latest_log" 2>/dev/null; }; then
                     log "WARN" "VALIDATING incomplete after $validating_attempt attempts, creating blocker"
@@ -1490,8 +1488,8 @@ main() {
 
     # Close orphaned triggers from previous sessions
     local stale_triggers
-    stale_triggers=$(bd_safe list --json --limit 0 2>/dev/null | \
-        jq -r '.[] | select((.labels // []) | index("trigger")) | .id' 2>/dev/null || true)
+    stale_triggers=$(bd_safe query "label=trigger" --json --limit 0 2>/dev/null | \
+        jq -r '.[].id' 2>/dev/null || true)
     for stale_id in $stale_triggers; do
         log "WARN" "Closing orphaned trigger $stale_id from previous session"
         bd_safe close "$stale_id" --reason="Orphaned trigger (HYPE startup cleanup)" >/dev/null 2>&1 || true

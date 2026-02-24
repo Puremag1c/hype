@@ -11,8 +11,8 @@ load '../helpers/setup'
 @test "bd_safe: auto-recovery block exists for write operations" {
     local common_sh="$SCRIPTS_DIR/common.sh"
 
-    # Must detect write failures (update/close/create — no sync since v2.5)
-    grep -q 'update|close|create)' "$common_sh"
+    # Must detect write failures (update/close/create/set-state — no sync since v2.5)
+    grep -q 'update|close|create|set-state)' "$common_sh"
 }
 
 @test "bd_safe: retries failed write after health probe (Dolt v0.50+)" {
@@ -67,8 +67,8 @@ load '../helpers/setup'
     local case_block
     case_block=$(sed -n '/Auto-recovery for failed write/,/esac/p' "$common_sh")
 
-    # Only update|close|create — no list, show, sync, etc.
-    echo "$case_block" | grep -q 'update|close|create)'
+    # Only write operations — no list, show, sync, etc.
+    echo "$case_block" | grep -q 'update|close|create|set-state)'
 
     # Must NOT contain list or show in the case pattern
     ! echo "$case_block" | grep -q 'list|show'
@@ -286,10 +286,10 @@ load '../helpers/setup'
 @test "hype.sh: VALIDATING keeps bd_safe for post-agent checks" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
-    # VALIDATING must still use bd_safe list (post-agent, needs fresh data)
+    # VALIDATING must still use fresh bd_safe calls (post-agent, needs fresh data)
     local final_block
     final_block=$(sed -n '/^        VALIDATING)/,/;;$/p' "$hype_sh")
-    echo "$final_block" | grep -q 'bd_safe list'
+    echo "$final_block" | grep -q 'bd_safe query\|bd_safe count'
 }
 
 @test "hype.sh: heal reads from tick-cache in main loop" {

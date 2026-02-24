@@ -483,17 +483,21 @@ load '../helpers/mock_bd'
 # v2.3.2: bd call reduction — caching pattern tests
 # =============================================================================
 
-@test "set_counter_label accepts optional task_json parameter" {
-    # Function signature should have 4th param (task_json)
+@test "set_counter_label uses bd set-state (atomic swap, v2.5)" {
     local body
     body=$(sed -n '/^set_counter_label()/,/^}/p' "$SCRIPTS_DIR/common.sh")
-    echo "$body" | grep -q 'task_json="\${4:-}"'
+    echo "$body" | grep -q 'bd_safe set-state'
+    # Must NOT do bd show + loop remove + add (old pattern)
+    ! echo "$body" | grep -q 'bd_safe show'
+    ! echo "$body" | grep -q 'remove-label'
 }
 
-@test "set_counter_label skips bd show when task_json provided" {
+@test "clean_model_label uses bd set-state (atomic swap, v2.5)" {
     local body
-    body=$(sed -n '/^set_counter_label()/,/^}/p' "$SCRIPTS_DIR/common.sh")
-    echo "$body" | grep -q 'if \[ -z "\$task_json" \]'
+    body=$(sed -n '/^clean_model_label()/,/^}/p' "$SCRIPTS_DIR/common.sh")
+    echo "$body" | grep -q 'bd_safe set-state'
+    ! echo "$body" | grep -q 'bd_safe show'
+    ! echo "$body" | grep -q 'remove-label'
 }
 
 @test "all set_counter_label callers pass task_json" {

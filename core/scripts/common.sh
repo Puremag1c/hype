@@ -52,7 +52,7 @@ bd_safe() {
     # Dolt embedded may transiently fail — probe health, retry once
     if [ $exit_code -ne 0 ]; then
         case "$1" in
-            update|close|create)
+            update|close|create|set-state)
                 >&2 echo "WARN: bd $1 failed (exit=$exit_code): bd $*"
 
                 # Probe backend health with a simple read
@@ -623,16 +623,9 @@ export -f is_audit_task 2>/dev/null || true
 clean_model_label() {
     local task_id="$1"
     local new_model="$2"
-    local task_json old_labels
 
-    task_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
-    old_labels=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("model:"))' 2>/dev/null || true)
-
-    for label in $old_labels; do
-        bd_safe update "$task_id" --remove-label="$label" >/dev/null 2>&1 || true
-    done
-
-    bd_safe update "$task_id" --add-label="model:$new_model" >/dev/null 2>&1 || true
+    # Atomic: removes old model:* label, adds model:$new_model, creates audit event
+    bd_safe set-state "$task_id" "model=$new_model" >/dev/null 2>&1 || true
 }
 export -f clean_model_label 2>/dev/null || true
 
@@ -646,19 +639,10 @@ set_counter_label() {
     local task_id="$1"
     local prefix="$2"
     local value="$3"
-    local task_json="${4:-}"
-    local old_labels
+    # $4 (task_json) kept for interface compat — no longer needed (set-state is atomic)
 
-    if [ -z "$task_json" ]; then
-        task_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
-    fi
-    old_labels=$(echo "$task_json" | jq -r ".[0].labels[]? | select(startswith(\"$prefix:\"))" 2>/dev/null || true)
-
-    for label in $old_labels; do
-        bd_safe update "$task_id" --remove-label="$label" >/dev/null 2>&1 || true
-    done
-
-    bd_safe update "$task_id" --add-label="$prefix:$value" >/dev/null 2>&1 || true
+    # Atomic: removes old $prefix:* label, adds $prefix:$value, creates audit event
+    bd_safe set-state "$task_id" "$prefix=$value" >/dev/null 2>&1 || true
 }
 export -f set_counter_label 2>/dev/null || true
 
@@ -1004,7 +988,7 @@ cleanup_iteration() {
     echo "  → Cleaning beads tasks..."
     # Close all open/in_progress tasks first (bd admin cleanup only deletes closed)
     local open_ids
-    open_ids=$(bd_safe list --json --limit 0 2>/dev/null | jq -r '.[] | select(.status == "open" or .status == "in_progress") | .id' 2>/dev/null || true)
+    open_ids=$(bd_safe query "(status=open OR status=in_progress)" --json --limit 0 2>/dev/null | jq -r '.[].id' 2>/dev/null || true)
     for task_id in $open_ids; do
         bd_safe close "$task_id" --reason="Closed by hype clear" 2>/dev/null || true
     done
@@ -1015,7 +999,7 @@ cleanup_iteration() {
     while [ $cleanup_pass -lt 3 ]; do
         bd_safe admin cleanup --force 2>&1 || true
         sleep 2
-        remaining=$(bd_safe list --all --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+        remaining=$(bd_safe count 2>/dev/null || echo "0")
         if [ "$remaining" -eq 0 ]; then
             break
         fi
@@ -1032,7 +1016,7 @@ cleanup_iteration() {
         done
         # Final verification
         sleep 1
-        remaining=$(bd_safe list --all --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+        remaining=$(bd_safe count 2>/dev/null || echo "0")
         if [ "$remaining" -gt 0 ]; then
             echo "  ⚠ WARNING: $remaining task(s) still remain after cleanup. Run 'bd list --all' to inspect."
         fi

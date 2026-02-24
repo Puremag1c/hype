@@ -13,20 +13,6 @@ BD_LOCK_FILE="${BD_LOCK_FILE:-/tmp/hype-bd.lock}"
 # Prevents daemon explosion from parallel bd calls overwhelming the socket
 # Uses mkdir-based locking (works on macOS and Linux, no external deps)
 bd_safe() {
-    # Check for daemon explosion before any operation
-    # If too many bd processes, kill all and restart fresh
-    local daemon_count
-    daemon_count=$(pgrep -x bd 2>/dev/null | wc -l | tr -d ' ')
-
-    if [ "$daemon_count" -gt 5 ]; then
-        >&2 echo "WARN: Beads daemon explosion detected ($daemon_count processes). Killing all and restarting."
-        pkill -9 -x bd 2>/dev/null || true
-        sleep 2
-        # Restart daemon (will start fresh on next bd command automatically)
-        bd daemon start --log-level warn >/dev/null 2>&1 || true
-        sleep 1
-    fi
-
     local lock_dir="/tmp/hype-bd.lock.d"
     local lock_timeout=30
     local waited=0
@@ -63,17 +49,15 @@ bd_safe() {
     fi
 
     # Auto-recovery for failed write operations
-    # If a write fails, the daemon SQLite connection may be broken
-    # ("database is closed") — detect, restart daemon, retry once
+    # Dolt embedded may transiently fail — probe health, retry once
     if [ $exit_code -ne 0 ]; then
         case "$1" in
-            update|close|create|sync)
+            update|close|create)
                 >&2 echo "WARN: bd $1 failed (exit=$exit_code): bd $*"
 
-                # Probe daemon health with a simple read
+                # Probe backend health with a simple read
                 if ! timeout_cmd 5s bd list --limit 1 >/dev/null 2>&1; then
-                    >&2 echo "WARN: Daemon unhealthy, restarting..."
-                    bd daemon restart . &>/dev/null || true
+                    >&2 echo "WARN: bd backend unhealthy, waiting before retry..."
                     sleep 2
                 fi
 
@@ -758,100 +742,38 @@ export -f release_review_lock 2>/dev/null || true
 # =============================================================================
 # Beads Daemon Health
 # =============================================================================
-# Shared daemon recovery logic — used by hype.sh, doctor.sh, and any script
-# that needs a healthy bd daemon before proceeding.
+# Beads health check — Dolt embedded backend (v0.50+, no daemon)
+# Verifies bd CLI can read from Dolt. Used by hype.sh and doctor.sh.
 
-# hard_kill_beads_daemon - kill zombie daemon by PID when socket is gone
-# Reads PID from .beads/daemon.pid, verifies it's a bd process, kills it,
-# cleans up stale files, and starts a fresh daemon.
-hard_kill_beads_daemon() {
-    local pid_file=".beads/daemon.pid"
-    local lock_file=".beads/daemon.lock"
-
-    if [ -f "$pid_file" ]; then
-        local pid
-        pid=$(cat "$pid_file" 2>/dev/null | tr -d '[:space:]')
-
-        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-            local proc_name
-            proc_name=$(ps -p "$pid" -o comm= 2>/dev/null || echo "")
-
-            if [[ "$proc_name" == *"bd"* ]] || [[ "$proc_name" == *"beads"* ]]; then
-                >&2 echo "WARN: Killing zombie daemon (PID $pid)"
-                kill "$pid" 2>/dev/null || true
-                sleep 1
-
-                if kill -0 "$pid" 2>/dev/null; then
-                    kill -9 "$pid" 2>/dev/null || true
-                    sleep 1
-                fi
-            else
-                >&2 echo "WARN: PID $pid is not a beads process ($proc_name), removing stale files"
-            fi
-        fi
-    fi
-
-    rm -f "$pid_file" "$lock_file" .beads/daemon.sock 2>/dev/null || true
-
-    bd daemon start --log-level warn &>/dev/null || true
-    sleep 2
-}
-export -f hard_kill_beads_daemon 2>/dev/null || true
-
-# check_beads - ensure bd daemon is alive, attempt recovery if not
-# Returns: 0 if daemon is healthy, 1 if unrecoverable
-# Caller decides policy: hype.sh exits, doctor.sh continues with limited data
+# check_beads - verify bd backend is accessible
+# Returns: 0 if healthy, 1 if unrecoverable
+# Caller decides policy: hype.sh retries, doctor.sh continues with limited data
 check_beads() {
-    # Check DAEMON specifically, not bd CLI (which has SQLite fallback even when daemon is dead)
-    if timeout_cmd 5s bd daemon status 2>/dev/null | grep -q "running"; then
+    if timeout_cmd 5s bd list --limit 1 >/dev/null 2>&1; then
         return 0
     fi
 
-    >&2 echo "WARN: Beads daemon not responding, attempting restart..."
+    >&2 echo "WARN: bd backend not responding, retrying..."
 
     local attempts=0
     while [ $attempts -lt 3 ]; do
         ((attempts++))
-        timeout_cmd 10s bd daemon restart . &>/dev/null || true
         sleep 2
-
-        if timeout_cmd 5s bd daemon status 2>/dev/null | grep -q "running"; then
-            >&2 echo "INFO: Beads daemon recovered after $attempts attempt(s)"
+        if timeout_cmd 5s bd list --limit 1 >/dev/null 2>&1; then
+            >&2 echo "INFO: bd backend recovered after $attempts attempt(s)"
             return 0
         fi
     done
 
-    >&2 echo "WARN: Soft restart failed, attempting hard kill..."
-    hard_kill_beads_daemon
-
-    if timeout_cmd 5s bd daemon status 2>/dev/null | grep -q "running"; then
-        >&2 echo "INFO: Beads daemon recovered after hard kill"
-        return 0
-    fi
-
-    >&2 echo "ERROR: Beads daemon failed to recover after hard kill"
+    >&2 echo "ERROR: bd backend failed to recover after 3 attempts"
     return 1
 }
 export -f check_beads 2>/dev/null || true
 
-# ensure_single_daemon - kill duplicates, ensure exactly one bd daemon running
-# ChatFilter incident: 6 daemons running simultaneously overwhelmed the socket.
-# Call at startup before main loop.
+# ensure_single_daemon - legacy compat stub (daemon removed in beads v0.50)
+# Kept as no-op so callers don't break. Will be removed when all callers updated.
 ensure_single_daemon() {
-    local daemon_count
-    daemon_count=$(pgrep -x bd 2>/dev/null | wc -l | tr -d ' ')
-
-    if [ "$daemon_count" -gt 1 ]; then
-        >&2 echo "WARN: Multiple bd daemons ($daemon_count), killing all and restarting one"
-        pkill -9 -x bd 2>/dev/null || true
-        sleep 2
-        bd daemon start --log-level warn >/dev/null 2>&1 || true
-        sleep 1
-    elif [ "$daemon_count" -eq 0 ]; then
-        >&2 echo "INFO: No bd daemon running, starting one"
-        bd daemon start --log-level warn >/dev/null 2>&1 || true
-        sleep 1
-    fi
+    return 0
 }
 export -f ensure_single_daemon 2>/dev/null || true
 
@@ -985,7 +907,7 @@ export -f delete_all_milestones 2>/dev/null || true
 # cleanup_iteration - полная очистка после завершения итерации
 # Использование: cleanup_iteration [LOGS_DIR] [PROJECT_DIR]
 # Делает:
-#   1. bd sync (backup в issues.jsonl)
+#   1. (removed: bd sync is no-op since Dolt v0.51)
 #   2. Удаляет логи
 #   3. Очищает beads tasks
 #   4. Удаляет milestones
@@ -1071,9 +993,7 @@ cleanup_iteration() {
     echo ""
     echo "Starting cleanup..."
 
-    # 1. Sync beads (backup to issues.jsonl)
-    echo "  → Syncing beads..."
-    bd_safe sync 2>/dev/null || true
+    # 1. (Dolt auto-commits — no sync needed since v0.51)
 
     # 2. Delete logs
     echo "  → Deleting logs..."

@@ -150,9 +150,8 @@ load_config() {
     validate_config
 }
 
-# === Beads daemon check ===
-# check_beads and hard_kill_beads_daemon are defined in common.sh
-# Here we wrap check_beads with exit-on-failure policy for the main loop
+# === Beads health check ===
+# check_beads is defined in common.sh (Dolt backend, no daemon since v0.50)
 
 # === Symlinks health check ===
 
@@ -1486,8 +1485,7 @@ main() {
     # Clean up stale state from previous sessions (crash recovery)
     rm -f "$CLAUDEV_DIR/run-testers.pid"
 
-    # Startup hardening: single daemon + DB compaction
-    ensure_single_daemon
+    # Startup hardening: DB compaction (daemon removed in beads v0.50)
     compact_beads_if_large 10
 
     # Close orphaned triggers from previous sessions
@@ -1508,16 +1506,16 @@ main() {
     while [ $cycle -lt "$max_cycles" ]; do
         ((cycle++))
 
-        # 1. Check beads daemon with adaptive backoff
-        # If daemon is slow, increase delay to reduce load instead of hammering it
+        # 1. Check beads backend with adaptive backoff
+        # If backend is slow, increase delay to reduce load instead of hammering it
         local health_start health_end health_elapsed
         health_start=$(date +%s)
         if ! check_beads; then
             ((beads_fail_streak++)) || true
             if [ "$beads_fail_streak" -ge 5 ]; then
-                log "ERROR" "Beads daemon failed $beads_fail_streak cycles in a row. Try: bd daemon restart ."
+                log "ERROR" "Beads backend failed $beads_fail_streak cycles in a row. Try: bd doctor"
             else
-                log "WARN" "Beads daemon not recovered (streak $beads_fail_streak/5), retrying in 60s..."
+                log "WARN" "Beads backend not recovered (streak $beads_fail_streak/5), retrying in 60s..."
             fi
             sleep 60
             continue
@@ -1529,7 +1527,7 @@ main() {
         local prev_delay="$current_delay"
         current_delay=$(calculate_backoff_delay "$current_delay" "$health_elapsed" "$base_delay")
         if [ "$current_delay" -ne "$prev_delay" ] && [ "$current_delay" -gt "$base_delay" ]; then
-            log "WARN" "Daemon slow (${health_elapsed}s), backing off to ${current_delay}s delay"
+            log "WARN" "bd backend slow (${health_elapsed}s), backing off to ${current_delay}s delay"
         fi
 
         # 2. Load config (allows hot reload)

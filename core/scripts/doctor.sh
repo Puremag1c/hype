@@ -166,7 +166,7 @@ gather_context() {
     # Beads status
     context+="## Beads Status\n"
     context+="\`\`\`\n"
-    context+=$(bd_safe sync --status 2>&1 || echo "DAEMON_ERROR: bd sync timeout")
+    context+=$(bd_safe info 2>&1 || echo "ERROR: bd info failed")
     context+="\n\n"
     context+=$(bd_safe stats 2>&1 || echo "bd stats failed")
     context+="\n\`\`\`\n\n"
@@ -336,8 +336,8 @@ run_doctor() {
     # Modifications (bd update, bd close, rm, pkill) still require user confirmation
     local allowed_tools='Read,Glob,Grep'
     allowed_tools+=',Bash(bd list:*),Bash(bd show:*),Bash(bd stats:*)'
-    allowed_tools+=',Bash(bd blocked:*),Bash(bd sync --status:*)'
-    allowed_tools+=',Bash(bd dep cycles:*),Bash(bd daemon status:*)'
+    allowed_tools+=',Bash(bd blocked:*),Bash(bd info:*)'
+    allowed_tools+=',Bash(bd dep cycles:*),Bash(bd doctor:*)'
     allowed_tools+=',Bash(pgrep:*),Bash(ps:*),Bash(kill -0:*)'
     allowed_tools+=',Bash(git status:*),Bash(git worktree list:*),Bash(git branch:*)'
     allowed_tools+=',Bash(ls:*),Bash(cat:*),Bash(tail:*),Bash(head:*)'
@@ -414,11 +414,10 @@ main() {
     log "INFO" "Project: $PROJECT_DIR"
     log "INFO" "=========================================="
 
-    # Ensure bd daemon is alive before gathering context
-    # check_beads (from common.sh) handles soft restart + hard kill recovery
-    # Without this, gather_context spends 60-70s on timeouts with empty results
+    # Ensure bd backend is accessible before gathering context
+    # check_beads (from common.sh) probes Dolt embedded backend
     if ! check_beads; then
-        log "ERROR" "Beads daemon unrecoverable — Doctor will run with limited data"
+        log "ERROR" "Beads backend unreachable — Doctor will run with limited data"
     fi
 
     run_doctor

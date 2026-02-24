@@ -280,7 +280,7 @@ load '../helpers/setup'
 }
 
 # =============================================================================
-# Shared check_beads: common.sh exports daemon health check (v2.2.8)
+# Shared check_beads: Dolt backend health check (v2.5, daemon removed v0.50)
 # =============================================================================
 
 @test "common.sh: check_beads defined and exported" {
@@ -290,29 +290,30 @@ load '../helpers/setup'
     grep -q 'export -f check_beads' "$common_sh"
 }
 
-@test "common.sh: hard_kill_beads_daemon defined and exported" {
+@test "common.sh: check_beads uses bd list probe (no daemon)" {
     local common_sh="$SCRIPTS_DIR/common.sh"
+    local body
+    body=$(sed -n '/^check_beads()/,/^}/p' "$common_sh")
 
-    grep -q 'hard_kill_beads_daemon()' "$common_sh"
-    grep -q 'export -f hard_kill_beads_daemon' "$common_sh"
+    echo "$body" | grep -q 'bd list --limit 1'
+    ! echo "$body" | grep -q 'bd daemon'
+}
+
+@test "common.sh: no hard_kill_beads_daemon (daemon removed v0.50)" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+    ! grep -q '^hard_kill_beads_daemon()' "$common_sh"
 }
 
 @test "hype.sh: does NOT define check_beads locally (uses common.sh)" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
-    # Should NOT have check_beads() function definition
     ! grep -q '^check_beads()' "$hype_sh"
-    ! grep -q '^hard_kill_beads_daemon()' "$hype_sh"
 }
 
-@test "doctor.sh: uses check_beads from common.sh (not inline daemon check)" {
+@test "doctor.sh: uses check_beads from common.sh" {
     local doctor_sh="$SCRIPTS_DIR/doctor.sh"
 
-    # Must call check_beads
     grep -q 'check_beads' "$doctor_sh"
-
-    # Must NOT have inline hard kill logic (old pattern)
-    ! grep -q 'kill -9.*pid' "$doctor_sh"
     ! grep -q 'daemon.pid' "$doctor_sh"
 }
 

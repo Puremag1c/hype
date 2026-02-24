@@ -11,22 +11,22 @@ load '../helpers/setup'
 @test "bd_safe: auto-recovery block exists for write operations" {
     local common_sh="$SCRIPTS_DIR/common.sh"
 
-    # Must detect write failures (update/close/create/sync)
-    grep -q 'update|close|create|sync' "$common_sh"
+    # Must detect write failures (update/close/create — no sync since v2.5)
+    grep -q 'update|close|create)' "$common_sh"
 }
 
-@test "bd_safe: retries failed write after daemon health check" {
+@test "bd_safe: retries failed write after health probe (Dolt v0.50+)" {
     local common_sh="$SCRIPTS_DIR/common.sh"
 
-    # Must have retry logic after daemon probe
+    # Must have retry logic after backend probe
     local recovery_block
     recovery_block=$(sed -n '/Auto-recovery for failed write/,/Release lock/p' "$common_sh")
 
-    # Must probe daemon health
+    # Must probe backend health
     echo "$recovery_block" | grep -q 'bd list --limit 1'
 
-    # Must attempt daemon restart
-    echo "$recovery_block" | grep -q 'daemon restart'
+    # Must NOT attempt daemon restart (daemon removed v0.50)
+    ! echo "$recovery_block" | grep -q 'daemon restart'
 
     # Must retry the command
     echo "$recovery_block" | grep -q 'timeout_cmd.*bd.*"$@"'
@@ -67,8 +67,8 @@ load '../helpers/setup'
     local case_block
     case_block=$(sed -n '/Auto-recovery for failed write/,/esac/p' "$common_sh")
 
-    # Only update|close|create|sync — no list, show, etc.
-    echo "$case_block" | grep -q 'update|close|create|sync)'
+    # Only update|close|create — no list, show, sync, etc.
+    echo "$case_block" | grep -q 'update|close|create)'
 
     # Must NOT contain list or show in the case pattern
     ! echo "$case_block" | grep -q 'list|show'
@@ -216,22 +216,21 @@ load '../helpers/setup'
     grep -q 'ALL_TASKS_JSON.*milestone:' "$detect_sh"
 }
 
-@test "detect-phase.sh: auto-recovery with bd sync --import-only on stale DB" {
+@test "detect-phase.sh: auto-recovery retries bd list on stale DB (no bd sync)" {
     local detect_sh="$SCRIPTS_DIR/detect-phase.sh"
 
-    # Must attempt bd sync --import-only before giving up
-    grep -q 'bd sync --import-only' "$detect_sh"
-    # Must retry bd_safe list after recovery
-    local recovery_block
-    recovery_block=$(sed -n '/import-only recovery/,/recovery succeeded/p' "$detect_sh")
-    echo "$recovery_block" | grep -q 'bd_safe list'
+    # Must NOT use bd sync --import-only (removed in v2.5, Dolt handles natively)
+    ! grep -q 'bd sync --import-only' "$detect_sh"
+    # Must retry bd_safe list after sleep
+    grep -q 'retrying after' "$detect_sh"
+    grep -q 'recovered on retry' "$detect_sh"
 }
 
 @test "detect-phase.sh: empty bd response guard (prevents phase regression)" {
     local detect_sh="$SCRIPTS_DIR/detect-phase.sh"
 
     # If TOTAL==0 but milestones exist → ERROR (not PLANNING)
-    grep -q 'milestones exist.*daemon returned empty' "$detect_sh"
+    grep -q 'milestones exist.*bd returned empty' "$detect_sh"
     grep -q 'output_json "ERROR"' "$detect_sh"
 }
 

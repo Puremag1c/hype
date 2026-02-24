@@ -200,10 +200,7 @@ main() {
         log "INFO" "Some analysts still open ($open_triggers remaining)"
     fi
 
-    # Sync only if daemon is not running (daemon auto-syncs)
-    if ! bd_safe sync --status 2>/dev/null | grep -q "auto-commit.*enabled"; then
-        bd_safe sync 2>/dev/null || true
-    fi
+    # Dolt auto-commits — no sync needed since v0.51
     log "INFO" "ANALYZE FINISHED"
 }
 

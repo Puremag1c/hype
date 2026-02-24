@@ -349,7 +349,6 @@ main() {
     for task_id in $tasks; do
         log "INFO" "Merge: $task_id"
         merge_task "$task_id"
-        bd_safe sync 2>/dev/null || true
         return
     done
 }

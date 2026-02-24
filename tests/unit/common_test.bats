@@ -429,24 +429,32 @@ load '../helpers/mock_bd'
     ! grep -q 'bd_safe delete' "$SCRIPTS_DIR/detect-phase.sh"
 }
 
-@test "bd_safe explosion threshold is 5" {
-    grep -q 'daemon_count.*-gt 5' "$SCRIPTS_DIR/common.sh"
+@test "bd_safe has no daemon explosion check (removed in v2.5)" {
+    local bd_safe_body
+    bd_safe_body=$(sed -n '/^bd_safe()/,/^}/p' "$SCRIPTS_DIR/common.sh")
+    ! echo "$bd_safe_body" | grep -q 'daemon_count'
+    ! echo "$bd_safe_body" | grep -q 'pkill'
+    ! echo "$bd_safe_body" | grep -q 'bd daemon'
 }
 
-@test "ensure_single_daemon function exists in common.sh" {
+@test "ensure_single_daemon is no-op stub (daemon removed v0.50)" {
     grep -q '^ensure_single_daemon()' "$SCRIPTS_DIR/common.sh"
+    local body
+    body=$(sed -n '/^ensure_single_daemon()/,/^}/p' "$SCRIPTS_DIR/common.sh")
+    echo "$body" | grep -q 'return 0'
 }
 
 @test "compact_beads_if_large function exists in common.sh" {
     grep -q '^compact_beads_if_large()' "$SCRIPTS_DIR/common.sh"
 }
 
-@test "check_beads uses bd daemon status not bd sync --status" {
-    # check_beads should use bd daemon status
-    sed -n '/^check_beads()/,/^}/p' "$SCRIPTS_DIR/common.sh" | grep -q 'bd daemon status'
-
-    # check_beads should NOT use bd sync --status
-    ! sed -n '/^check_beads()/,/^}/p' "$SCRIPTS_DIR/common.sh" | grep -q 'bd sync --status'
+@test "check_beads uses bd list probe not bd daemon status (Dolt v0.50+)" {
+    local body
+    body=$(sed -n '/^check_beads()/,/^}/p' "$SCRIPTS_DIR/common.sh")
+    # Should probe with bd list (works with Dolt embedded)
+    echo "$body" | grep -q 'bd list --limit 1'
+    # Should NOT reference daemon
+    ! echo "$body" | grep -q 'bd daemon'
 }
 
 @test "delete_milestone uses rm -f (v2.3.9 file-based)" {
@@ -463,8 +471,8 @@ load '../helpers/mock_bd'
     ! echo "$body" | grep -q 'bd_safe'
 }
 
-@test "hype.sh calls ensure_single_daemon at startup" {
-    grep -q 'ensure_single_daemon' "$SCRIPTS_DIR/hype.sh"
+@test "hype.sh does NOT call ensure_single_daemon (daemon removed v0.50)" {
+    ! grep -q '^[[:space:]]*ensure_single_daemon' "$SCRIPTS_DIR/hype.sh"
 }
 
 @test "hype.sh calls compact_beads_if_large at startup" {

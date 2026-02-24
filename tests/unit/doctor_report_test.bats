@@ -205,8 +205,8 @@ EOF
     grep -q 'Bash(bd show:\*)' "$doctor"
     grep -q 'Bash(bd stats:\*)' "$doctor"
     grep -q 'Bash(bd blocked:\*)' "$doctor"
-    grep -q 'Bash(bd sync --status:\*)' "$doctor"
-    grep -q 'Bash(bd daemon status:\*)' "$doctor"
+    grep -q 'Bash(bd info:\*)' "$doctor"
+    grep -q 'Bash(bd doctor:\*)' "$doctor"
 }
 
 @test "doctor.sh: allowedTools does NOT include unsafe bd commands" {

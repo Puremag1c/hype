@@ -37,7 +37,7 @@ else
     if [ -n "$CLOSED_BUG" ]; then
         echo "REGRESSION: Reopening $CLOSED_BUG"
         bd update "$CLOSED_BUG" --status=open --add-label=regression --add-label=smoke \
-            --notes="Regression detected during SMOKE_TEST. Issue reappeared after previous fix."
+            --notes="Regression detected during TESTING. Issue reappeared after previous fix."
     else
         # Step 3: Create NEW bug with done_when
         bd create --title="SMOKE: [Tests] <description>" \
@@ -201,7 +201,7 @@ $(grep -A5 "FAIL\|✕\|Error" .hype/evidence/regression/test-output.txt | head -
 .hype/evidence/regression/test-output.txt
 
 ## Context
-Discovered during SMOKE_TEST regression verification.
+Discovered during TESTING regression verification.
 
 done_when: All tests pass ($TEST_CMD returns exit code 0)"
 ```
@@ -248,7 +248,7 @@ bd close $TRIGGER_TASK --reason="Regression testing complete. $PASSED passed, $F
 
 - Default: 5 minutes (300s)
 - If timeout: report as failure with "Test suite timeout"
-- Don't let slow tests block the entire SMOKE_TEST phase
+- Don't let slow tests block the entire TESTING phase
 
 ## What NOT to Do
 

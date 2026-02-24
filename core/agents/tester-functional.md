@@ -36,7 +36,7 @@ else
     if [ -n "$CLOSED_BUG" ]; then
         echo "REGRESSION: Reopening $CLOSED_BUG"
         bd update "$CLOSED_BUG" --status=open --add-label=regression --add-label=smoke \
-            --notes="Regression detected during SMOKE_TEST. Issue reappeared after previous fix."
+            --notes="Regression detected during TESTING. Issue reappeared after previous fix."
     else
         # Step 3: Create NEW bug with done_when
         bd create --title="SMOKE: [Must Have] <description>" \
@@ -211,7 +211,7 @@ Button stays the same, no visual feedback
 3. Observe: no spinner appears
 
 ## Context
-Discovered during SMOKE_TEST phase.
+Discovered during TESTING phase.
 
 done_when: Clicking Connect button shows visible loading indicator (spinner or text change) within 100ms"
 ```
@@ -230,7 +230,7 @@ Navigation links overflow on mobile viewport (375px)
 .hype/evidence/functional/mobile-nav-overflow.png
 
 ## Context
-Discovered during SMOKE_TEST phase.
+Discovered during TESTING phase.
 
 done_when: Navigation menu displays correctly on 375px viewport without overflow or truncation"
 ```

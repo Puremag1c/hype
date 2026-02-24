@@ -75,24 +75,24 @@ create_milestone() {
 }
 
 # =============================================================================
-# INIT phase tests
+# PREPARING phase tests
 # =============================================================================
 
-@test "detect-phase: INIT when no SPEC.md" {
+@test "detect-phase: PREPARING when no SPEC.md" {
     run get_phase
     [[ "$status" -eq 0 ]]
-    [[ "$output" == "INIT" ]]
+    [[ "$output" == "PREPARING" ]]
 }
 
-@test "detect-phase: INIT when needs-spec marker exists" {
+@test "detect-phase: PREPARING when needs-spec marker exists" {
     # Create SPEC but also needs-spec (after cleanup)
     touch "$INT_TMPDIR/SPEC.md"
     touch "$INT_TMPDIR/.hype/needs-spec"
 
     run get_phase
     [[ "$status" -eq 0 ]]
-    # Empty beads + needs-spec = INIT (or PLANNING if no needs-spec handling)
-    [[ "$output" == "INIT" || "$output" == "PLANNING" ]]
+    # Empty beads + needs-spec = PREPARING (or PLANNING if no needs-spec handling)
+    [[ "$output" == "PREPARING" || "$output" == "PLANNING" ]]
 }
 
 # =============================================================================
@@ -118,19 +118,19 @@ create_milestone() {
 }
 
 # =============================================================================
-# HELPERS phase tests
+# ANALYZE phase tests
 # =============================================================================
 
-@test "detect-phase: HELPERS when planning-done but no analysts-done" {
+@test "detect-phase: ANALYZE when planning-done but no analysts-done" {
     touch "$INT_TMPDIR/SPEC.md"
     create_milestone "milestone:planning-done" "Planning complete"
 
     run get_phase
     [[ "$status" -eq 0 ]]
-    [[ "$output" == "HELPERS" ]]
+    [[ "$output" == "ANALYZE" ]]
 }
 
-@test "detect-phase: HELPERS self-healing removes premature milestone" {
+@test "detect-phase: ANALYZE self-healing removes premature milestone" {
     # NOTE: This test verifies self-healing removes analysts-done milestone
     # when analyst triggers are still pending. The self-healing logic
     # deletes the milestone via bd delete, which may require daemon sync.
@@ -147,28 +147,28 @@ create_milestone() {
 
     run get_phase
     [[ "$status" -eq 0 ]]
-    [[ "$output" == "HELPERS" ]]
+    [[ "$output" == "ANALYZE" ]]
 }
 
 # =============================================================================
-# PLAN_REVIEW phase tests
+# THINKING phase tests
 # =============================================================================
 
-@test "detect-phase: PLAN_REVIEW when analysts-done but no plan-reviewed" {
+@test "detect-phase: THINKING when analysts-done but no plan-reviewed" {
     touch "$INT_TMPDIR/SPEC.md"
     create_milestone "milestone:planning-done" "Planning complete"
     create_milestone "milestone:analysts-done" "Analysts done"
 
     run get_phase
     [[ "$status" -eq 0 ]]
-    [[ "$output" == "PLAN_REVIEW" ]]
+    [[ "$output" == "THINKING" ]]
 }
 
 # =============================================================================
-# IMPLEMENTATION phase tests
+# CODING phase tests
 # =============================================================================
 
-@test "detect-phase: IMPLEMENTATION when open tasks exist" {
+@test "detect-phase: CODING when open tasks exist" {
     touch "$INT_TMPDIR/SPEC.md"
     create_milestone "milestone:planning-done" "Planning complete"
     create_milestone "milestone:analysts-done" "Analysts done"
@@ -180,10 +180,10 @@ create_milestone() {
 
     run get_phase
     [[ "$status" -eq 0 ]]
-    [[ "$output" == "IMPLEMENTATION" ]]
+    [[ "$output" == "CODING" ]]
 }
 
-@test "detect-phase: IMPLEMENTATION when in_progress tasks exist" {
+@test "detect-phase: CODING when in_progress tasks exist" {
     touch "$INT_TMPDIR/SPEC.md"
     create_milestone "milestone:planning-done" "Planning complete"
     create_milestone "milestone:analysts-done" "Analysts done"
@@ -196,7 +196,7 @@ create_milestone() {
 
     run get_phase
     [[ "$status" -eq 0 ]]
-    [[ "$output" == "IMPLEMENTATION" ]]
+    [[ "$output" == "CODING" ]]
 }
 
 @test "detect-phase: in_progress_ids contains task IDs" {
@@ -216,10 +216,10 @@ create_milestone() {
 }
 
 # =============================================================================
-# SMOKE_REVIEW phase tests
+# REFLEXING phase tests
 # =============================================================================
 
-@test "detect-phase: SMOKE_REVIEW when regression tasks exist" {
+@test "detect-phase: REFLEXING when regression tasks exist" {
     touch "$INT_TMPDIR/SPEC.md"
     create_milestone "milestone:planning-done" "Planning complete"
     create_milestone "milestone:analysts-done" "Analysts done"
@@ -231,7 +231,7 @@ create_milestone() {
 
     run get_phase
     [[ "$status" -eq 0 ]]
-    [[ "$output" == "SMOKE_REVIEW" ]]
+    [[ "$output" == "REFLEXING" ]]
 }
 
 @test "detect-phase: regression_count reflects open regressions" {
@@ -251,10 +251,10 @@ create_milestone() {
 }
 
 # =============================================================================
-# SMOKE_TEST phase tests
+# TESTING phase tests
 # =============================================================================
 
-@test "detect-phase: SMOKE_TEST when all tasks closed and no smoke-test-done" {
+@test "detect-phase: TESTING when all tasks closed and no testing-done" {
     touch "$INT_TMPDIR/SPEC.md"
     create_milestone "milestone:planning-done" "Planning complete"
     create_milestone "milestone:analysts-done" "Analysts done"
@@ -267,19 +267,19 @@ create_milestone() {
 
     run get_phase
     [[ "$status" -eq 0 ]]
-    [[ "$output" == "SMOKE_TEST" ]]
+    [[ "$output" == "TESTING" ]]
 }
 
 # =============================================================================
-# FINAL_REVIEW phase tests
+# VALIDATING phase tests
 # =============================================================================
 
-@test "detect-phase: FINAL_REVIEW when smoke-test-done but no project-done" {
+@test "detect-phase: VALIDATING when testing-done but no project-done" {
     touch "$INT_TMPDIR/SPEC.md"
     create_milestone "milestone:planning-done" "Planning complete"
     create_milestone "milestone:analysts-done" "Analysts done"
     create_milestone "milestone:plan-reviewed" "Plan reviewed"
-    create_milestone "milestone:smoke-test-done" "Smoke test done"
+    create_milestone "milestone:testing-done" "Smoke test done"
 
     # Need at least one closed task for stats
     cd "$INT_TMPDIR"
@@ -288,7 +288,7 @@ create_milestone() {
 
     run get_phase
     [[ "$status" -eq 0 ]]
-    [[ "$output" == "FINAL_REVIEW" ]]
+    [[ "$output" == "VALIDATING" ]]
 }
 
 # =============================================================================
@@ -310,16 +310,16 @@ create_milestone() {
 
 @test "detect-phase: force-phase overrides detection" {
     touch "$INT_TMPDIR/SPEC.md"
-    echo "SMOKE_TEST" > "$INT_TMPDIR/.hype/force-phase"
+    echo "TESTING" > "$INT_TMPDIR/.hype/force-phase"
 
     run get_phase
     [[ "$status" -eq 0 ]]
-    [[ "$output" == "SMOKE_TEST" ]]
+    [[ "$output" == "TESTING" ]]
 }
 
 @test "detect-phase: force-phase file is deleted after use" {
     touch "$INT_TMPDIR/SPEC.md"
-    echo "IMPLEMENTATION" > "$INT_TMPDIR/.hype/force-phase"
+    echo "CODING" > "$INT_TMPDIR/.hype/force-phase"
 
     get_phase >/dev/null
 

@@ -34,17 +34,17 @@ PLANNING_TIMEOUT="15m"
 # NOTE: Increased from 10m to handle slow bd operations under load
 ANALYST_TIMEOUT="15m"
 
-# Таймаут для PLAN_REVIEW (architect ревьюит добавления analysts)
-PLAN_REVIEW_TIMEOUT="10m"
+# Таймаут для THINKING (architect ревьюит добавления analysts)
+THINKING_TIMEOUT="10m"
 
-# Таймаут для каждого tester агента (SMOKE_TEST phase)
+# Таймаут для каждого tester агента (TESTING phase)
 TESTER_TIMEOUT="10m"
 
-# Общий таймаут на SMOKE_TEST фазу
-SMOKE_TEST_TIMEOUT="15m"
+# Общий таймаут на TESTING фазу
+TESTING_TIMEOUT="15m"
 
-# Таймаут для FINAL_REVIEW (architect проверяет весь проект)
-FINAL_REVIEW_TIMEOUT="15m"
+# Таймаут для VALIDATING (architect проверяет весь проект)
+VALIDATING_TIMEOUT="15m"
 
 # Таймаут stale worktrees (секунды) — worktree старше этого удаляется
 WORKTREE_STALE_TIMEOUT=900
@@ -73,7 +73,7 @@ MODEL_REVIEWER="sonnet"
 MODEL_MANAGER="sonnet"
 MODEL_ANALYZER="opus"
 
-# Модели для SMOKE_TEST testers
+# Модели для TESTING testers
 MODEL_TESTERS="haiku"               # Default for api, cli testers
 MODEL_TESTER_FUNCTIONAL="sonnet"    # Must Have verification
 MODEL_TESTER_VISUAL="opus"          # UI testing (needs vision)

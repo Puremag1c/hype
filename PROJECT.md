@@ -6,7 +6,7 @@
 
 Запустите `hype init` в любом проекте, опишите что хотите словами — система сама создаст план, распределит задачи между агентами и выдаст готовый результат.
 
-**Версия:** 2.4.0
+**Версия:** 2.4.1
 
 ## Целевая аудитория
 
@@ -68,27 +68,27 @@ hype/
 ## Фазы работы
 
 ```
-INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST → FINAL_REVIEW → DONE
+PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALIDATING → REPORTING → DONE
                                               ↑                 ↓
-                                              └── SMOKE_REVIEW ←┘ (smoke/regression tasks)
-                                         USER_REVIEW ← (user-escalation → daemon stops)
+                                              └── REFLEXING ←┘ (smoke/regression tasks)
+                                         CONSULTATION ← (user-escalation → daemon stops)
 ```
 
 | Фаза | Агент | Что происходит |
 |------|-------|----------------|
-| INIT | Tech Writer | Собирает требования, создаёт SPEC.md (+ deep analysis для больших проектов) |
+| PREPARING | Tech Writer | Собирает требования, создаёт SPEC.md (+ deep analysis для больших проектов) |
 | PLANNING | Architect-Planner | Создаёт задачи в beads, расставляет deps |
-| HELPERS | Analysts ×5 | Параллельный аудит плана |
-| PLAN_REVIEW | Architect-Reviewer | Ревью добавлений от Analysts |
-| IMPLEMENTATION | Executors + Reviewers + Merge Queue | Параллельная реализация + review + merge (v2.2) |
-| SMOKE_TEST | Testers ×6 | Параллельная проверка (по типу проекта) |
-| SMOKE_REVIEW | Architect-QA | Триаж smoke test находок (smoke + regression) |
-| USER_REVIEW | Tech-Writer-Review | Отчёт для пользователя, daemon stops |
-| FINAL_REVIEW | Architect-QA | Проверка целостности |
-| VERSIONING | Completion (Opus) | Version bump + CHANGELOG + SPEC_REPORT + commit + push |
+| ANALYZE | Analysts ×5 | Параллельный аудит плана |
+| THINKING | Architect-Reviewer | Ревью добавлений от Analysts |
+| CODING | Executors + Reviewers + Merge Queue | Параллельная реализация + review + merge (v2.2) |
+| TESTING | Testers ×6 | Параллельная проверка (по типу проекта) |
+| REFLEXING | Architect-QA | Триаж smoke test находок (smoke + regression) |
+| CONSULTATION | Tech-Writer-Review | Отчёт для пользователя, daemon stops |
+| VALIDATING | Architect-QA | Проверка целостности |
+| REPORTING | Completion (Opus) | Version bump + CHANGELOG + SPEC_REPORT + commit + push |
 | DONE | — | Проект завершён |
 
-### SMOKE_TEST Testers
+### TESTING Testers
 
 | Tester | Model | Project Types | Focus |
 |--------|-------|---------------|-------|
@@ -99,15 +99,15 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 | tester-regression | sonnet | library | Тестовый suite |
 | tester-backend | sonnet | ALL | Запуск существующих тестов + генерация новых |
 
-**Hard gate:** P0 bugs блокируют milestone:smoke-test-done → возврат в IMPLEMENTATION
+**Hard gate:** P0 bugs блокируют milestone:testing-done → возврат в CODING
 
-**Smoke triage:** ВСЕ баги из SMOKE_TEST получают label `smoke`. Regression reopens получают `smoke` + `regression`. Architect-QA триажит каждый баг в SMOKE_REVIEW перед тем как executors смогут его взять.
+**Smoke triage:** ВСЕ баги из TESTING получают label `smoke`. Regression reopens получают `smoke` + `regression`. Architect-QA триажит каждый баг в REFLEXING перед тем как executors смогут его взять.
 
 **Regression counter:** `regress:N` — script-driven счётчик в `run-testers.sh`. Отслеживает сколько раз баг возвращался.
 
 **Escalation ladder:** reject:1→retry, reject:2-3→escalate model (haiku→sonnet→opus), reject:4→Troubleshooter. Troubleshooter: reformulate / split / remove / escalate to user.
 
-### Deep Analysis (INIT)
+### Deep Analysis (PREPARING)
 
 Для существующих проектов с >50 файлами кода и без хорошего README — автоматически запускается глубокий анализ через Claude (Opus). Tech Writer получает обогащённый контекст об архитектуре проекта.
 
@@ -216,16 +216,16 @@ startup_timeout: 30          # Секунды на запуск сервера
 - **reject:N counter** — счётчик code quality отказов от Reviewer (merge конфликты обрабатываются hybrid merge queue с v2.3.11)
 - **Model escalation ladder** — автоматическая эскалация: reject:1→retry, reject:2-3→upgrade model, reject:4→Troubleshooter
 - **Architect Troubleshooter** — новый агент для persistent failures (reformulate / split / remove / escalate to user)
-- **USER_REVIEW phase** — daemon stops, tech-writer-review генерирует отчёт для пользователя
+- **CONSULTATION phase** — daemon stops, tech-writer-review генерирует отчёт для пользователя
 - **Regression counter regress:N** — script-driven, отслеживает regression cycles
-- **Smoke triage gate** — все баги из SMOKE_TEST проходят через Architect review
-- **Regression-aware final_review** — 3-step протокол (check open → check closed → create new)
+- **Smoke triage gate** — все баги из TESTING проходят через Architect review
+- **Regression-aware validating** — 3-step протокол (check open → check closed → create new)
 
 ## v2.0.0: Testing Infrastructure (завершено)
 
 - **Doctor** — диагностика проблем, doctor-log для архитектора
 - **6 параллельных тестеров** — functional, backend, visual, api, cli, regression
-- **SMOKE_TEST/SMOKE_REVIEW** — hard gate на P0 bugs
+- **TESTING/REFLEXING** — hard gate на P0 bugs
 
 ## Планируется
 

@@ -444,6 +444,7 @@ PROJECT_CONTEXT.md
 SPEC.md
 SPEC.draft.md
 SPEC.prev.md
+SPEC_REPORT.prev.md
 .mcp.json
 EOF
             success "Updated .gitignore"
@@ -463,6 +464,7 @@ PROJECT_CONTEXT.md
 SPEC.md
 SPEC.draft.md
 SPEC.prev.md
+SPEC_REPORT.prev.md
 .mcp.json
 EOF
         success "Created .gitignore"
@@ -852,7 +854,7 @@ update_gitignore() {
         return
     fi
 
-    local entries=(".hype/" ".claude/agents" ".claude/commands" "scripts" "project-scripts/" "logs/" "stats/" "PROJECT_CONTEXT.md" "SPEC.md" "SPEC.draft.md" "SPEC.prev.md" ".mcp.json")
+    local entries=(".hype/" ".claude/agents" ".claude/commands" "scripts" "project-scripts/" "logs/" "stats/" "PROJECT_CONTEXT.md" "SPEC.md" "SPEC.draft.md" "SPEC.prev.md" "SPEC_REPORT.prev.md" ".mcp.json")
     local added=()
 
     for entry in "${entries[@]}"; do
@@ -1220,19 +1222,20 @@ cmd_reset_phase() {
     fi
 
     # Valid phases
-    local valid_phases="INIT PLANNING HELPERS PLAN_REVIEW IMPLEMENTATION SMOKE_TEST FINAL_REVIEW"
+    local valid_phases="PREPARING PLANNING ANALYZE THINKING CODING TESTING VALIDATING REPORTING"
 
     if [[ -z "$target_phase" ]]; then
         echo "Usage: hype reset-phase <PHASE>"
         echo ""
         echo "Available phases:"
-        echo "  INIT           - Start fresh (Tech Writer)"
-        echo "  PLANNING       - Architect creates plan"
-        echo "  HELPERS        - Analysts run"
-        echo "  PLAN_REVIEW    - Architect reviews analysts"
-        echo "  IMPLEMENTATION - Executors work on tasks"
-        echo "  SMOKE_TEST     - Testers verify product"
-        echo "  FINAL_REVIEW   - Architect final review"
+        echo "  PREPARING    - Start fresh (Tech Writer)"
+        echo "  PLANNING     - Architect creates plan"
+        echo "  ANALYZE      - Analysts run"
+        echo "  THINKING     - Architect reviews analysts"
+        echo "  CODING       - Executors work on tasks"
+        echo "  TESTING      - Testers verify product"
+        echo "  VALIDATING   - Architect final review"
+        echo "  REPORTING    - Version bump + changelog + report"
         echo ""
         echo "Current phase:"
         if [[ -x "./scripts/detect-phase.sh" ]]; then
@@ -1269,7 +1272,7 @@ cmd_reset_phase() {
     # Clean up milestones/state for consistency
     # Delete milestones AFTER target phase, create milestones BEFORE target phase
     case "$target_phase" in
-        INIT)
+        PREPARING)
             # Remove SPEC to trigger Tech Writer
             if [[ -f "SPEC.md" ]]; then
                 warn "Moving SPEC.md to SPEC.md.bak"
@@ -1278,7 +1281,8 @@ cmd_reset_phase() {
             delete_milestone "milestone:planning-done"
             delete_milestone "milestone:analysts-done"
             delete_milestone "milestone:plan-reviewed"
-            delete_milestone "milestone:smoke-test-done"
+            delete_milestone "milestone:testing-done"
+            delete_milestone "milestone:validating-done"
             delete_milestone "milestone:project-done"
             ;;
         PLANNING)
@@ -1287,52 +1291,67 @@ cmd_reset_phase() {
             delete_milestone "milestone:planning-done"
             delete_milestone "milestone:analysts-done"
             delete_milestone "milestone:plan-reviewed"
-            delete_milestone "milestone:smoke-test-done"
+            delete_milestone "milestone:testing-done"
+            delete_milestone "milestone:validating-done"
             delete_milestone "milestone:project-done"
             ;;
-        HELPERS)
+        ANALYZE)
             # Need: planning-done
             # Delete: analysts-done and after
             ensure_milestone "milestone:planning-done" "Planning complete"
             delete_milestone "milestone:analysts-done"
             delete_milestone "milestone:plan-reviewed"
-            delete_milestone "milestone:smoke-test-done"
+            delete_milestone "milestone:testing-done"
+            delete_milestone "milestone:validating-done"
             delete_milestone "milestone:project-done"
             ;;
-        PLAN_REVIEW)
+        THINKING)
             # Need: planning-done, analysts-done
             # Delete: plan-reviewed and after
             ensure_milestone "milestone:planning-done" "Planning complete"
             ensure_milestone "milestone:analysts-done" "Analysts complete"
             delete_milestone "milestone:plan-reviewed"
-            delete_milestone "milestone:smoke-test-done"
+            delete_milestone "milestone:testing-done"
+            delete_milestone "milestone:validating-done"
             delete_milestone "milestone:project-done"
             ;;
-        IMPLEMENTATION)
+        CODING)
             # Need: planning-done, analysts-done, plan-reviewed
-            # Delete: smoke-test-done and after
+            # Delete: testing-done and after
             ensure_milestone "milestone:planning-done" "Planning complete"
             ensure_milestone "milestone:analysts-done" "Analysts complete"
             ensure_milestone "milestone:plan-reviewed" "Plan reviewed"
-            delete_milestone "milestone:smoke-test-done"
+            delete_milestone "milestone:testing-done"
+            delete_milestone "milestone:validating-done"
             delete_milestone "milestone:project-done"
             ;;
-        SMOKE_TEST)
+        TESTING)
             # Need: planning-done, analysts-done, plan-reviewed
-            # Delete: smoke-test-done and after
+            # Delete: testing-done and after
             ensure_milestone "milestone:planning-done" "Planning complete"
             ensure_milestone "milestone:analysts-done" "Analysts complete"
             ensure_milestone "milestone:plan-reviewed" "Plan reviewed"
-            delete_milestone "milestone:smoke-test-done"
+            delete_milestone "milestone:testing-done"
+            delete_milestone "milestone:validating-done"
             delete_milestone "milestone:project-done"
             rm -rf .hype/evidence 2>/dev/null || true
             ;;
-        FINAL_REVIEW)
+        VALIDATING)
+            # Need: all milestones except validating-done and project-done
+            ensure_milestone "milestone:planning-done" "Planning complete"
+            ensure_milestone "milestone:analysts-done" "Analysts complete"
+            ensure_milestone "milestone:plan-reviewed" "Plan reviewed"
+            ensure_milestone "milestone:testing-done" "Testing complete"
+            delete_milestone "milestone:validating-done"
+            delete_milestone "milestone:project-done"
+            ;;
+        REPORTING)
             # Need: all milestones except project-done
             ensure_milestone "milestone:planning-done" "Planning complete"
             ensure_milestone "milestone:analysts-done" "Analysts complete"
             ensure_milestone "milestone:plan-reviewed" "Plan reviewed"
-            ensure_milestone "milestone:smoke-test-done" "Smoke test complete"
+            ensure_milestone "milestone:testing-done" "Testing complete"
+            ensure_milestone "milestone:validating-done" "Validation passed"
             delete_milestone "milestone:project-done"
             ;;
     esac
@@ -1341,7 +1360,7 @@ cmd_reset_phase() {
     # Without this, detect-phase.sh fallback finds old bd milestones that should be deleted
     local all_bd_tasks
     all_bd_tasks=$(bd_safe list --all --json --limit 0 2>/dev/null || echo "[]")
-    for milestone_label in "milestone:planning-done" "milestone:analysts-done" "milestone:plan-reviewed" "milestone:smoke-test-done" "milestone:project-done"; do
+    for milestone_label in "milestone:planning-done" "milestone:analysts-done" "milestone:plan-reviewed" "milestone:testing-done" "milestone:project-done"; do
         # Only clean if this milestone was DELETED (not if it was ensured)
         if ! has_milestone "$milestone_label"; then
             local legacy_ids
@@ -1460,7 +1479,7 @@ cmd_help() {
     echo "               --force  Force upgrade even if versions match"
     echo "  delete       Remove hype from project (keeps .beads, code, SPEC)"
     echo "  wipe         Full cleanup: close tasks, remove .beads/, all hype files"
-    echo "  reset-phase  Reset to earlier phase (PLANNING, HELPERS, PLAN_REVIEW, SMOKE_TEST)"
+    echo "  reset-phase  Reset to earlier phase (PLANNING, ANALYZE, THINKING, TESTING, REPORTING)"
     echo ""
     echo "Home: $HYPE_HOME"
 }

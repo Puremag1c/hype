@@ -396,14 +396,14 @@ create_analyst_triggers() {
     done
 }
 
-# === Check and create done milestone after final_review ===
+# === Check and create done milestone after validating ===
 
 check_and_create_done_milestone() {
     # Check if architect output contains PASSED
     local latest_log
     latest_log=$(ls -t "$LOGS_DIR"/architect-*.log 2>/dev/null | head -1)
 
-    if [ -n "$latest_log" ] && grep -q "FINAL_REVIEW: PASSED" "$latest_log" 2>/dev/null; then
+    if [ -n "$latest_log" ] && grep -q "VALIDATING: PASSED" "$latest_log" 2>/dev/null; then
         # Safety: verify no open/in_progress tasks remain before marking DONE
         local remaining_tasks
         remaining_tasks=$(bd_safe list --json --limit 0 2>/dev/null | \
@@ -412,7 +412,7 @@ check_and_create_done_milestone() {
                 select((.labels // []) | index("trigger") | not)] | length' 2>/dev/null || echo "0")
 
         if [ "$remaining_tasks" -gt 0 ]; then
-            log "WARN" "FINAL_REVIEW passed but $remaining_tasks task(s) still open, deferring DONE milestone"
+            log "WARN" "VALIDATING passed but $remaining_tasks task(s) still open, deferring DONE milestone"
             return 0
         fi
 
@@ -885,7 +885,7 @@ dispatch_phase() {
     fi
 
     case $phase in
-        INIT)
+        PREPARING)
             # Check draft TTL first
             check_draft_ttl
 
@@ -896,7 +896,7 @@ dispatch_phase() {
                 source "$HYPE_HOME/core/scripts/deep-analyze.sh" 2>/dev/null || true
 
                 if type needs_deep_analysis &>/dev/null && needs_deep_analysis; then
-                    log "INFO" "INIT: Large project detected, running deep analysis..."
+                    log "INFO" "PREPARING: Large project detected, running deep analysis..."
                     if "$HYPE_HOME/core/scripts/deep-analyze.sh" --force; then
                         touch "$CLAUDEV_DIR/deep-analyzed"
                         log "INFO" "Deep analysis complete — enriched PROJECT_CONTEXT.md"
@@ -908,7 +908,7 @@ dispatch_phase() {
 
             # Tech Writer creates SPEC.md (INTERACTIVE - needs user dialogue)
             if [ -f ".claude/agents/tech-writer.md" ]; then
-                log "INFO" "INIT: Starting Tech Writer (interactive)..."
+                log "INFO" "PREPARING: Starting Tech Writer (interactive)..."
                 local tw_model
                 tw_model=$(map_model "${MODEL_TECH_WRITER:-opus}")
                 if ! run_interactive_agent "tech-writer" ".claude/agents/tech-writer.md" "$tw_model"; then
@@ -920,10 +920,10 @@ dispatch_phase() {
                     fi
                 fi
             else
-                log "WARN" "tech-writer.md not found, skipping INIT"
+                log "WARN" "tech-writer.md not found, skipping PREPARING"
             fi
 
-            # Clean up after INIT phase if SPEC.md was created
+            # Clean up after PREPARING phase if SPEC.md was created
             if [ -f "$PROJECT_DIR/SPEC.md" ]; then
                 # Remove needs-spec marker
                 if [ -f "$PROJECT_DIR/.hype/needs-spec" ]; then
@@ -962,9 +962,9 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             fi
             ;;
 
-        HELPERS)
+        ANALYZE)
             # Create trigger tasks for analysts (if not exist), then run them
-            log "INFO" "HELPERS: Creating analyst triggers and running analysts..."
+            log "INFO" "ANALYZE: Creating analyst triggers and running analysts..."
             create_analyst_triggers
             ./scripts/run-analysts.sh || log "ERROR" "run-analysts.sh failed (exit $?)"
 
@@ -983,9 +983,9 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             fi
             ;;
 
-        PLAN_REVIEW)
+        THINKING)
             # Architect reviews additions from Analysts
-            log "INFO" "PLAN_REVIEW: Starting Architect to review plan..."
+            log "INFO" "THINKING: Starting Architect to review plan..."
             local arch_model
             arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
             # Close stale triggers from previous runs, create fresh
@@ -994,12 +994,12 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             bd_cache=$(cat "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "[]")
             cleanup_stale_trigger "run-plan-review" "$bd_cache"
             bd_safe create --title="run-plan-review" --type=task --priority=0 --label=trigger >/dev/null 2>&1 || true
-            run_agent_with_mode "architect" ".claude/agents/architect-reviewer.md" "$arch_model" "plan_review" "" "${PLAN_REVIEW_TIMEOUT:-10m}"
+            run_agent_with_mode "architect" ".claude/agents/architect-reviewer.md" "$arch_model" "plan_review" "" "${THINKING_TIMEOUT:-10m}"
             ;;
 
-        USER_REVIEW)
+        CONSULTATION)
             # Tasks escalated to user — generate non-technical report and stop daemon
-            log "INFO" "USER_REVIEW: Tasks require human decision, generating report..."
+            log "INFO" "CONSULTATION: Tasks require human decision, generating report..."
 
             local user_tasks
             # v2.3.9: read from tick-cache (written by detect-phase.sh this cycle)
@@ -1028,7 +1028,7 @@ $user_tasks"
             fi
 
             # Stop daemon loop — user must act
-            log "WARN" "USER_REVIEW: Daemon stopping. Resolve user-escalation tasks manually, then restart."
+            log "WARN" "CONSULTATION: Daemon stopping. Resolve user-escalation tasks manually, then restart."
             log "WARN" "Tasks needing attention:"
             echo "$user_tasks" | while IFS= read -r line; do
                 [ -n "$line" ] && log "WARN" "  $line"
@@ -1036,15 +1036,15 @@ $user_tasks"
             return 0
             ;;
 
-        SMOKE_REVIEW)
+        REFLEXING)
             # Clean stale testers PID file (v2.3.5)
-            # Testers are done when we reach SMOKE_REVIEW. If PID file persists
-            # through IMPLEMENTATION and SMOKE_TEST re-enters, STATE 3 would treat
+            # Testers are done when we reach REFLEXING. If PID file persists
+            # through CODING and TESTING re-enters, STATE 3 would treat
             # the dead PID as "testers just finished" — skipping actual test launch.
             rm -f "$CLAUDEV_DIR/run-testers.pid"
 
             # Architect triages ALL smoke test findings before executors can grab them
-            log "INFO" "SMOKE_REVIEW: Processing smoke test findings..."
+            log "INFO" "REFLEXING: Processing smoke test findings..."
 
             local arch_model
             arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
@@ -1073,27 +1073,27 @@ For each task:
    c) Needs to be split → CREATE subtasks, close original, remove smoke label
 4. ALWAYS remove 'smoke' label after processing. ALWAYS remove 'regression' label after processing."
 
-            run_agent_with_mode "architect" ".claude/agents/architect-qa.md" "$arch_model" "smoke_review" "$triage_prompt" "${SMOKE_REVIEW_TIMEOUT:-10m}"
+            run_agent_with_mode "architect" ".claude/agents/architect-qa.md" "$arch_model" "reflexing" "$triage_prompt" "${REFLEXING_TIMEOUT:-10m}"
 
             # v2.3.14: Safety net — force-remove smoke/regression labels architect missed
-            # Without this, leftover labels trigger another SMOKE_REVIEW (2x Opus waste)
+            # Without this, leftover labels trigger another REFLEXING (2x Opus waste)
             local remaining_smoke_ids
             remaining_smoke_ids=$(jq -r '.[] | select(.status == "open") | select((.labels // []) | any(. == "smoke" or . == "regression")) | .id' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "")
             if [ -n "$remaining_smoke_ids" ]; then
-                log "WARN" "SMOKE_REVIEW: Cleaning up leftover smoke labels (safety net)"
+                log "WARN" "REFLEXING: Cleaning up leftover smoke labels (safety net)"
                 for sid in $remaining_smoke_ids; do
                     bd_safe update "$sid" --remove-label=smoke --remove-label=regression >/dev/null 2>&1 || true
                 done
             fi
             ;;
 
-        IMPLEMENTATION)
-            # v2.3.21: Clean stale testers PID file (covers SMOKE_TEST→IMPL→SMOKE_TEST path)
+        CODING)
+            # v2.3.21: Clean stale testers PID file (covers TESTING→IMPL→TESTING path)
             rm -f "$CLAUDEV_DIR/run-testers.pid"
 
             # Streaming: launch executors + reviewers + merge queue (all non-blocking)
-            # Note: regression tasks are handled in SMOKE_REVIEW phase before reaching here
-            log "INFO" "IMPLEMENTATION: Streaming cycle..."
+            # Note: regression tasks are handled in REFLEXING phase before reaching here
+            log "INFO" "CODING: Streaming cycle..."
 
             ./scripts/run-executors.sh || log "ERROR" "run-executors.sh failed (exit $?)"
 
@@ -1103,7 +1103,7 @@ For each task:
             HYPE_IN_PROGRESS_CACHE="$in_progress_cache" ./scripts/run-merge-queue.sh || log "ERROR" "run-merge-queue.sh failed (exit $?)"
             ;;
 
-        SMOKE_TEST)
+        TESTING)
             # Non-blocking: launch testers in background, HYPE keeps ticking
             # This ensures check_beads runs every cycle even during long smoke tests
             local testers_pid_file="$CLAUDEV_DIR/run-testers.pid"
@@ -1112,14 +1112,14 @@ For each task:
 
             if [ -n "$testers_pid" ] && kill -0 "$testers_pid" 2>/dev/null; then
                 # STATE 1: Testers running — wait
-                log "INFO" "SMOKE_TEST: testers running (PID $testers_pid)"
+                log "INFO" "TESTING: testers running (PID $testers_pid)"
 
             elif [ ! -f "$testers_pid_file" ]; then
                 # STATE 2: Never launched (no PID file) — start testers
-                log "INFO" "SMOKE_TEST: launching testers..."
+                log "INFO" "TESTING: launching testers..."
                 ./scripts/run-testers.sh &
                 echo $! > "$testers_pid_file"
-                log "INFO" "SMOKE_TEST: testers launched (PID $!)"
+                log "INFO" "TESTING: testers launched (PID $!)"
 
             else
                 # STATE 3: PID file exists but process dead — testers finished (or crashed)
@@ -1131,10 +1131,10 @@ For each task:
                 tester_triggers=$(jq '[.[] | select(.status == "open" or .status == "in_progress") | select(.title | startswith("run-tester-"))] | length' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "0")
 
                 if [ "$tester_triggers" -gt 0 ]; then
-                    log "WARN" "SMOKE_TEST: orphaned tester triggers ($tester_triggers), re-launching..."
+                    log "WARN" "TESTING: orphaned tester triggers ($tester_triggers), re-launching..."
                     ./scripts/run-testers.sh &
                     echo $! > "$testers_pid_file"
-                    log "INFO" "SMOKE_TEST: testers re-launched (PID $!)"
+                    log "INFO" "TESTING: testers re-launched (PID $!)"
                 else
                     # Testers done — check results
                     local pending_tasks
@@ -1142,104 +1142,105 @@ For each task:
                     pending_tasks=$(jq '[.[] | select(.status == "open" or .status == "in_progress") | select((.labels // []) | index("trigger") | not)] | length' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "0")
 
                     if [ "$pending_tasks" -gt 0 ]; then
-                        log "WARN" "SMOKE_TEST: $pending_tasks pending task(s) found"
+                        log "WARN" "TESTING: $pending_tasks pending task(s) found"
                     else
-                        log "INFO" "SMOKE_TEST: All tests passed - creating milestone"
-                        ensure_milestone "milestone:smoke-test-done" "Smoke test complete"
+                        log "INFO" "TESTING: All tests passed - creating milestone"
+                        ensure_milestone "milestone:testing-done" "Smoke test complete"
                     fi
                 fi
             fi
             ;;
 
-        FINAL_REVIEW)
+        VALIDATING)
             # Architect does final review and versioning
             # Retry up to RETRY_LIMIT times on failure/timeout
-            local arch_model final_review_attempt=0 final_review_success=false
+            local arch_model validating_attempt=0 validating_success=false
             arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
 
-            while [ $final_review_attempt -lt "${RETRY_LIMIT:-3}" ]; do
-                ((final_review_attempt++)) || true
-                log "INFO" "FINAL_REVIEW: Starting Architect (attempt $final_review_attempt/${RETRY_LIMIT:-3})..."
+            while [ $validating_attempt -lt "${RETRY_LIMIT:-3}" ]; do
+                ((validating_attempt++)) || true
+                log "INFO" "VALIDATING: Starting Architect (attempt $validating_attempt/${RETRY_LIMIT:-3})..."
 
-                if run_agent_with_mode "architect" ".claude/agents/architect-qa.md" "$arch_model" "final_review" "" "${FINAL_REVIEW_TIMEOUT:-15m}"; then
+                if run_agent_with_mode "architect" ".claude/agents/architect-qa.md" "$arch_model" "validating" "" "${VALIDATING_TIMEOUT:-15m}"; then
                     # Check if architect actually completed (wrote PASSED)
                     local latest_log
                     latest_log=$(ls -t "$LOGS_DIR"/architect-*.log 2>/dev/null | head -1)
-                    if [ -n "$latest_log" ] && grep -q "FINAL_REVIEW: PASSED" "$latest_log" 2>/dev/null; then
+                    if [ -n "$latest_log" ] && grep -q "VALIDATING: PASSED" "$latest_log" 2>/dev/null; then
                         # Defense: check if architect also created tasks (contradicts PASSED)
                         local new_open_count
                         new_open_count=$(bd_safe list --status=open --json --limit 0 2>/dev/null | \
                             jq '[.[] | select((.labels // []) | index("trigger") | not)] | length' 2>/dev/null || echo "0")
                         if [ "$new_open_count" -gt 0 ]; then
-                            log "WARN" "FINAL_REVIEW: PASSED but $new_open_count new task(s) created — treating as NEEDS_FIXES"
-                            delete_milestone "milestone:smoke-test-done"
+                            log "WARN" "VALIDATING: PASSED but $new_open_count new task(s) created — treating as NEEDS_FIXES"
+                            delete_milestone "milestone:testing-done"
                             break
                         fi
-                        final_review_success=true
+                        validating_success=true
                         break
                     fi
                     # Agent ran but didn't write PASSED - might have created tasks
                     local open_count
                     open_count=$(bd_safe list --status=open --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
                     if [ "$open_count" -gt 0 ]; then
-                        log "INFO" "FINAL_REVIEW: Architect created $open_count task(s), returning to IMPLEMENTATION"
-                        # Invalidate smoke-test-done milestone — need to re-test after fix
-                        delete_milestone "milestone:smoke-test-done"
-                        log "INFO" "Invalidated smoke-test-done milestone (will re-run smoke test)"
+                        log "INFO" "VALIDATING: Architect created $open_count task(s), returning to CODING"
+                        # Invalidate testing-done milestone — need to re-test after fix
+                        delete_milestone "milestone:testing-done"
+                        log "INFO" "Invalidated testing-done milestone (will re-run smoke test)"
                         break
                     fi
-                    log "WARN" "FINAL_REVIEW: Architect didn't complete review, retrying..."
+                    log "WARN" "VALIDATING: Architect didn't complete review, retrying..."
                 else
-                    log "WARN" "FINAL_REVIEW: Architect failed/timed out (attempt $final_review_attempt)"
+                    log "WARN" "VALIDATING: Architect failed/timed out (attempt $validating_attempt)"
                 fi
 
                 # Brief pause before retry
                 sleep 5
             done
 
-            # Run completion agent after successful final review
-            if [ "$final_review_success" = true ]; then
-                log "INFO" "FINAL_REVIEW passed, running completion..."
-
-                # Close stale triggers from previous runs, create fresh
-                # v2.3.10: pass tick-cache to avoid bd_safe list call
-                local bd_cache
-                bd_cache=$(cat "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "[]")
-                cleanup_stale_trigger "run-completion" "$bd_cache"
-                local completion_trigger
-                completion_trigger=$(bd_safe create --title="run-completion" --type=task --priority=0 --label=trigger 2>&1 | grep -oE '[A-Za-z]+-[a-z0-9]+' | head -1)
-
-                if [ -n "$completion_trigger" ]; then
-                    local completion_model
-                    completion_model=$(map_model "${MODEL_COMPLETION:-opus}")
-
-                    # Run completion with trigger task context
-                    local completion_prompt="TRIGGER_TASK: $completion_trigger"
-                    if run_agent_with_mode "completion" ".claude/agents/completion.md" "$completion_model" "" "$completion_prompt" "${COMPLETION_TIMEOUT:-10m}"; then
-                        log "INFO" "Completion agent completed"
-                    else
-                        log "WARN" "Completion agent failed/timed out, closing trigger"
-                        bd_safe close "$completion_trigger" --reason="Completion timeout" >/dev/null 2>&1 || true
-                    fi
-                fi
+            # Create validating-done milestone on success → transitions to REPORTING
+            if [ "$validating_success" = true ]; then
+                ensure_milestone "milestone:validating-done" "Validation passed"
             fi
 
-            # Check if architect created project-done milestone
-            check_and_create_done_milestone
-
             # Safety: if still no PASSED and no new tasks after all retries, create blocker
-            if [ "$final_review_success" = false ]; then
+            if [ "$validating_success" = false ]; then
                 local latest_log open_count
                 latest_log=$(ls -t "$LOGS_DIR"/architect-*.log 2>/dev/null | head -1)
                 open_count=$(bd_safe list --status=open --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
 
-                if [ "$open_count" -eq 0 ] && { [ -z "$latest_log" ] || ! grep -q "FINAL_REVIEW: PASSED" "$latest_log" 2>/dev/null; }; then
-                    log "WARN" "FINAL_REVIEW incomplete after $final_review_attempt attempts, creating blocker"
-                    bd_safe create --title="FINAL_REVIEW incomplete - check logs" \
+                if [ "$open_count" -eq 0 ] && { [ -z "$latest_log" ] || ! grep -q "VALIDATING: PASSED" "$latest_log" 2>/dev/null; }; then
+                    log "WARN" "VALIDATING incomplete after $validating_attempt attempts, creating blocker"
+                    bd_safe create --title="VALIDATING incomplete - check logs" \
                         --type=bug --priority=0 \
-                        --description="Architect did not complete FINAL_REVIEW after $final_review_attempt attempts. Manual intervention required." >/dev/null 2>&1 || true
+                        --description="Architect did not complete VALIDATING after $validating_attempt attempts. Manual intervention required." >/dev/null 2>&1 || true
                 fi
             fi
+            ;;
+
+        REPORTING)
+            # Completion agent: version bump, CHANGELOG, SPEC_REPORT, commit+push
+            log "INFO" "REPORTING: Running completion agent..."
+
+            local bd_cache
+            bd_cache=$(cat "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "[]")
+            cleanup_stale_trigger "run-completion" "$bd_cache"
+            local completion_trigger
+            completion_trigger=$(bd_safe create --title="run-completion" --type=task --priority=0 --label=trigger 2>&1 | grep -oE '[A-Za-z]+-[a-z0-9]+' | head -1)
+
+            if [ -n "$completion_trigger" ]; then
+                local completion_model
+                completion_model=$(map_model "${MODEL_COMPLETION:-opus}")
+
+                local completion_prompt="TRIGGER_TASK: $completion_trigger"
+                if run_agent_with_mode "completion" ".claude/agents/completion.md" "$completion_model" "" "$completion_prompt" "${COMPLETION_TIMEOUT:-10m}"; then
+                    log "INFO" "Completion agent completed"
+                else
+                    log "WARN" "Completion agent failed/timed out, closing trigger"
+                    bd_safe close "$completion_trigger" --reason="Completion timeout" >/dev/null 2>&1 || true
+                fi
+            fi
+
+            check_and_create_done_milestone
             ;;
 
         DONE)
@@ -1248,7 +1249,7 @@ For each task:
             ;;
 
         BLOCKED_CYCLES)
-            log "ERROR" "Dependency cycles detected! Cannot proceed to IMPLEMENTATION."
+            log "ERROR" "Dependency cycles detected! Cannot proceed to CODING."
 
             # Track consecutive blocked cycles for escalation
             local blocked_count_file="$CLAUDEV_DIR/blocked_cycles_count"
@@ -1274,7 +1275,7 @@ For each task:
             # v2.3.9: read from tick-cache (written by detect-phase.sh this cycle)
             if ! jq -e '.[] | select(.title == "Fix dependency cycles")' "$CLAUDEV_DIR/tick-cache.json" > /dev/null 2>&1; then
                 bd_safe create --title="Fix dependency cycles" --type=task --priority=0 \
-                    --description="bd dep cycles detected circular dependencies. Fix before IMPLEMENTATION can proceed.
+                    --description="bd dep cycles detected circular dependencies. Fix before CODING can proceed.
 
 Run: bd dep cycles
 Then: bd dep remove <task> <dep> for one edge in each cycle" \
@@ -1547,12 +1548,12 @@ main() {
                 echo "========================"
                 echo ""
             else
-                local final_review_log
-                final_review_log=$(ls -t "$LOGS_DIR"/architect-*.log 2>/dev/null | head -1)
-                if [ -n "$final_review_log" ] && [ -f "$final_review_log" ]; then
+                local validating_log
+                validating_log=$(ls -t "$LOGS_DIR"/architect-*.log 2>/dev/null | head -1)
+                if [ -n "$validating_log" ] && [ -f "$validating_log" ]; then
                     echo ""
                     echo "=== FINAL REVIEW REPORT ==="
-                    tail -50 "$final_review_log" | grep -v "^$" | head -40
+                    tail -50 "$validating_log" | grep -v "^$" | head -40
                     echo "==========================="
                     echo ""
                 fi

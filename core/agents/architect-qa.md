@@ -19,12 +19,12 @@ model: opus
 ## Режимы работы
 
 Смотри переменную MODE в контексте:
-- `final_review` — финальная проверка перед релизом
-- `smoke_review` — триаж всех находок из SMOKE_TEST (новые баги и regression)
+- `validating` — финальная проверка перед релизом
+- `reflexing` — триаж всех находок из TESTING (новые баги и regression)
 
 ---
 
-## MODE: final_review
+## MODE: validating
 
 ### 1. Проверь что все features реализованы
 
@@ -56,7 +56,7 @@ grep -A5 "## Testing" SPEC.md
 **Если секции Testing нет** — создай P0 задачу и выйди:
 ```bash
 bd create --title="Add Testing section to SPEC.md" --type=bug --priority=0
-echo "FINAL_REVIEW: NEEDS_FIXES"
+echo "VALIDATING: NEEDS_FIXES"
 exit 1
 ```
 
@@ -130,7 +130,7 @@ bd list --status=closed --json | jq '.[] | select(.title | test("<ключево
 ```bash
 bd update <closed_id> --status=open --add-label=regression --add-label=smoke \
   --notes="Regression detected during final review: <что вернулось>"
-echo "FINAL_REVIEW: NEEDS_FIXES"
+echo "VALIDATING: NEEDS_FIXES"
 ```
 
 **Шаг 3: Создай новый баг (только если шаги 1-2 не нашли)**
@@ -142,7 +142,7 @@ bd create --title="Fix: <что не работает>" --type=bug --priority=0 
   --description="Обнаружено при final review. <детали проблемы>
 files: <1-3 конкретных файла>
 done_when: <чёткий критерий>"
-echo "FINAL_REVIEW: NEEDS_FIXES"
+echo "VALIDATING: NEEDS_FIXES"
 ```
 
 ### 4. Обработай untracked файлы
@@ -162,18 +162,18 @@ git status --porcelain | grep '^??'
 
 **Если найдены проблемы:**
 Используй 3-step протокол из секции 3.5 выше (check open → check closed → create new).
-НЕ добавляй `--label=smoke` — баги из final_review идут напрямую в IMPLEMENTATION.
+НЕ добавляй `--label=smoke` — баги из validating идут напрямую в CODING.
 
 **Если всё ок:**
 ```bash
-echo "FINAL_REVIEW: PASSED"
+echo "VALIDATING: PASSED"
 ```
 
 ---
 
-## MODE: smoke_review
+## MODE: reflexing
 
-Вызывается когда SMOKE_TEST нашёл проблемы. Задачи бывают двух типов:
+Вызывается когда TESTING нашёл проблемы. Задачи бывают двух типов:
 - **smoke** (label `smoke`) — НОВЫЙ баг, найденный впервые
 - **regression** (labels `smoke` + `regression`) — баг который уже был "пофиксен" но вернулся
 
@@ -308,8 +308,8 @@ bd close $TASK_ID --reason="False positive: <объяснение почему �
 
 ### 2. ОБЯЗАТЕЛЬНО: удали smoke/regression labels после обработки
 
-Каждая обработанная задача должна выйти из smoke_review БЕЗ label `smoke`.
-Это критично — пока есть открытые задачи с `smoke`, система застрянет в SMOKE_REVIEW.
+Каждая обработанная задача должна выйти из reflexing БЕЗ label `smoke`.
+Это критично — пока есть открытые задачи с `smoke`, система застрянет в REFLEXING.
 
 ### 3. После обработки ВСЕХ задач — закрой trigger
 

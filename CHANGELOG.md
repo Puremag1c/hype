@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.4.1] - 2026-02-24
+
+### Changed
+
+- **Phase rename** — All phases renamed for clarity: INIT→PREPARING, HELPERS→ANALYZE, PLAN_REVIEW→THINKING, IMPLEMENTATION→CODING, SMOKE_TEST→TESTING, SMOKE_REVIEW→REFLEXING, USER_REVIEW→CONSULTATION, FINAL_REVIEW→VALIDATING. PLANNING and DONE unchanged.
+
+- **REPORTING phase** — Completion agent extracted from VALIDATING into its own phase. Flow: VALIDATING→REPORTING→DONE. New `milestone:validating-done` signals transition. Completion agent (version bump, CHANGELOG, SPEC_REPORT, commit+push) runs in REPORTING.
+
+- **Milestone rename** — `milestone:smoke-test-done` → `milestone:testing-done` to match new phase name.
+
+- **reset-phase** — Added REPORTING phase support. All phases now properly clean `milestone:validating-done`.
+
+- **SPEC_REPORT.prev.md in .gitignore** — `hype init` and `hype upgrade` now add `SPEC_REPORT.prev.md` to .gitignore.
+
+- 335 tests (no regressions).
+
+---
+
 ## [2.4.0] - 2026-02-24
 
 ### Added

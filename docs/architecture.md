@@ -10,16 +10,16 @@ hype.sh (bash loop с lock file)
     ├─► detect-phase.sh → определяет текущую фазу (JSON output)
     │
     ├─► НАПРЯМУЮ вызывает по фазе:
-    │   ├─► INIT: Tech Writer (Opus, interactive)
+    │   ├─► PREPARING: Tech Writer (Opus, interactive)
     │   ├─► PLANNING: Architect-Planner (Opus)
-    │   ├─► HELPERS: run-analysts.sh → Analysts (Sonnet × 5)
-    │   ├─► PLAN_REVIEW: Architect-Reviewer (Opus)
-    │   ├─► IMPLEMENTATION: run-executors.sh + run-reviewers.sh + run-merge-queue.sh
-    │   ├─► SMOKE_TEST: run-testers.sh (background) → Testers × 6
-    │   ├─► SMOKE_REVIEW: Architect-QA (Opus)
-    │   ├─► USER_REVIEW: Tech-Writer-Review (Sonnet) → daemon stops
-    │   ├─► FINAL_REVIEW: Architect-QA (Opus)
-    │   ├─► VERSIONING: Versioner (Haiku)
+    │   ├─► ANALYZE: run-analysts.sh → Analysts (Sonnet × 5)
+    │   ├─► THINKING: Architect-Reviewer (Opus)
+    │   ├─► CODING: run-executors.sh + run-reviewers.sh + run-merge-queue.sh
+    │   ├─► TESTING: run-testers.sh (background) → Testers × 6
+    │   ├─► REFLEXING: Architect-QA (Opus)
+    │   ├─► CONSULTATION: Tech-Writer-Review (Sonnet) → daemon stops
+    │   ├─► VALIDATING: Architect-QA (Opus)
+    │   ├─► REPORTING: Completion (Opus)
     │   └─► BLOCKED_CYCLES: Architect-Ops (Sonnet)
     │
     ├─► Troubleshooter (Opus) — при blocked:troubleshoot (reject:4+)
@@ -32,24 +32,24 @@ hype.sh (bash loop с lock file)
 ## Фазы проекта
 
 ```
-INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST → FINAL_REVIEW → VERSIONING → DONE
+PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALIDATING → REPORTING → DONE
                                               ↑                  ↓
-                                              └── SMOKE_REVIEW ←─┘ (smoke/regression tasks)
-                                         USER_REVIEW ← (user-escalation label → daemon stops)
+                                              └── REFLEXING ←─┘ (smoke/regression tasks)
+                                         CONSULTATION ← (user-escalation label → daemon stops)
 ```
 
 | Фаза | Условие перехода | Агент | Действие |
 |------|-----------------|-------|----------|
-| INIT | Нет SPEC.md | Tech Writer | Собирает требования от user (+ deep analysis для больших проектов) |
+| PREPARING | Нет SPEC.md | Tech Writer | Собирает требования от user (+ deep analysis для больших проектов) |
 | PLANNING | Есть SPEC.md | Architect-Planner | Создаёт задачи в beads |
-| HELPERS | milestone:planning-done | Analysts ×5 | Параллельный аудит плана |
-| PLAN_REVIEW | milestone:analysts-done | Architect-Reviewer | Ревьюит добавления Analysts |
-| IMPLEMENTATION | milestone:plan-reviewed | Executors + Auditor | Реализуют задачи + аудит |
-| SMOKE_TEST | все задачи closed | Testers ×6 | Параллельная проверка работоспособности |
-| SMOKE_REVIEW | smoke/regression tasks найдены | Architect-QA | Триаж всех smoke test находок |
-| USER_REVIEW | user-escalation label | Tech-Writer-Review | Генерирует отчёт, daemon stops |
-| FINAL_REVIEW | milestone:smoke-test-done | Architect-QA | Проверяет целостность |
-| VERSIONING | FINAL_REVIEW: PASSED | Versioner | Обновляет VERSION + CHANGELOG |
+| ANALYZE | milestone:planning-done | Analysts ×5 | Параллельный аудит плана |
+| THINKING | milestone:analysts-done | Architect-Reviewer | Ревьюит добавления Analysts |
+| CODING | milestone:plan-reviewed | Executors + Auditor | Реализуют задачи + аудит |
+| TESTING | все задачи closed | Testers ×6 | Параллельная проверка работоспособности |
+| REFLEXING | smoke/regression tasks найдены | Architect-QA | Триаж всех smoke test находок |
+| CONSULTATION | user-escalation label | Tech-Writer-Review | Генерирует отчёт, daemon stops |
+| VALIDATING | milestone:testing-done | Architect-QA | Проверяет целостность |
+| REPORTING | milestone:validating-done | Completion (Opus) | Version bump + CHANGELOG + SPEC_REPORT + commit + push |
 | DONE | milestone:project-done | — | Проект завершён |
 
 ## Агенты
@@ -136,8 +136,8 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 - **Эскалация:** sonnet → opus при timeout/failure
 
 ### Versioner (Haiku)
-- **Роль:** Обновление VERSION и CHANGELOG после FINAL_REVIEW
-- **Когда:** После успешного FINAL_REVIEW: PASSED
+- **Роль:** Обновление VERSION и CHANGELOG после VALIDATING
+- **Когда:** После успешного VALIDATING: PASSED
 - **Задачи:**
   - Определяет тип изменений (major/minor/patch)
   - Обнаруживает источник версии в целевом проекте (v2.2.1): `package.json`, `pyproject.toml`, `Cargo.toml`, `mix.exs`, etc. — обновляет версию где она определена, не только `VERSION` файл
@@ -154,11 +154,11 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 
 ### Tech Writer Review (Sonnet)
 - **Роль:** Генерация non-technical отчёта для пользователя
-- **Когда:** Фаза USER_REVIEW (задачи с `user-escalation` label)
+- **Когда:** Фаза CONSULTATION (задачи с `user-escalation` label)
 - **Выход:** `.hype/evidence/user-review-report.md`
 
-### Testers (SMOKE_TEST фаза)
-- **Роль:** Проверка работоспособности после IMPLEMENTATION
+### Testers (TESTING фаза)
+- **Роль:** Проверка работоспособности после CODING
 - **Виды (6 штук):**
   - `tester-functional` (sonnet) — Must Have из SPEC.md (все проекты)
   - `tester-backend` (sonnet) — Запуск существующих тестов + генерация новых (все проекты)
@@ -168,7 +168,7 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
   - `tester-regression` (sonnet) — Тестовый suite (library)
 - **Sequential:** functional + visual запускаются последовательно (Playwright MCP conflicts)
 - **Async (v2.2.6):** `run-testers.sh` запускается в background с PID tracking. HYPE продолжает тикать (check_beads, heal каждый цикл). Три состояния: running (PID alive → wait), never launched (no PID file → start), finished/crashed (PID dead → check results or re-launch orphans)
-- **Hard gate:** P0 bugs блокируют milestone:smoke-test-done → возврат в IMPLEMENTATION
+- **Hard gate:** P0 bugs блокируют milestone:testing-done → возврат в CODING
 
 ### Doctor (Opus)
 - **Роль:** Диагностика проблем HYPE, формирование doctor-log
@@ -198,12 +198,12 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 | `run-executors.sh` | Параллельный запуск Executors с backpressure |
 | `run-reviewers.sh` | Параллельный запуск Reviewers с backpressure (v2.2) |
 | `run-merge-queue.sh` | Sequential merge approved задач (v2.2) |
-| `run-testers.sh` | Параллельный запуск Testers (SMOKE_TEST) |
+| `run-testers.sh` | Параллельный запуск Testers (TESTING) |
 | `common.sh` | Общие функции (bd_safe, timeout, milestones, backoff, audit detection) |
 | `log.sh` | Хелпер для логирования |
 | `notify.sh` | Уведомления (macOS, Linux, WSL) |
 | `analyze-project.sh` | Анализ структуры проекта |
-| `deep-analyze.sh` | Глубокий анализ через Claude (INIT) |
+| `deep-analyze.sh` | Глубокий анализ через Claude (PREPARING) |
 | `close-completed-parents.sh` | Автозакрытие parent tasks |
 
 ## Конфигурация
@@ -219,7 +219,7 @@ TASK_STALE_TIMEOUT=600      # Секунды до сброса stale task
 ALLOWED_MODELS="opus,sonnet,haiku"  # Разрешённые модели
 ```
 
-### `.hype/testing.yaml` (SMOKE_TEST)
+### `.hype/testing.yaml` (TESTING)
 
 ```yaml
 type: web                    # web | api | cli | library
@@ -329,10 +329,10 @@ bd daemon start
 - `reject:N` — счётчик отказов code review (escalation ladder: 1→retry, 2-3→escalate model, 4→troubleshooter). Только для quality rejections от Reviewer
 - `merge-conflict:N` — (убран в v2.3.11). Заменён hybrid merge queue: fast script path + merger agent fallback. Нет больше 6-retry loop
 - `regress:N` — счётчик regression cycles (script-driven)
-- `smoke` — баг из SMOKE_TEST, ждёт тriage от Architect
+- `smoke` — баг из TESTING, ждёт тriage от Architect
 - `regression` — баг который вернулся после fix
 - `reformulated` — задача переформулирована Troubleshooter (макс 2 раза)
-- `user-escalation` — требует решения пользователя (trigger USER_REVIEW)
+- `user-escalation` — требует решения пользователя (trigger CONSULTATION)
 - `reviewing` — Reviewer работает над этой задачей (v2.2)
 - `approved` — задача одобрена, ждёт merge queue (v2.2)
 - `reviewed` — задача замержена и закрыта (v2.2)
@@ -358,7 +358,7 @@ bd daemon start
   - P0 bug count в `detect-phase.sh` — trigger'ы не считаются багами
   - OPEN/IN_PROGRESS counts в `detect-phase.sh` (v2.2.5) — trigger'ы не блокируют фазовую машину
 
-**Почему это важно:** До v2.2.1 trigger'ы могли попасть в review pipeline → получить `NO_BRANCH` error → считаться P0 багами → блокировать SMOKE_TEST бесконечно.
+**Почему это важно:** До v2.2.1 trigger'ы могли попасть в review pipeline → получить `NO_BRANCH` error → считаться P0 багами → блокировать TESTING бесконечно.
 
 ### Dependencies
 

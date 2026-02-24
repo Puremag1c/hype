@@ -136,7 +136,7 @@ EOF
 # Doctor Log
 
 ## Reported Symptom
-Tasks stuck in IMPLEMENTATION phase for 30 minutes
+Tasks stuck in CODING phase for 30 minutes
 
 ## Collected Data
 ...
@@ -149,7 +149,7 @@ EOF
     export -f gh
 
     run send_doctor_report "$test_file"
-    [[ "$output" == *"Tasks stuck in IMPLEMENTATION phase for 30 minutes"* ]]
+    [[ "$output" == *"Tasks stuck in CODING phase for 30 minutes"* ]]
 }
 
 @test "send_doctor_report: fallback title when section missing" {

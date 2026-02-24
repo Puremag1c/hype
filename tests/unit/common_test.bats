@@ -514,7 +514,7 @@ load '../helpers/mock_bd'
     echo "$body" | grep -q 'all_tasks_json="\${3:-}"'
 }
 
-@test "hype.sh IMPLEMENTATION shares cache via HYPE_IN_PROGRESS_CACHE" {
+@test "hype.sh CODING shares cache via HYPE_IN_PROGRESS_CACHE" {
     grep -q 'HYPE_IN_PROGRESS_CACHE=.*run-reviewers.sh' "$SCRIPTS_DIR/hype.sh"
     grep -q 'HYPE_IN_PROGRESS_CACHE=.*run-merge-queue.sh' "$SCRIPTS_DIR/hype.sh"
 }

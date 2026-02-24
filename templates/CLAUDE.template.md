@@ -35,12 +35,12 @@ tail -f logs/hype.log
 
 | Фаза | Описание |
 |------|----------|
-| INIT | Нет SPEC.md → Tech Writer собирает требования |
+| PREPARING | Нет SPEC.md → Tech Writer собирает требования |
 | PLANNING | Architect создаёт план из SPEC.md |
-| HELPERS | 5 Analysts аудитят план параллельно |
-| PLAN_REVIEW | Architect ревьюит добавления Analysts |
-| IMPLEMENTATION | Executors реализуют задачи |
-| FINAL_REVIEW | Architect проверяет целостность |
+| ANALYZE | 5 Analysts аудитят план параллельно |
+| THINKING | Architect ревьюит добавления Analysts |
+| CODING | Executors реализуют задачи |
+| VALIDATING | Architect проверяет целостность |
 | DONE | Проект завершён |
 
 ## Полезные команды

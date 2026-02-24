@@ -37,7 +37,7 @@ else
     if [ -n "$CLOSED_BUG" ]; then
         echo "REGRESSION: Reopening $CLOSED_BUG"
         bd update "$CLOSED_BUG" --status=open --add-label=regression --add-label=smoke \
-            --notes="Regression detected during SMOKE_TEST. Issue reappeared after previous fix."
+            --notes="Regression detected during TESTING. Issue reappeared after previous fix."
     else
         # Step 3: Create NEW bug with done_when
         bd create --title="SMOKE: [CLI] <description>" \
@@ -171,7 +171,7 @@ Output: $(cat .hype/evidence/cli/help.txt)
 .hype/evidence/cli/help.txt
 
 ## Context
-Discovered during SMOKE_TEST CLI verification.
+Discovered during TESTING CLI verification.
 
 done_when: --help command returns exit code 0 and displays usage information"
 ```

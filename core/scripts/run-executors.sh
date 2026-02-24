@@ -143,7 +143,7 @@ get_ready_tasks() {
     # Фильтруем:
     #   - type: task, bug, feature (исключаем epic - это контейнеры)
     #   - исключаем служебные (triggers, milestones)
-    #   - исключаем smoke и regression (ждут smoke_review от Architect)
+    #   - исключаем smoke и regression (ждут reflexing от Architect)
     #   - сортируем по приоритету (P0 первые)
     #   - sort -u для дедупликации (bd ready может вернуть дубликаты)
     bd_safe ready --json 2>/dev/null | \

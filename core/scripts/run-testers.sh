@@ -1,6 +1,6 @@
 #!/bin/bash
 # core/scripts/run-testers.sh
-# Запускает Tester агентов параллельно для SMOKE_TEST фазы.
+# Запускает Tester агентов параллельно для TESTING фазы.
 # Testers выбираются по типу проекта из SPEC.md.
 #
 # Testers by project type:
@@ -28,7 +28,7 @@ if [ -f "$CONFIG_FILE" ]; then
 fi
 
 TESTER_TIMEOUT="${TESTER_TIMEOUT:-10m}"
-SMOKE_TEST_TIMEOUT="${SMOKE_TEST_TIMEOUT:-15m}"
+TESTING_TIMEOUT="${TESTING_TIMEOUT:-15m}"
 # bd_safe is provided by common.sh with flock serialization
 
 mkdir -p "$LOGS_DIR"
@@ -320,7 +320,7 @@ ALWAYS use venv: \`.venv/bin/python\`
 
 done_when: .hype/testing.yaml exists with valid, tested commands" >/dev/null 2>&1
 
-        echo "SMOKE_TEST: NEEDS_CONFIG"
+        echo "TESTING: NEEDS_CONFIG"
         return 1
     fi
 
@@ -487,7 +487,7 @@ $(tail -50 "$LOGS_DIR/build.log")
 \`\`\`
 
 ## Context
-Build failed before SMOKE_TEST could run. Fix build errors first." >/dev/null 2>&1
+Build failed before TESTING could run. Fix build errors first." >/dev/null 2>&1
         return 1
     fi
 
@@ -521,8 +521,8 @@ main() {
 
     # Ensure testing config exists (for web/api projects)
     if ! ensure_testing_config "$project_type"; then
-        log "WARN" "SMOKE_TEST: missing testing configuration - task created"
-        return 0  # Task created, hype.sh will route to IMPLEMENTATION
+        log "WARN" "TESTING: missing testing configuration - task created"
+        return 0  # Task created, hype.sh will route to CODING
     fi
 
     # Read testing config
@@ -533,8 +533,8 @@ main() {
 
     # Run build first to ensure fresh artifacts
     if ! run_build; then
-        log "WARN" "SMOKE_TEST: build failed - task created"
-        return 0  # Task created, hype.sh will route to IMPLEMENTATION
+        log "WARN" "TESTING: build failed - task created"
+        return 0  # Task created, hype.sh will route to CODING
     fi
 
     # Start dev server (single instance for all testers)
@@ -544,8 +544,8 @@ main() {
             server_started=true
             export SERVER_MANAGED=true  # Tell testers not to start their own
         else
-            log "WARN" "SMOKE_TEST: server failed to start - task created"
-            return 0  # Task created, hype.sh will route to IMPLEMENTATION
+            log "WARN" "TESTING: server failed to start - task created"
+            return 0  # Task created, hype.sh will route to CODING
         fi
     fi
 
@@ -644,7 +644,7 @@ main() {
 
     if [ "$p0_bugs" -gt 0 ]; then
         log "WARN" "SMOKE TEST FAILED: $p0_bugs P0 bug(s) found"
-        log "INFO" "System will return to IMPLEMENTATION to fix P0 bugs"
+        log "INFO" "System will return to CODING to fix P0 bugs"
     else
         log "INFO" "SMOKE TEST PASSED: No P0 bugs found"
     fi

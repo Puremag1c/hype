@@ -2,7 +2,7 @@
 # tests/e2e/phase_flow_test.bats
 # End-to-end tests for HYPE phase transitions
 #
-# These tests verify the complete flow: INIT → DONE
+# These tests verify the complete flow: PREPARING → DONE
 
 load '../helpers/setup'
 
@@ -91,10 +91,10 @@ create_closed_task() {
 # Phase Transition Tests: Happy Path
 # =============================================================================
 
-@test "E2E: INIT → PLANNING (create SPEC)" {
-    # Start in INIT
+@test "E2E: PREPARING → PLANNING (create SPEC)" {
+    # Start in PREPARING
     local phase1=$(get_phase)
-    [[ "$phase1" == "INIT" ]]
+    [[ "$phase1" == "PREPARING" ]]
 
     # Create SPEC.md (Tech Writer's output)
     cat > "$E2E_TMPDIR/SPEC.md" << 'EOF'
@@ -108,7 +108,7 @@ EOF
     [[ "$phase2" == "PLANNING" ]]
 }
 
-@test "E2E: PLANNING → HELPERS (create milestone)" {
+@test "E2E: PLANNING → ANALYZE (create milestone)" {
     touch "$E2E_TMPDIR/SPEC.md"
     local phase1=$(get_phase)
     [[ "$phase1" == "PLANNING" ]]
@@ -116,47 +116,47 @@ EOF
     # Architect creates planning-done milestone
     create_milestone "milestone:planning-done" "Planning complete"
 
-    # Should transition to HELPERS
+    # Should transition to ANALYZE
     local phase2=$(get_phase)
-    [[ "$phase2" == "HELPERS" ]]
+    [[ "$phase2" == "ANALYZE" ]]
 }
 
-@test "E2E: HELPERS → PLAN_REVIEW (analysts complete)" {
+@test "E2E: ANALYZE → THINKING (analysts complete)" {
     touch "$E2E_TMPDIR/SPEC.md"
     create_milestone "milestone:planning-done" "Planning"
 
     local phase1=$(get_phase)
-    [[ "$phase1" == "HELPERS" ]]
+    [[ "$phase1" == "ANALYZE" ]]
 
     # Analysts complete
     create_milestone "milestone:analysts-done" "Analysts"
 
-    # Should transition to PLAN_REVIEW
+    # Should transition to THINKING
     local phase2=$(get_phase)
-    [[ "$phase2" == "PLAN_REVIEW" ]]
+    [[ "$phase2" == "THINKING" ]]
 }
 
-@test "E2E: PLAN_REVIEW → IMPLEMENTATION (review done)" {
+@test "E2E: THINKING → CODING (review done)" {
     touch "$E2E_TMPDIR/SPEC.md"
     create_milestone "milestone:planning-done" "Planning"
     create_milestone "milestone:analysts-done" "Analysts"
 
     local phase1=$(get_phase)
-    [[ "$phase1" == "PLAN_REVIEW" ]]
+    [[ "$phase1" == "THINKING" ]]
 
     # Architect reviews plan
     create_milestone "milestone:plan-reviewed" "Reviewed"
 
-    # Need open task to go to IMPLEMENTATION (not SMOKE_TEST)
+    # Need open task to go to CODING (not TESTING)
     cd "$E2E_TMPDIR"
     bd create --title="Implement feature" --type=task --priority=1
 
-    # Should transition to IMPLEMENTATION
+    # Should transition to CODING
     local phase2=$(get_phase)
-    [[ "$phase2" == "IMPLEMENTATION" ]]
+    [[ "$phase2" == "CODING" ]]
 }
 
-@test "E2E: IMPLEMENTATION → SMOKE_TEST (all tasks closed)" {
+@test "E2E: CODING → TESTING (all tasks closed)" {
     touch "$E2E_TMPDIR/SPEC.md"
     create_milestone "milestone:planning-done" "Planning"
     create_milestone "milestone:analysts-done" "Analysts"
@@ -165,31 +165,31 @@ EOF
     # Create task and close it
     create_closed_task "Implement feature"
 
-    # Should transition to SMOKE_TEST
+    # Should transition to TESTING
     local phase=$(get_phase)
-    [[ "$phase" == "SMOKE_TEST" ]]
+    [[ "$phase" == "TESTING" ]]
 }
 
-@test "E2E: SMOKE_TEST → FINAL_REVIEW (smoke done)" {
+@test "E2E: TESTING → VALIDATING (smoke done)" {
     touch "$E2E_TMPDIR/SPEC.md"
     create_milestone "milestone:planning-done" "Planning"
     create_milestone "milestone:analysts-done" "Analysts"
     create_milestone "milestone:plan-reviewed" "Reviewed"
     create_closed_task "Task"
-    create_milestone "milestone:smoke-test-done" "Smoke"
+    create_milestone "milestone:testing-done" "Smoke"
 
-    # Should transition to FINAL_REVIEW
+    # Should transition to VALIDATING
     local phase=$(get_phase)
-    [[ "$phase" == "FINAL_REVIEW" ]]
+    [[ "$phase" == "VALIDATING" ]]
 }
 
-@test "E2E: FINAL_REVIEW → DONE (project complete)" {
+@test "E2E: VALIDATING → DONE (project complete)" {
     touch "$E2E_TMPDIR/SPEC.md"
     create_milestone "milestone:planning-done" "Planning"
     create_milestone "milestone:analysts-done" "Analysts"
     create_milestone "milestone:plan-reviewed" "Reviewed"
     create_closed_task "Task"
-    create_milestone "milestone:smoke-test-done" "Smoke"
+    create_milestone "milestone:testing-done" "Smoke"
     create_milestone "milestone:project-done" "Done"
 
     # Should transition to DONE
@@ -201,7 +201,7 @@ EOF
 # Phase Transition Tests: Edge Cases
 # =============================================================================
 
-@test "E2E: SMOKE_REVIEW triggered by regression" {
+@test "E2E: REFLEXING triggered by regression" {
     touch "$E2E_TMPDIR/SPEC.md"
     create_milestone "milestone:planning-done" "Planning"
     create_milestone "milestone:analysts-done" "Analysts"
@@ -211,9 +211,9 @@ EOF
     cd "$E2E_TMPDIR"
     bd create --title="Regression bug" --type=bug --priority=0 --labels="regression"
 
-    # Should trigger SMOKE_REVIEW
+    # Should trigger REFLEXING
     local phase=$(get_phase)
-    [[ "$phase" == "SMOKE_REVIEW" ]]
+    [[ "$phase" == "REFLEXING" ]]
 }
 
 @test "E2E: force-phase overrides normal detection" {
@@ -223,18 +223,18 @@ EOF
     local phase1=$(get_phase)
     [[ "$phase1" == "PLANNING" ]]
 
-    # Force IMPLEMENTATION
-    echo "IMPLEMENTATION" > "$E2E_TMPDIR/.hype/force-phase"
+    # Force CODING
+    echo "CODING" > "$E2E_TMPDIR/.hype/force-phase"
 
-    # Should be IMPLEMENTATION now
+    # Should be CODING now
     local phase2=$(get_phase)
-    [[ "$phase2" == "IMPLEMENTATION" ]]
+    [[ "$phase2" == "CODING" ]]
 
     # force-phase file should be deleted
     [[ ! -f "$E2E_TMPDIR/.hype/force-phase" ]]
 }
 
-@test "E2E: in_progress task keeps IMPLEMENTATION" {
+@test "E2E: in_progress task keeps CODING" {
     touch "$E2E_TMPDIR/SPEC.md"
     create_milestone "milestone:planning-done" "Planning"
     create_milestone "milestone:analysts-done" "Analysts"
@@ -245,9 +245,9 @@ EOF
     local id=$(bd create --title="Active task" --type=task --priority=1 2>&1 | grep "Created issue:" | sed 's/.*Created issue: //' | awk '{print $1}')
     bd update "$id" --status=in_progress
 
-    # Should stay in IMPLEMENTATION
+    # Should stay in CODING
     local phase=$(get_phase)
-    [[ "$phase" == "IMPLEMENTATION" ]]
+    [[ "$phase" == "CODING" ]]
 }
 
 # =============================================================================
@@ -321,7 +321,7 @@ EOF
     [[ "$approved" -ge 1 ]]
 }
 
-@test "E2E: reviewing task keeps IMPLEMENTATION phase" {
+@test "E2E: reviewing task keeps CODING phase" {
     touch "$E2E_TMPDIR/SPEC.md"
     create_milestone "milestone:planning-done" "P"
     create_milestone "milestone:analysts-done" "A"
@@ -333,10 +333,10 @@ EOF
     bd update "$id" --status=in_progress --add-label=reviewing
 
     local phase=$(get_phase)
-    [[ "$phase" == "IMPLEMENTATION" ]]
+    [[ "$phase" == "CODING" ]]
 }
 
-@test "E2E: approved task keeps IMPLEMENTATION phase" {
+@test "E2E: approved task keeps CODING phase" {
     touch "$E2E_TMPDIR/SPEC.md"
     create_milestone "milestone:planning-done" "P"
     create_milestone "milestone:analysts-done" "A"
@@ -348,7 +348,7 @@ EOF
     bd update "$id" --status=in_progress --add-label=approved
 
     local phase=$(get_phase)
-    [[ "$phase" == "IMPLEMENTATION" ]]
+    [[ "$phase" == "CODING" ]]
 }
 
 @test "E2E: regression_count reflects open regression tasks" {

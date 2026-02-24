@@ -1,36 +1,36 @@
 #!/usr/bin/env bats
 # tests/unit/hype_v22_test.bats
-# Tests for v2.2 changes in hype.sh: IMPLEMENTATION routing + heal_stuck_tasks
+# Tests for v2.2 changes in hype.sh: CODING routing + heal_stuck_tasks
 
 load '../helpers/setup'
 
 # =============================================================================
-# IMPLEMENTATION phase: calls run-reviewers.sh + run-merge-queue.sh
+# CODING phase: calls run-reviewers.sh + run-merge-queue.sh
 # =============================================================================
 
-@test "hype: IMPLEMENTATION calls run-reviewers.sh" {
+@test "hype: CODING calls run-reviewers.sh" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
     local impl_block
-    impl_block=$(sed -n '/IMPLEMENTATION)/,/;;/p' "$hype_sh")
+    impl_block=$(sed -n '/CODING)/,/;;/p' "$hype_sh")
 
     echo "$impl_block" | grep -q 'run-reviewers.sh'
 }
 
-@test "hype: IMPLEMENTATION calls run-merge-queue.sh" {
+@test "hype: CODING calls run-merge-queue.sh" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
     local impl_block
-    impl_block=$(sed -n '/IMPLEMENTATION)/,/;;/p' "$hype_sh")
+    impl_block=$(sed -n '/CODING)/,/;;/p' "$hype_sh")
 
     echo "$impl_block" | grep -q 'run-merge-queue.sh'
 }
 
-@test "hype: IMPLEMENTATION does NOT call run-senior-executor.sh" {
+@test "hype: CODING does NOT call run-senior-executor.sh" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
     local impl_block
-    impl_block=$(sed -n '/IMPLEMENTATION)/,/;;/p' "$hype_sh")
+    impl_block=$(sed -n '/CODING)/,/;;/p' "$hype_sh")
 
     ! echo "$impl_block" | grep -q 'run-senior-executor.sh'
 }

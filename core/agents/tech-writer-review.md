@@ -54,5 +54,5 @@ hype
 ### 3. Print the report path
 
 ```bash
-echo "USER_REVIEW: Report at .hype/evidence/user-review-report.md"
+echo "CONSULTATION: Report at .hype/evidence/user-review-report.md"
 ```

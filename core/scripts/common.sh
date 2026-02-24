@@ -965,7 +965,7 @@ export -f delete_milestone 2>/dev/null || true
 
 # delete_all_milestones - удаляет все milestones
 # Использование: delete_all_milestones
-# Используется при начале новой итерации (INIT phase).
+# Используется при начале новой итерации (PREPARING phase).
 delete_all_milestones() {
     local hype_dir="${HYPE_DIR:-.hype}"
     local count=0

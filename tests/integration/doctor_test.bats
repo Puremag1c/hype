@@ -94,7 +94,7 @@ teardown() {
 }
 
 # =============================================================================
-# SMOKE_REVIEW Loop Detection
+# REFLEXING Loop Detection
 # =============================================================================
 
 @test "Doctor: detects regression loop" {

@@ -37,7 +37,7 @@ else
     if [ -n "$CLOSED_BUG" ]; then
         echo "REGRESSION: Reopening $CLOSED_BUG"
         bd update "$CLOSED_BUG" --status=open --add-label=regression --add-label=smoke \
-            --notes="Regression detected during SMOKE_TEST. Issue reappeared after previous fix."
+            --notes="Regression detected during TESTING. Issue reappeared after previous fix."
     else
         # Step 3: Create NEW bug with done_when
         bd create --title="SMOKE: [Visual] <description>" \
@@ -182,7 +182,7 @@ bd create --title="SMOKE: [Visual] <description of issue>" \
 <how it should look>
 
 ## Context
-Discovered during SMOKE_TEST visual verification.
+Discovered during TESTING visual verification.
 
 done_when: <specific visual criteria, e.g., 'Page renders without broken layout on mobile viewport'>"
 ```

@@ -146,12 +146,12 @@ load '../helpers/setup'
     ! grep -q 'for .* in .*\*.*2>/dev/null; do' "$reviewers_sh"
 }
 
-@test "hype.sh: FINAL_REVIEW PASSED checks for new open tasks" {
+@test "hype.sh: VALIDATING PASSED checks for new open tasks" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
     # After grep PASSED, must check for open tasks before setting success
     local passed_block
-    passed_block=$(sed -n '/FINAL_REVIEW: PASSED/,/final_review_success=true/p' "$hype_sh")
+    passed_block=$(sed -n '/VALIDATING: PASSED/,/final_review_success=true/p' "$hype_sh")
 
     echo "$passed_block" | grep -q 'bd_safe list.*--status=open'
     echo "$passed_block" | grep -q 'NEEDS_FIXES'
@@ -216,48 +216,48 @@ load '../helpers/setup'
     grep -q 'rm -f.*run-testers.pid' "$hype_sh"
 }
 
-@test "hype.sh: SMOKE_REVIEW cleans testers PID file (v2.3.5)" {
+@test "hype.sh: REFLEXING cleans testers PID file (v2.3.5)" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
-    # SMOKE_REVIEW must remove PID file — testers are done when this phase starts.
-    # Without cleanup, stale PID persists through IMPLEMENTATION and causes
-    # SMOKE_TEST STATE 3 to skip actual test launch on next round.
+    # REFLEXING must remove PID file — testers are done when this phase starts.
+    # Without cleanup, stale PID persists through CODING and causes
+    # TESTING STATE 3 to skip actual test launch on next round.
     local smoke_review_block
-    smoke_review_block=$(sed -n '/SMOKE_REVIEW)/,/;;/p' "$hype_sh")
+    smoke_review_block=$(sed -n '/REFLEXING)/,/;;/p' "$hype_sh")
 
     echo "$smoke_review_block" | grep -q 'rm -f.*run-testers.pid'
 }
 
-@test "hype.sh: IMPLEMENTATION cleans stale testers PID file (v2.3.21)" {
+@test "hype.sh: CODING cleans stale testers PID file (v2.3.21)" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
-    # IMPLEMENTATION must remove PID file — covers SMOKE_TEST→IMPL→SMOKE_TEST path
-    # that bypasses SMOKE_REVIEW (v2.3.5 only covers the SMOKE_REVIEW path)
+    # CODING must remove PID file — covers TESTING→IMPL→TESTING path
+    # that bypasses REFLEXING (v2.3.5 only covers the REFLEXING path)
     local impl_block
-    impl_block=$(sed -n '/IMPLEMENTATION)/,/;;/p' "$hype_sh")
+    impl_block=$(sed -n '/CODING)/,/;;/p' "$hype_sh")
 
     echo "$impl_block" | grep -q 'rm -f.*run-testers.pid'
 }
 
 # =============================================================================
-# Async SMOKE_TEST: non-blocking testers (v2.2.6)
+# Async TESTING: non-blocking testers (v2.2.6)
 # =============================================================================
 
-@test "hype.sh: SMOKE_TEST launches testers in background" {
+@test "hype.sh: TESTING launches testers in background" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
     # run-testers.sh must be launched with & (background)
     local smoke_block
-    smoke_block=$(sed -n '/SMOKE_TEST)/,/;;/p' "$hype_sh")
+    smoke_block=$(sed -n '/TESTING)/,/;;/p' "$hype_sh")
 
     echo "$smoke_block" | grep -q './scripts/run-testers.sh &'
 }
 
-@test "hype.sh: SMOKE_TEST uses PID file for state tracking" {
+@test "hype.sh: TESTING uses PID file for state tracking" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
     local smoke_block
-    smoke_block=$(sed -n '/SMOKE_TEST)/,/;;/p' "$hype_sh")
+    smoke_block=$(sed -n '/TESTING)/,/;;/p' "$hype_sh")
 
     # Must write PID file
     echo "$smoke_block" | grep -q 'run-testers.pid'
@@ -266,11 +266,11 @@ load '../helpers/setup'
     echo "$smoke_block" | grep -q 'kill -0'
 }
 
-@test "hype.sh: SMOKE_TEST does NOT call run-testers.sh synchronously" {
+@test "hype.sh: TESTING does NOT call run-testers.sh synchronously" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
     local smoke_block
-    smoke_block=$(sed -n '/SMOKE_TEST)/,/;;/p' "$hype_sh")
+    smoke_block=$(sed -n '/TESTING)/,/;;/p' "$hype_sh")
 
     # Must NOT have synchronous call (without &)
     # All ./scripts/run-testers.sh calls must end with &
@@ -337,11 +337,11 @@ load '../helpers/setup'
 # set -e resilience: scripts don't kill HYPE on bd failure (v2.2.8)
 # =============================================================================
 
-@test "hype.sh: IMPLEMENTATION script calls protected with || log" {
+@test "hype.sh: CODING script calls protected with || log" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
     local impl_block
-    impl_block=$(sed -n '/IMPLEMENTATION)/,/;;/p' "$hype_sh")
+    impl_block=$(sed -n '/CODING)/,/;;/p' "$hype_sh")
 
     # All three scripts must have || log protection
     echo "$impl_block" | grep 'run-executors.sh' | grep -q '|| log'
@@ -349,11 +349,11 @@ load '../helpers/setup'
     echo "$impl_block" | grep 'run-merge-queue.sh' | grep -q '|| log'
 }
 
-@test "hype.sh: HELPERS script call protected with || log" {
+@test "hype.sh: ANALYZE script call protected with || log" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
     local helpers_block
-    helpers_block=$(sed -n '/HELPERS)/,/;;/p' "$hype_sh")
+    helpers_block=$(sed -n '/ANALYZE)/,/;;/p' "$hype_sh")
 
     echo "$helpers_block" | grep 'run-analysts.sh' | grep -q '|| log'
 }

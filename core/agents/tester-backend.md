@@ -35,7 +35,7 @@ else
     if [ -n "$CLOSED_BUG" ]; then
         echo "REGRESSION: Reopening $CLOSED_BUG"
         bd update "$CLOSED_BUG" --status=open --add-label=regression --add-label=smoke \
-            --notes="Regression detected during SMOKE_TEST. Issue reappeared after previous fix."
+            --notes="Regression detected during TESTING. Issue reappeared after previous fix."
     else
         # Step 3: Create NEW bug with done_when
         bd create --title="SMOKE: [Backend] <description>" \
@@ -182,7 +182,7 @@ $(grep -A10 'FAILED test_name' .hype/evidence/backend/test-output.txt)
 \`\`\`
 
 ## Context
-Discovered during SMOKE_TEST backend verification.
+Discovered during TESTING backend verification.
 
 done_when: test_name passes"
 ```

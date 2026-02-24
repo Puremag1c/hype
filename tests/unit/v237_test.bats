@@ -241,20 +241,20 @@ load '../helpers/setup'
     grep -q 'export HYPE_DIR=' "$hype_sh"
 }
 
-@test "hype.sh: dispatch_phase reads tick-cache for IMPLEMENTATION" {
+@test "hype.sh: dispatch_phase reads tick-cache for CODING" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
-    # IMPLEMENTATION dispatch should NOT have bd_safe list
+    # CODING dispatch should NOT have bd_safe list
     local impl_block
-    impl_block=$(sed -n '/^        IMPLEMENTATION)/,/;;$/p' "$hype_sh")
+    impl_block=$(sed -n '/^        CODING)/,/;;$/p' "$hype_sh")
     ! echo "$impl_block" | grep -q 'bd_safe list'
 }
 
-@test "hype.sh: dispatch_phase reads tick-cache for SMOKE_TEST" {
+@test "hype.sh: dispatch_phase reads tick-cache for TESTING" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
     local smoke_block
-    smoke_block=$(sed -n '/^        SMOKE_TEST)/,/;;$/p' "$hype_sh")
+    smoke_block=$(sed -n '/^        TESTING)/,/;;$/p' "$hype_sh")
 
     # tick-cache reads exist
     echo "$smoke_block" | grep -q 'tick-cache.json'
@@ -263,33 +263,33 @@ load '../helpers/setup'
     ! echo "$smoke_block" | grep -q 'bd_safe list'
 }
 
-@test "hype.sh: dispatch_phase reads tick-cache for SMOKE_REVIEW" {
+@test "hype.sh: dispatch_phase reads tick-cache for REFLEXING" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
     local smoke_review_block
-    smoke_review_block=$(sed -n '/^        SMOKE_REVIEW)/,/;;$/p' "$hype_sh")
+    smoke_review_block=$(sed -n '/^        REFLEXING)/,/;;$/p' "$hype_sh")
 
     echo "$smoke_review_block" | grep -q 'tick-cache.json'
     # No bd_safe list calls (excluding comments)
     ! echo "$smoke_review_block" | grep -v '^[[:space:]]*#' | grep -q 'bd_safe list'
 }
 
-@test "hype.sh: dispatch_phase reads tick-cache for USER_REVIEW" {
+@test "hype.sh: dispatch_phase reads tick-cache for CONSULTATION" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
     local user_block
-    user_block=$(sed -n '/^        USER_REVIEW)/,/;;$/p' "$hype_sh")
+    user_block=$(sed -n '/^        CONSULTATION)/,/;;$/p' "$hype_sh")
 
     echo "$user_block" | grep -q 'tick-cache.json'
     ! echo "$user_block" | grep -q 'bd_safe list'
 }
 
-@test "hype.sh: FINAL_REVIEW keeps bd_safe for post-agent checks" {
+@test "hype.sh: VALIDATING keeps bd_safe for post-agent checks" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
-    # FINAL_REVIEW must still use bd_safe list (post-agent, needs fresh data)
+    # VALIDATING must still use bd_safe list (post-agent, needs fresh data)
     local final_block
-    final_block=$(sed -n '/^        FINAL_REVIEW)/,/;;$/p' "$hype_sh")
+    final_block=$(sed -n '/^        VALIDATING)/,/;;$/p' "$hype_sh")
     echo "$final_block" | grep -q 'bd_safe list'
 }
 
@@ -415,12 +415,12 @@ load '../helpers/setup'
 @test "hype.sh: dispatch_phase passes tick-cache to single trigger cleanups" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
-    # PLAN_REVIEW: passes cache
+    # THINKING: passes cache
     local plan_block
-    plan_block=$(sed -n '/^        PLAN_REVIEW)/,/;;$/p' "$hype_sh")
+    plan_block=$(sed -n '/^        THINKING)/,/;;$/p' "$hype_sh")
     echo "$plan_block" | grep -q 'cleanup_stale_trigger "run-plan-review" "\$bd_cache"'
 
-    # FINAL_REVIEW: completion passes cache
+    # VALIDATING: completion passes cache
     grep -q 'cleanup_stale_trigger "run-completion" "\$bd_cache"' "$hype_sh"
 }
 
@@ -618,9 +618,9 @@ load '../helpers/setup'
     done
 }
 
-# === v2.3.13: Force SMOKE_TEST while testers running ===
+# === v2.3.13: Force TESTING while testers running ===
 
-@test "detect-phase.sh: forces SMOKE_TEST when testers PID alive" {
+@test "detect-phase.sh: forces TESTING when testers PID alive" {
     local detect_sh="$SCRIPTS_DIR/detect-phase.sh"
 
     # Must read PID file
@@ -629,17 +629,17 @@ load '../helpers/setup'
     # Must check if process is alive (kill -0)
     grep -q 'kill -0' "$detect_sh"
 
-    # PID alive → output SMOKE_TEST and exit
-    # This block must come BEFORE SMOKE_REVIEW check
+    # PID alive → output TESTING and exit
+    # This block must come BEFORE REFLEXING check
     local pid_block
     pid_block=$(sed -n '/testers actively running/,/exit 0/p' "$detect_sh")
-    echo "$pid_block" | grep -q 'SMOKE_TEST'
+    echo "$pid_block" | grep -q 'TESTING'
 }
 
-@test "detect-phase.sh: SMOKE_REVIEW only reachable when testers done" {
+@test "detect-phase.sh: REFLEXING only reachable when testers done" {
     local detect_sh="$SCRIPTS_DIR/detect-phase.sh"
 
-    # PID check (exits with SMOKE_TEST) must come BEFORE SMOKE_REVIEW
+    # PID check (exits with TESTING) must come BEFORE REFLEXING
     local pid_line smoke_review_line
     pid_line=$(grep -n 'testers actively running' "$detect_sh" | head -1 | cut -d: -f1)
     smoke_review_line=$(grep -n 'SMOKE_TRIAGE_OPEN.*-gt 0' "$detect_sh" | head -1 | cut -d: -f1)
@@ -647,23 +647,23 @@ load '../helpers/setup'
     [ "$pid_line" -lt "$smoke_review_line" ]
 }
 
-@test "detect-phase.sh: SMOKE_REVIEW check is simple (no testers guard needed)" {
+@test "detect-phase.sh: REFLEXING check is simple (no testers guard needed)" {
     local detect_sh="$SCRIPTS_DIR/detect-phase.sh"
 
-    # SMOKE_REVIEW condition should be simple — testers check is upstream
+    # REFLEXING condition should be simple — testers check is upstream
     local smoke_block
     smoke_block=$(sed -n '/SMOKE_TRIAGE_OPEN.*-gt 0/,/exit 0/p' "$detect_sh" | head -5)
-    echo "$smoke_block" | grep -q 'SMOKE_REVIEW'
-    # No TESTERS_STILL_RUNNING in the SMOKE_REVIEW block itself
+    echo "$smoke_block" | grep -q 'REFLEXING'
+    # No TESTERS_STILL_RUNNING in the REFLEXING block itself
     ! echo "$smoke_block" | grep -q 'TESTERS_STILL_RUNNING'
 }
 
-@test "hype.sh: SMOKE_REVIEW cleans leftover smoke labels (safety net)" {
+@test "hype.sh: REFLEXING cleans leftover smoke labels (safety net)" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
-    # Extract SMOKE_REVIEW handler
+    # Extract REFLEXING handler
     local smoke_block
-    smoke_block=$(sed -n '/SMOKE_REVIEW)/,/;;/p' "$hype_sh")
+    smoke_block=$(sed -n '/REFLEXING)/,/;;/p' "$hype_sh")
 
     # Must read remaining smoke task IDs from tick-cache
     echo "$smoke_block" | grep -q 'remaining_smoke_ids'
@@ -911,7 +911,7 @@ load '../helpers/setup'
     grep -q 'VERSIONING: DONE' "$agent"
 }
 
-@test "v2.4.0: hype.sh FINAL_REVIEW uses opus for completion" {
+@test "v2.4.0: hype.sh VALIDATING uses opus for completion" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
     grep -q 'MODEL_COMPLETION:-opus' "$hype_sh"
 }

@@ -179,7 +179,7 @@ bd update <id> --remove-label=needs-review
 **Симптомы:**
 - Фаза `BLOCKED_CYCLES`
 - `bd dep cycles` показывает циклы
-- HYPE не переходит в IMPLEMENTATION
+- HYPE не переходит в CODING
 
 **Причина:**
 Architect создал circular dependencies.
@@ -381,11 +381,11 @@ rm .hype/hype.lock
 
 ---
 
-### PROBLEM: Phase stuck on INIT
+### PROBLEM: Phase stuck on PREPARING
 
 **Симптомы:**
-- INIT повторяется хотя SPEC.md существует
-- detect-phase.sh возвращает INIT
+- PREPARING повторяется хотя SPEC.md существует
+- detect-phase.sh возвращает PREPARING
 
 **Причина:**
 Маркер `.hype/needs-spec` застрял.
@@ -403,10 +403,10 @@ rm .hype/needs-spec
 
 ---
 
-### PROBLEM: SMOKE_REVIEW loop
+### PROBLEM: REFLEXING loop
 
 **Симптомы:**
-- Фаза SMOKE_REVIEW повторяется бесконечно
+- Фаза REFLEXING повторяется бесконечно
 - regression label не снимается
 
 **Причина:**
@@ -424,18 +424,18 @@ bd update <id> --remove-label=regression
 
 ---
 
-### PROBLEM: SMOKE_REVIEW phase bouncing (SMOKE_TEST → SMOKE_REVIEW → IMPLEMENTATION loop)
+### PROBLEM: REFLEXING phase bouncing (TESTING → REFLEXING → CODING loop)
 
 **Симптомы:**
-- Фаза прыгает: SMOKE_TEST → SMOKE_REVIEW → IMPLEMENTATION → SMOKE_REVIEW → IMPLEMENTATION
+- Фаза прыгает: TESTING → REFLEXING → CODING → REFLEXING → CODING
 - Architect-QA (Opus) вызывается 3-4 раза вместо одного
 - Задачи видны как "крутящиеся" часами
 
 **Причина (≤v2.3.12):**
-`detect-phase.sh` входил в SMOKE_REVIEW как только ЛЮБОЙ тестер создавал smoke задачу, не дожидаясь завершения всех тестеров. Async тестеры (v2.2.6) заканчивают с разницей в 5-8 минут → каждый завершённый тестер триггерил отдельный SMOKE_REVIEW.
+`detect-phase.sh` входил в REFLEXING как только ЛЮБОЙ тестер создавал smoke задачу, не дожидаясь завершения всех тестеров. Async тестеры (v2.2.6) заканчивают с разницей в 5-8 минут → каждый завершённый тестер триггерил отдельный REFLEXING.
 
 **Исправлено в v2.3.13:**
-`detect-phase.sh` проверяет PID файл `run-testers.pid` — пока тестеры работают, SMOKE_REVIEW откладывается. Все findings накапливаются, Architect триажит один раз.
+`detect-phase.sh` проверяет PID файл `run-testers.pid` — пока тестеры работают, REFLEXING откладывается. Все findings накапливаются, Architect триажит один раз.
 
 ---
 
@@ -782,7 +782,7 @@ rm logs/*.log
 **Симптомы:**
 - milestone:analysts-done существует
 - Но analyst triggers ещё open/in_progress
-- Фаза HELPERS не завершается корректно
+- Фаза ANALYZE не завершается корректно
 
 **Причина:**
 Race condition: milestone создан пока trigger был in_progress, потом timeout reset trigger to open.
@@ -804,21 +804,21 @@ bd update <milestone-id> --remove-label=milestone:analysts-done
 
 ---
 
-## SMOKE_TEST проблемы
+## TESTING проблемы
 
-### PROBLEM: Testers not running (bd daemon frozen during SMOKE_TEST)
+### PROBLEM: Testers not running (bd daemon frozen during TESTING)
 
 **Fixed in:** 2.2.6
 
 **Симптомы:**
-- `SMOKE_TEST: testers running (PID X)` в логах, но тестеры не работают
+- `TESTING: testers running (PID X)` в логах, но тестеры не работают
 - `bd` commands timeout: `ERROR: bd command timeout: bd close ...`
 - Tester logs show "Trigger already claimed" within 10-15 seconds (too fast for real test)
 - Tester trigger tasks stuck in `open` (never claimed to `in_progress`)
 - `bd show <id>` hangs (daemon frozen)
 
 **Причина:**
-До v2.2.6 `run-testers.sh` запускалось синхронно внутри HYPE main loop. 4+ Claude тестера + hype.sh одновременно вызывали `bd` — daemon перегружался и переставал отвечать. `check_beads` не запускалось (заблокировано внутри SMOKE_TEST), daemon не перезапускался. `bd_safe update --status=in_progress` таймаутил → интерпретировался как "already claimed" → тестер пропускал задачу.
+До v2.2.6 `run-testers.sh` запускалось синхронно внутри HYPE main loop. 4+ Claude тестера + hype.sh одновременно вызывали `bd` — daemon перегружался и переставал отвечать. `check_beads` не запускалось (заблокировано внутри TESTING), daemon не перезапускался. `bd_safe update --status=in_progress` таймаутил → интерпретировался как "already claimed" → тестер пропускал задачу.
 
 **Диагностика:**
 ```bash
@@ -849,14 +849,14 @@ hype stop && hype
 
 ---
 
-### PROBLEM: Zombie trigger blocks phase transition (IMPLEMENTATION → SMOKE_TEST)
+### PROBLEM: Zombie trigger blocks phase transition (CODING → TESTING)
 
 **Fixed in:** 2.2.5
 
 **Симптомы:**
-- Phase stuck on `IMPLEMENTATION` despite all real tasks being closed (100% progress)
+- Phase stuck on `CODING` despite all real tasks being closed (100% progress)
 - `bd list` shows a trigger task (e.g. `run-plan-review`) in `in_progress` from previous session
-- Phase never transitions to SMOKE_TEST
+- Phase never transitions to TESTING
 
 **Причина:**
 До v2.2.5 `detect-phase.sh` counted trigger tasks in OPEN/IN_PROGRESS totals. A zombie trigger (from crashed session) was counted as real work, blocking phase transition. `cleanup_stale_trigger()` couldn't help when bd daemon was also frozen.
@@ -886,7 +886,7 @@ bd close <trigger-id> --reason="Orphaned trigger"
 ### PROBLEM: Testers see OLD code (stale code loop)
 
 **Симптомы:**
-- SMOKE_TEST → bug → IMPLEMENTATION → fix → SMOKE_TEST → тот же bug
+- TESTING → bug → CODING → fix → TESTING → тот же bug
 - Executor видит что фикс уже есть в исходниках
 - Бесконечный цикл fix → test → same bug
 
@@ -908,7 +908,7 @@ stat -f %m $(python3 -c "import module; print(module.__file__)")
 ```
 
 **Решение:**
-Исправить testing.yaml — Opus создаёт конфиг при первом SMOKE_TEST через ensure_testing_config().
+Исправить testing.yaml — Opus создаёт конфиг при первом TESTING через ensure_testing_config().
 Если конфиг некорректный, testers найдут баги и система исправит в следующей итерации.
 
 **Manual fix (testing.yaml):**
@@ -960,10 +960,10 @@ bd close <id> --reason="Manual: removed from scope"
 
 ---
 
-### PROBLEM: USER_REVIEW phase — daemon stopped
+### PROBLEM: CONSULTATION phase — daemon stopped
 
 **Симптомы:**
-- Фаза `USER_REVIEW`
+- Фаза `CONSULTATION`
 - HYPE daemon останавливается с сообщением "Daemon stopping"
 - Задачи с `user-escalation` label
 
@@ -995,7 +995,7 @@ hype
 ### PROBLEM: Infinite regression loop (regress:N keeps growing)
 
 **Симптомы:**
-- Один и тот же баг возвращается после каждого SMOKE_TEST
+- Один и тот же баг возвращается после каждого TESTING
 - `regress:N` растёт (3+)
 - Цикл: fix → test → same bug → fix
 
@@ -1288,7 +1288,7 @@ bd update <id> --add-label=needs-review
 **Симптомы:**
 - Задача с label `trigger` в `reviewing` или `needs-review` статусе
 - В логах reviewer: "NO_BRANCH" error (trigger не имеет git branch)
-- P0 bug count растёт, SMOKE_TEST блокируется
+- P0 bug count растёт, TESTING блокируется
 - Бесконечный цикл: trigger → review → NO_BRANCH → reject → review
 
 **Причина:**

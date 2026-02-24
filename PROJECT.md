@@ -6,7 +6,7 @@
 
 Запустите `hype init` в любом проекте, опишите что хотите словами — система сама создаст план, распределит задачи между агентами и выдаст готовый результат.
 
-**Версия:** 2.3.24
+**Версия:** 2.4.0
 
 ## Целевая аудитория
 
@@ -41,7 +41,7 @@ hype/
 │   │   ├── reviewer.md            # Code review only (v2.2)
 │   │   ├── auditor.md           # Аудит задач с label:audit (Sonnet→Opus)
 │   │   ├── analyzer.md          # Deep analysis кода (Opus)
-│   │   ├── versioner.md         # VERSION + CHANGELOG (Haiku)
+│   │   ├── completion.md         # VERSION + CHANGELOG + report (Opus)
 │   │   ├── architect-troubleshooter.md # Persistent failure resolution (Opus)
 │   │   ├── tech-writer-review.md  # Non-technical user report (Sonnet)
 │   │   ├── analyst-*.md         # 5 аналитиков (Sonnet)
@@ -85,7 +85,7 @@ INIT → PLANNING → HELPERS → PLAN_REVIEW → IMPLEMENTATION → SMOKE_TEST 
 | SMOKE_REVIEW | Architect-QA | Триаж smoke test находок (smoke + regression) |
 | USER_REVIEW | Tech-Writer-Review | Отчёт для пользователя, daemon stops |
 | FINAL_REVIEW | Architect-QA | Проверка целостности |
-| VERSIONING | Versioner | Обновление VERSION + CHANGELOG |
+| VERSIONING | Completion (Opus) | Version bump + CHANGELOG + SPEC_REPORT + commit + push |
 | DONE | — | Проект завершён |
 
 ### SMOKE_TEST Testers

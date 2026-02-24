@@ -1197,29 +1197,29 @@ For each task:
                 sleep 5
             done
 
-            # Run versioner after successful final review
+            # Run completion agent after successful final review
             if [ "$final_review_success" = true ]; then
-                log "INFO" "FINAL_REVIEW passed, running versioner..."
+                log "INFO" "FINAL_REVIEW passed, running completion..."
 
                 # Close stale triggers from previous runs, create fresh
                 # v2.3.10: pass tick-cache to avoid bd_safe list call
                 local bd_cache
                 bd_cache=$(cat "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "[]")
-                cleanup_stale_trigger "run-versioning" "$bd_cache"
-                local versioner_trigger
-                versioner_trigger=$(bd_safe create --title="run-versioning" --type=task --priority=0 --label=trigger 2>&1 | grep -oE '[A-Za-z]+-[a-z0-9]+' | head -1)
+                cleanup_stale_trigger "run-completion" "$bd_cache"
+                local completion_trigger
+                completion_trigger=$(bd_safe create --title="run-completion" --type=task --priority=0 --label=trigger 2>&1 | grep -oE '[A-Za-z]+-[a-z0-9]+' | head -1)
 
-                if [ -n "$versioner_trigger" ]; then
-                    local versioner_model
-                    versioner_model=$(map_model "${MODEL_VERSIONER:-haiku}")
+                if [ -n "$completion_trigger" ]; then
+                    local completion_model
+                    completion_model=$(map_model "${MODEL_COMPLETION:-opus}")
 
-                    # Run versioner with trigger task context
-                    local versioner_prompt="TRIGGER_TASK: $versioner_trigger"
-                    if run_agent_with_mode "versioner" ".claude/agents/versioner.md" "$versioner_model" "" "$versioner_prompt" "${VERSIONER_TIMEOUT:-5m}"; then
-                        log "INFO" "Versioner completed"
+                    # Run completion with trigger task context
+                    local completion_prompt="TRIGGER_TASK: $completion_trigger"
+                    if run_agent_with_mode "completion" ".claude/agents/completion.md" "$completion_model" "" "$completion_prompt" "${COMPLETION_TIMEOUT:-10m}"; then
+                        log "INFO" "Completion agent completed"
                     else
-                        log "WARN" "Versioner failed/timed out, closing trigger"
-                        bd_safe close "$versioner_trigger" --reason="Versioner timeout" >/dev/null 2>&1 || true
+                        log "WARN" "Completion agent failed/timed out, closing trigger"
+                        bd_safe close "$completion_trigger" --reason="Completion timeout" >/dev/null 2>&1 || true
                     fi
                 fi
             fi
@@ -1537,16 +1537,25 @@ main() {
             log "INFO" "PROJECT COMPLETE"
             log "INFO" "=========================================="
 
-            # Show architect's final review report
-            local final_review_log
-            final_review_log=$(ls -t "$LOGS_DIR"/architect-*.log 2>/dev/null | head -1)
-            if [ -n "$final_review_log" ] && [ -f "$final_review_log" ]; then
+            # Show completion report (SPEC_REPORT.md) or fall back to architect log
+            local project_dir
+            project_dir=$(pwd)
+            if [ -f "$project_dir/SPEC_REPORT.md" ]; then
                 echo ""
-                echo "=== FINAL REVIEW REPORT ==="
-                # Show last 50 lines of architect log (contains summary)
-                tail -50 "$final_review_log" | grep -v "^$" | head -40
-                echo "==========================="
+                echo "=== ITERATION REPORT ==="
+                cat "$project_dir/SPEC_REPORT.md"
+                echo "========================"
                 echo ""
+            else
+                local final_review_log
+                final_review_log=$(ls -t "$LOGS_DIR"/architect-*.log 2>/dev/null | head -1)
+                if [ -n "$final_review_log" ] && [ -f "$final_review_log" ]; then
+                    echo ""
+                    echo "=== FINAL REVIEW REPORT ==="
+                    tail -50 "$final_review_log" | grep -v "^$" | head -40
+                    echo "==========================="
+                    echo ""
+                fi
             fi
 
             # Generate iteration stats

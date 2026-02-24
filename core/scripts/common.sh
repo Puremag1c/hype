@@ -1066,6 +1066,7 @@ cleanup_iteration() {
 
     # SPEC.md
     [ -f "$project_dir/SPEC.md" ] && echo "  • SPEC.md → SPEC.prev.md (archived)"
+    [ -f "$project_dir/SPEC_REPORT.md" ] && echo "  • SPEC_REPORT.md → SPEC_REPORT.prev.md (archived)"
 
     echo ""
     echo "Starting cleanup..."
@@ -1138,6 +1139,12 @@ cleanup_iteration() {
     if [ -f "$project_dir/SPEC.md" ]; then
         echo "  → Archiving SPEC.md → SPEC.prev.md..."
         mv "$project_dir/SPEC.md" "$project_dir/SPEC.prev.md"
+    fi
+
+    # 6b. Archive SPEC_REPORT.md
+    if [ -f "$project_dir/SPEC_REPORT.md" ]; then
+        echo "  → Archiving SPEC_REPORT.md → SPEC_REPORT.prev.md..."
+        mv "$project_dir/SPEC_REPORT.md" "$project_dir/SPEC_REPORT.prev.md"
     fi
 
     # 7. Create needs-spec marker for next iteration

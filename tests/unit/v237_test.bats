@@ -420,8 +420,8 @@ load '../helpers/setup'
     plan_block=$(sed -n '/^        PLAN_REVIEW)/,/;;$/p' "$hype_sh")
     echo "$plan_block" | grep -q 'cleanup_stale_trigger "run-plan-review" "\$bd_cache"'
 
-    # FINAL_REVIEW: versioner passes cache
-    grep -q 'cleanup_stale_trigger "run-versioning" "\$bd_cache"' "$hype_sh"
+    # FINAL_REVIEW: completion passes cache
+    grep -q 'cleanup_stale_trigger "run-completion" "\$bd_cache"' "$hype_sh"
 }
 
 @test "hype.sh: close-completed-parents skipped when no features/epics" {
@@ -877,4 +877,66 @@ load '../helpers/setup'
     echo "$func_body" | grep -q 'bd delete.*--force'
     # Must only trigger when remaining > 0
     echo "$func_body" | grep -q 'remaining.*-gt 0'
+}
+
+# =============================================================================
+# v2.4.0: Completion Agent + Language Metadata
+# =============================================================================
+
+@test "v2.4.0: completion.md agent prompt exists" {
+    [ -f "$SCRIPTS_DIR/../agents/completion.md" ]
+}
+
+@test "v2.4.0: versioner.md does not exist (replaced by completion.md)" {
+    [ ! -f "$SCRIPTS_DIR/../agents/versioner.md" ]
+}
+
+@test "v2.4.0: completion.md reads Client Language from SPEC" {
+    local agent="$SCRIPTS_DIR/../agents/completion.md"
+    grep -q 'Client Language' "$agent"
+}
+
+@test "v2.4.0: completion.md creates SPEC_REPORT.md" {
+    local agent="$SCRIPTS_DIR/../agents/completion.md"
+    grep -q 'SPEC_REPORT.md' "$agent"
+}
+
+@test "v2.4.0: completion.md includes git push step" {
+    local agent="$SCRIPTS_DIR/../agents/completion.md"
+    grep -q 'git push' "$agent"
+}
+
+@test "v2.4.0: completion.md outputs VERSIONING: DONE signal" {
+    local agent="$SCRIPTS_DIR/../agents/completion.md"
+    grep -q 'VERSIONING: DONE' "$agent"
+}
+
+@test "v2.4.0: hype.sh FINAL_REVIEW uses opus for completion" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+    grep -q 'MODEL_COMPLETION:-opus' "$hype_sh"
+}
+
+@test "v2.4.0: hype.sh DONE phase shows SPEC_REPORT.md" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+    grep -q 'SPEC_REPORT.md' "$hype_sh"
+}
+
+@test "v2.4.0: tech-writer.md includes Client Language in SPEC template" {
+    local agent="$SCRIPTS_DIR/../agents/tech-writer.md"
+    grep -q 'Client Language' "$agent"
+}
+
+@test "v2.4.0: tech-writer.md reads SPEC_REPORT.prev.md at startup" {
+    local agent="$SCRIPTS_DIR/../agents/tech-writer.md"
+    grep -q 'SPEC_REPORT.prev.md' "$agent"
+}
+
+@test "v2.4.0: common.sh cleanup archives SPEC_REPORT.md" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    local func_body
+    func_body=$(sed -n '/^cleanup_iteration()/,/^}/p' "$common_sh")
+
+    echo "$func_body" | grep -q 'SPEC_REPORT.md'
+    echo "$func_body" | grep -q 'SPEC_REPORT.prev.md'
 }

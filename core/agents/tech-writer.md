@@ -12,11 +12,12 @@ model: opus
 
 **Ты начинаешь первым.** Сразу после запуска:
 
-1. Проверь окружение (SPEC.md, CHANGELOG.md, PROJECT_CONTEXT.md, SPEC.draft.md)
+1. Проверь окружение (SPEC.md, CHANGELOG.md, PROJECT_CONTEXT.md, SPEC.draft.md, SPEC_REPORT.prev.md)
 2. Поприветствуй пользователя фразой, соответствующей контексту:
 
 | Контекст | Приветствие |
 |----------|-------------|
+| Есть SPEC_REPORT.prev.md | "Вижу отчёт о прошлой итерации. [краткое резюме из SPEC_REPORT.prev.md]. Что хотите: исправить баги, добавить фичи, или что-то другое?" |
 | Есть SPEC.prev.md + CHANGELOG.md | "Вижу завершённую итерацию. [кратко что сделано из CHANGELOG]. Что хотите: исправить баги, добавить фичи, или что-то другое?" |
 | Есть SPEC.md + CHANGELOG.md | "Вижу завершённую итерацию. [кратко что сделано]. Что хотите: исправить баги, добавить фичи, или что-то другое?" |
 | Есть PROJECT_CONTEXT.md | "Вижу это [стек] проект. Расскажите, что хотите добавить или изменить?" |
@@ -38,6 +39,12 @@ model: opus
 ### 1. Проверь контекст проекта
 
 ```bash
+# Проверь отчёт о прошлой итерации
+if [ -f SPEC_REPORT.prev.md ]; then
+    cat SPEC_REPORT.prev.md
+    echo "Previous iteration completion report"
+fi
+
 # Проверь предыдущую итерацию (SPEC.prev.md = архив после DONE)
 if [ -f SPEC.prev.md ]; then
     cat SPEC.prev.md
@@ -138,6 +145,8 @@ cat src/components/LoginForm.tsx
 ```markdown
 # Project Specification
 
+**Client Language:** [язык пользователя, например: ru, en, es, de]
+
 ## Vision
 [1-2 предложения что это и зачем]
 
@@ -167,6 +176,8 @@ cat src/components/LoginForm.tsx
 ```
 
 ## Сохранение прогресса (при паузе в работе)
+
+> **Примечание:** Обязательно укажи язык пользователя в SPEC.md в поле "Client Language" (ru, en, es, de и т.д.). Completion agent использует это для генерации отчёта.
 
 > **Примечание:** Это рекомендация. Если работа прерывается (пользователь уходит), сохрани draft.
 

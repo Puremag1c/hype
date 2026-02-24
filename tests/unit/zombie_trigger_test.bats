@@ -136,7 +136,7 @@ load '../helpers/setup'
     # All inline trigger creation points should call cleanup first
     grep -q 'cleanup_stale_trigger "run-plan-review"' "$hype_sh"
     grep -q 'cleanup_stale_trigger "run-smoke-review"' "$hype_sh"
-    grep -q 'cleanup_stale_trigger "run-versioning"' "$hype_sh"
+    grep -q 'cleanup_stale_trigger "run-completion"' "$hype_sh"
 }
 
 @test "run-reviewers.sh: for loop glob does not have inline 2>/dev/null" {

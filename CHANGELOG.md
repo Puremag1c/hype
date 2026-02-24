@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.4.0] - 2026-02-24
+
+### Added
+
+- **Completion Agent (Opus)** — Replaces Versioner (Haiku). New `completion.md` agent handles version bump, CHANGELOG generation, git commit + push, AND writes `SPEC_REPORT.md` — a human-readable iteration report in the user's language. Timeout increased from 5m to 10m to accommodate the expanded responsibilities. (GitHub issue #14)
+
+- **Client Language metadata** — Tech Writer now records the user's language in SPEC.md (`Client Language: ru`). Completion agent reads this field to write SPEC_REPORT.md in the correct language.
+
+- **SPEC_REPORT lifecycle** — `SPEC_REPORT.md` is archived to `SPEC_REPORT.prev.md` during `hype clear`. Tech Writer reads the previous report at startup to provide continuity between iterations.
+
+- **DONE phase shows SPEC_REPORT** — When project completes, the iteration report is displayed instead of raw architect logs.
+
+- 11 new tests (335 total).
+
+### Removed
+
+- `versioner.md` — replaced by `completion.md`.
+
+---
+
 ## [2.3.24] - 2026-02-22
 
 ### Fixed

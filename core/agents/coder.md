@@ -1,5 +1,5 @@
 ---
-name: executor
+name: coder
 description: Реализует одну задачу в своей git ветке
 model: по задаче (label model:*)
 ---

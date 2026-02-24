@@ -180,7 +180,7 @@ get_phase() {
     [ "$phase" = "TESTING" ]
 }
 
-@test "smoke: testers PID alive + open tasks (executor) → TESTING (NOT CODING)" {
+@test "smoke: testers PID alive + open tasks (coder) → TESTING (NOT CODING)" {
     set_all_milestones
     set_tasks '[
         {"id":"t1","title":"closed task","status":"closed","priority":2,"labels":[]},
@@ -191,7 +191,7 @@ get_phase() {
     [ "$phase" = "TESTING" ]
 }
 
-@test "smoke: testers PID alive + in_progress executor → TESTING (NOT CODING)" {
+@test "smoke: testers PID alive + in_progress coder → TESTING (NOT CODING)" {
     set_all_milestones
     set_tasks '[
         {"id":"t1","title":"closed task","status":"closed","priority":2,"labels":[]},
@@ -381,7 +381,7 @@ get_phase() {
     set_all_milestones
     set_tasks '[
         {"id":"t1","title":"done","status":"closed","priority":2,"labels":[]},
-        {"id":"t2","title":"working","status":"in_progress","priority":2,"labels":["executor"]},
+        {"id":"t2","title":"working","status":"in_progress","priority":2,"labels":["coder"]},
         {"id":"t3","title":"reviewing","status":"in_progress","priority":2,"labels":["reviewing"]},
         {"id":"t4","title":"approved","status":"in_progress","priority":2,"labels":["approved"]},
         {"id":"t5","title":"waiting","status":"open","priority":2,"labels":["model:haiku"]}
@@ -431,7 +431,7 @@ get_phase() {
     set_tasks '[
         {"id":"t1","title":"done","status":"closed","priority":2,"labels":[]},
         {"id":"t2","title":"Fix api bug","status":"open","priority":1,"labels":["model:sonnet"]},
-        {"id":"t3","title":"Fix ui bug","status":"in_progress","priority":1,"labels":["model:sonnet","executor"]}
+        {"id":"t3","title":"Fix ui bug","status":"in_progress","priority":1,"labels":["model:sonnet","coder"]}
     ]'
     # smoke labels removed by architect, PID file removed by REFLEXING
     [ "$(get_phase)" = "CODING" ]

@@ -1,5 +1,5 @@
 ---
-name: architect-planner
+name: architect
 description: Создаёт план проекта из SPEC.md
 model: opus
 ---

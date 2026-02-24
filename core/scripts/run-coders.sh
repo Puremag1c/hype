@@ -1,11 +1,11 @@
 #!/bin/bash
-# core/scripts/run-executors.sh
+# core/scripts/run-coders.sh
 # Запускает Executor агентов параллельно с backpressure контролем.
 #
-# Backpressure: количество активных executors ограничено через MAX_PARALLEL_EXECUTORS.
-# Считаем через beads (in_progress + label=executor), не через gh pr list.
+# Backpressure: количество активных coders ограничено через MAX_PARALLEL_CODERS.
+# Считаем через beads (in_progress + label=coder), не через gh pr list.
 #
-# Использование: ./scripts/run-executors.sh
+# Использование: ./scripts/run-coders.sh
 
 set -euo pipefail
 
@@ -23,14 +23,14 @@ if [ -f "$CONFIG_FILE" ]; then
     source "$CONFIG_FILE"
 fi
 
-MAX_PARALLEL="${MAX_PARALLEL_EXECUTORS:-3}"
+MAX_PARALLEL="${MAX_PARALLEL_CODERS:-3}"
 TASK_TIMEOUT="${TASK_TIMEOUT:-10m}"
 WORKTREES_DIR="$PROJECT_DIR/.hype-worktrees"
 
 mkdir -p "$LOGS_DIR"
 
 # === Worktree management ===
-# Изоляция executors через git worktrees (избегает HEAD conflicts и beads import storms)
+# Изоляция coders через git worktrees (избегает HEAD conflicts и beads import storms)
 
 # find_free_slot - allocates a slot with lock-based protection
 # Uses mkdir for atomic lock acquisition (prevents race conditions between HYPE cycles)
@@ -39,9 +39,9 @@ find_free_slot() {
     mkdir -p "$WORKTREES_DIR"
     local slot=0
     while true; do
-        local lock_dir="$WORKTREES_DIR/executor-$slot.lock"
+        local lock_dir="$WORKTREES_DIR/coder-$slot.lock"
 
-        # Check for stale lock (older than 30 minutes = crashed executor)
+        # Check for stale lock (older than 30 minutes = crashed coder)
         if [ -d "$lock_dir" ]; then
             local lock_age
             lock_age=$(( $(date +%s) - $(stat -f %m "$lock_dir" 2>/dev/null || stat -c %Y "$lock_dir" 2>/dev/null || echo 0) ))
@@ -69,7 +69,7 @@ find_free_slot() {
 create_worktree() {
     local slot=$1
     local task_id=$2
-    local worktree_path="$WORKTREES_DIR/executor-$slot"
+    local worktree_path="$WORKTREES_DIR/coder-$slot"
 
     # Cleanup if exists (stale from crash)
     if [ -d "$worktree_path" ]; then
@@ -79,7 +79,7 @@ create_worktree() {
     mkdir -p "$WORKTREES_DIR"
 
     # Create worktree from current HEAD (detached)
-    # --detach avoids branch conflicts between parallel executors
+    # --detach avoids branch conflicts between parallel coders
     # Suppress stdout ("HEAD is now at...") to avoid polluting worktree_path
     if git worktree add --detach "$worktree_path" HEAD >/dev/null 2>&1; then
         echo "$worktree_path"
@@ -93,15 +93,15 @@ create_worktree() {
 
 cleanup_worktree() {
     local slot=$1
-    local worktree_path="$WORKTREES_DIR/executor-$slot"
-    local lock_dir="$WORKTREES_DIR/executor-$slot.lock"
+    local worktree_path="$WORKTREES_DIR/coder-$slot"
+    local lock_dir="$WORKTREES_DIR/coder-$slot.lock"
 
     if [ -d "$worktree_path" ]; then
         timeout 30s git worktree remove --force "$worktree_path" 2>/dev/null || rm -rf "$worktree_path"
     fi
 
     # Release lock AFTER worktree is fully cleaned up
-    # This prevents race condition where new executor gets slot before cleanup completes
+    # This prevents race condition where new coder gets slot before cleanup completes
     rmdir "$lock_dir" 2>/dev/null || true
 }
 
@@ -124,19 +124,19 @@ log() {
 }
 
 # === Backpressure check ===
-# Count active executors by lock files (not beads labels — labels are unreliable
+# Count active coders by lock files (not beads labels — labels are unreliable
 # due to sync lag and race conditions between parallel subshells)
 # Lock lifecycle: find_free_slot() creates → cleanup_worktree() removes
 
-count_active_executors() {
+count_active_coders() {
     local count=0
-    for lock in "$WORKTREES_DIR"/executor-*.lock; do
+    for lock in "$WORKTREES_DIR"/coder-*.lock; do
         [ -d "$lock" ] && ((count++))
     done
     echo "$count"
 }
 
-# === Get ready tasks for executors ===
+# === Get ready tasks for coders ===
 
 get_ready_tasks() {
     # Получаем задачи готовые к работе (не blocked, не in_progress)
@@ -153,9 +153,9 @@ get_ready_tasks() {
         head -n "$MAX_PARALLEL" || echo ""
 }
 
-# === Run single executor ===
+# === Run single coder ===
 
-run_executor() {
+run_coder() {
     local slot=$1
     local task_id=$2
     local worktree_path=""
@@ -172,13 +172,13 @@ run_executor() {
 
     # Try to claim the task (atomic via beads)
     # Remove needs-review in case this is a retry after timeout
-    if ! bd_safe update "$task_id" --status=in_progress --add-label=executor --remove-label=needs-review >/dev/null 2>&1; then
+    if ! bd_safe update "$task_id" --status=in_progress --add-label=coder --remove-label=needs-review >/dev/null 2>&1; then
         log "INFO" "Task $task_id claim failed (race condition), skipping"
         cleanup_worktree "$slot"
         return 0
     fi
 
-    # Create isolated worktree for this executor
+    # Create isolated worktree for this coder
     worktree_path=$(create_worktree "$slot" "$task_id")
     log "INFO" "Executor $slot using worktree: $worktree_path"
 
@@ -210,18 +210,18 @@ run_executor() {
         log "INFO" "Model mapped: $requested_model → $model (ALLOWED_MODELS=$ALLOWED_MODELS)"
     fi
 
-    log "INFO" "Starting executor for $task_id ($model): $task_title"
+    log "INFO" "Starting coder for $task_id ($model): $task_title"
 
-    # Run executor agent with timeout (with tool use enabled)
-    local output_file="$LOGS_DIR/executor-$task_id.log"
-    local executor_prompt
-    executor_prompt=$(cat .claude/agents/executor.md 2>/dev/null || echo "# Executor agent not found")
+    # Run coder agent with timeout (with tool use enabled)
+    local output_file="$LOGS_DIR/coder-$task_id.log"
+    local coder_prompt
+    coder_prompt=$(cat .claude/agents/coder.md 2>/dev/null || echo "# Coder agent not found")
 
     # Build retry context if this is a retry attempt
     local retry_context
     retry_context=$(build_retry_context "$task_id")
 
-    local full_prompt="$executor_prompt
+    local full_prompt="$coder_prompt
 
 ---
 TASK_ID: $task_id
@@ -231,21 +231,21 @@ WORKTREE_PATH: $worktree_path
 ${retry_context:+
 $retry_context}"
 
-    # Run executor with real-time progress logging
+    # Run coder with real-time progress logging
     # Uses worktree for git isolation, all bd operations through daemon
     # Use || to prevent set -e from killing script on timeout/failure
     local exit_code=0
-    run_claude_with_progress "$full_prompt" "$model" "$TASK_TIMEOUT" "$output_file" "EXEC $slot" "$LOGS_DIR" "$worktree_path" || exit_code=$?
+    run_claude_with_progress "$full_prompt" "$model" "$TASK_TIMEOUT" "$output_file" "CODE $slot" "$LOGS_DIR" "$worktree_path" || exit_code=$?
 
     # Always cleanup worktree (success or failure)
     cleanup_worktree "$slot"
 
-    # Guard: check if task was already handled by senior executor during our run.
-    # Without this, a zombie executor timeout reopens a task that senior already closed.
+    # Guard: check if task was already handled by senior coder during our run.
+    # Without this, a zombie coder timeout reopens a task that senior already closed.
     local post_status
     post_status=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].status // "unknown"' 2>/dev/null || echo "unknown")
     if [ "$post_status" = "closed" ]; then
-        log "INFO" "Task $task_id already closed (reviewed during executor run), skipping post-processing"
+        log "INFO" "Task $task_id already closed (reviewed during coder run), skipping post-processing"
         return 0
     fi
 
@@ -265,28 +265,28 @@ $retry_context}"
             # Remove old retry label if exists, add new one
             old_retry_label=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("retry:"))' 2>/dev/null | head -1)
             if [ -n "$old_retry_label" ]; then
-                bd_safe update "$task_id" --status=open --remove-label=executor --remove-label="$old_retry_label" --add-label="retry:$new_retry" --notes="$updated_notes" >/dev/null 2>&1 || true
+                bd_safe update "$task_id" --status=open --remove-label=coder --remove-label="$old_retry_label" --add-label="retry:$new_retry" --notes="$updated_notes" >/dev/null 2>&1 || true
             else
-                bd_safe update "$task_id" --status=open --remove-label=executor --add-label="retry:$new_retry" --notes="$updated_notes" >/dev/null 2>&1 || true
+                bd_safe update "$task_id" --status=open --remove-label=coder --add-label="retry:$new_retry" --notes="$updated_notes" >/dev/null 2>&1 || true
             fi
         else
             log "ERROR" "Executor failed for $task_id (exit: $exit_code)"
             # Save structured attempt result
             local updated_notes
             updated_notes=$(save_attempt_result "$task_id" "FAILED with exit code $exit_code")
-            bd_safe update "$task_id" --status=open --remove-label=executor --notes="$updated_notes" >/dev/null 2>&1 || true
+            bd_safe update "$task_id" --status=open --remove-label=coder --notes="$updated_notes" >/dev/null 2>&1 || true
         fi
         return 0
     fi
 
-    log "INFO" "Executor completed for $task_id"
+    log "INFO" "Coder completed for $task_id"
 
     # Fallback: ensure labels are updated even if agent didn't do it
-    # Agent should call: bd update --remove-label=executor --add-label=needs-review
+    # Agent should call: bd update --remove-label=coder --add-label=needs-review
     # But we ensure it as safety net (with retry for beads sync contention)
     local attempt=0
     while [ $attempt -lt 3 ]; do
-        if bd_safe update "$task_id" --remove-label=executor --add-label=needs-review >/dev/null 2>&1; then
+        if bd_safe update "$task_id" --remove-label=coder --add-label=needs-review >/dev/null 2>&1; then
             break
         fi
         ((attempt++))
@@ -305,7 +305,7 @@ run_auditor() {
     local task_id=$1
 
     # Try to claim the task
-    if ! bd_safe update "$task_id" --status=in_progress --add-label=executor --remove-label=needs-review >/dev/null 2>&1; then
+    if ! bd_safe update "$task_id" --status=in_progress --add-label=coder --remove-label=needs-review >/dev/null 2>&1; then
         log "INFO" "Task $task_id claim failed (race condition), skipping"
         return 0
     fi
@@ -398,7 +398,7 @@ Audit task $task_id failed after 3 attempts (timeout/error).
 2. Either: split into smaller audits, or reformulate
 3. Close $task_id with appropriate reason" >/dev/null 2>&1 || true
 
-            bd_safe update "$task_id" --status=open --remove-label=executor \
+            bd_safe update "$task_id" --status=open --remove-label=coder \
                 --add-label=blocked:escalated \
                 --notes="Escalated to Architect: auditor failed 3 times (timeout/error)." >/dev/null 2>&1 || true
         else
@@ -412,21 +412,21 @@ Audit task $task_id failed after 3 attempts (timeout/error).
             if [ "$current_model" = "haiku" ]; then
                 # haiku → sonnet
                 log "INFO" "Escalating $task_id: haiku → sonnet (retry $next_retry)"
-                bd_safe update "$task_id" --status=open --remove-label=executor \
+                bd_safe update "$task_id" --status=open --remove-label=coder \
                     --remove-label="audit-retry:$audit_retry" --remove-label=model:haiku \
                     --add-label=model:sonnet --add-label="audit-retry:$next_retry" \
                     --notes="Retry $next_retry: escalated haiku → sonnet." >/dev/null 2>&1 || true
             elif [ "$current_model" = "sonnet" ]; then
                 # sonnet → opus
                 log "INFO" "Escalating $task_id: sonnet → opus (retry $next_retry)"
-                bd_safe update "$task_id" --status=open --remove-label=executor \
+                bd_safe update "$task_id" --status=open --remove-label=coder \
                     --remove-label="audit-retry:$audit_retry" --remove-label=model:sonnet \
                     --add-label=model:opus --add-label="audit-retry:$next_retry" \
                     --notes="Retry $next_retry: escalated sonnet → opus." >/dev/null 2>&1 || true
             else
                 # opus → stay opus, just increment retry
                 log "INFO" "RETRY: $task_id - opus retry $next_retry"
-                bd_safe update "$task_id" --status=open --remove-label=executor \
+                bd_safe update "$task_id" --status=open --remove-label=coder \
                     --remove-label="audit-retry:$audit_retry" --add-label="audit-retry:$next_retry" \
                     --notes="Retry $next_retry: opus retry." >/dev/null 2>&1 || true
             fi
@@ -439,7 +439,7 @@ Audit task $task_id failed after 3 attempts (timeout/error).
     # Ensure needs-review is set (with retry for beads sync contention)
     local attempt=0
     while [ $attempt -lt 3 ]; do
-        if bd_safe update "$task_id" --remove-label=executor --add-label=needs-review >/dev/null 2>&1; then
+        if bd_safe update "$task_id" --remove-label=coder --add-label=needs-review >/dev/null 2>&1; then
             break
         fi
         ((attempt++))
@@ -460,7 +460,7 @@ main() {
 
     # Check backpressure (count by lock files, not beads labels)
     local active
-    active=$(count_active_executors)
+    active=$(count_active_coders)
 
     if [ "$active" -ge "$MAX_PARALLEL" ]; then
         log "INFO" "Executor queue full ($active/$MAX_PARALLEL), waiting for slots"
@@ -482,9 +482,9 @@ main() {
     task_count=$(echo "$tasks" | wc -l | tr -d ' ')
     log "INFO" "Checking $task_count ready tasks (slots: $available_slots/$MAX_PARALLEL)"
 
-    # Start executors in parallel (up to available slots)
+    # Start coders in parallel (up to available slots)
     # Non-blocking: launch and return immediately (streaming architecture)
-    # Each executor gets its own slot number for worktree isolation
+    # Each coder gets its own slot number for worktree isolation
     # Slots are allocated via lock files (find_free_slot) to prevent race conditions
     local started=0
     local skipped=0
@@ -522,7 +522,7 @@ main() {
             }
             log "TASK_START" "$task_id \"$task_title\" (slot $slot, $model)"
             # Executor: uses worktree for isolation
-            ( run_executor "$slot" "$task_id" ) &
+            ( run_coder "$slot" "$task_id" ) &
         fi
         ((started++))
     done
@@ -530,7 +530,7 @@ main() {
     # Detach all background jobs (won't receive SIGHUP if parent exits)
     disown -a 2>/dev/null || true
 
-    log "INFO" "Started $started executor(s), skipped $skipped"
+    log "INFO" "Started $started coder(s), skipped $skipped"
     # No wait — returns immediately, HYPE will check progress next iteration
 }
 

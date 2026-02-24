@@ -1,5 +1,32 @@
 # Changelog
 
+## [2.4.2] - 2026-02-24
+
+### Changed
+
+- **Agent cleanup** — All agent files renamed for clarity:
+  - `executor.md` → `coder.md`, `reviewer.md` → `senior.md`
+  - `architect-planner.md` → `architect.md`, `architect-reviewer.md` → `plan-reviewer.md`
+  - `architect-qa.md` → `qa.md`, `architect-ops.md` → `ops.md`
+  - `architect-troubleshooter.md` → `troubleshooter.md`
+  - `tech-writer.md` → `manager.md`, `tech-writer-review.md` → `manager-review.md`
+
+- **Script rename** — `run-executors.sh` → `run-coders.sh`, `run-reviewers.sh` → `run-seniors.sh`
+
+- **Config rename** — `MAX_PARALLEL_EXECUTORS` → `MAX_PARALLEL_CODERS`, `MAX_PARALLEL_REVIEWERS` → `MAX_PARALLEL_SENIORS`, `MODEL_TECH_WRITER` → `MODEL_MANAGER`, `MODEL_REVIEWER` → `MODEL_SENIOR`. Old config vars still work (backward compat fallback).
+
+- **Label rename** — `executor` label → `coder`. Lock files: `reviewer-N.lock` → `senior-N.lock`.
+
+### Removed
+
+- **Manager LLM agent** — `manager.md` (problem resolver) deleted. Replaced with bash logic in `call_manager_for_problems()`. Saves LLM call for deterministic blocked/retry resolution.
+
+### Fixed
+
+- **SPEC_REPORT lifecycle** — Completion agent now writes directly to `SPEC_REPORT.prev.md` (was incorrectly writing to `SPEC_REPORT.md` then archiving). Cleanup deletes stale `.prev.md` instead of archiving.
+
+---
+
 ## [2.4.1] - 2026-02-24
 
 ### Changed

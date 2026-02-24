@@ -114,7 +114,7 @@ Prepend to CHANGELOG.md:
 <old CHANGELOG.md content>
 ```
 
-### 5. Write SPEC_REPORT.md (in Client Language!)
+### 5. Write SPEC_REPORT.prev.md (in Client Language!)
 
 Read SPEC.md and check each Must Have / Nice to Have against closed tasks and code.
 
@@ -137,7 +137,7 @@ Format:
 [2-3 sentences: what was done, what's the state]
 ```
 
-**IMPORTANT:** Write SPEC_REPORT.md entirely in the language specified by "Client Language" in SPEC.md. If `ru` — write in Russian. If `en` — write in English. Default: `en`.
+**IMPORTANT:** Write SPEC_REPORT.prev.md entirely in the language specified by "Client Language" in SPEC.md. If `ru` — write in Russian. If `en` — write in English. Default: `en`.
 
 ### 6. Git commit + push
 

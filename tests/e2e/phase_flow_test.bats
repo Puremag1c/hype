@@ -38,7 +38,7 @@ setup() {
 
     # Create config
     cat > .hype/config.sh << 'EOF'
-MAX_PARALLEL_EXECUTORS=2
+MAX_PARALLEL_CODERS=2
 RETRY_LIMIT=3
 ITERATION_DELAY=5
 TASK_STALE_TIMEOUT=600

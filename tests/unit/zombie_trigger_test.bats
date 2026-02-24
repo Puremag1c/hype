@@ -139,8 +139,8 @@ load '../helpers/setup'
     grep -q 'cleanup_stale_trigger "run-completion"' "$hype_sh"
 }
 
-@test "run-reviewers.sh: for loop glob does not have inline 2>/dev/null" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+@test "run-seniors.sh: for loop glob does not have inline 2>/dev/null" {
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     # The 2>/dev/null must be on 'done', not in 'for ... in ...' word list
     ! grep -q 'for .* in .*\*.*2>/dev/null; do' "$reviewers_sh"
@@ -157,8 +157,8 @@ load '../helpers/setup'
     echo "$passed_block" | grep -q 'NEEDS_FIXES'
 }
 
-@test "architect-qa.md: final_review bugs do NOT get smoke label" {
-    local qa_md="$SCRIPTS_DIR/../agents/architect-qa.md"
+@test "qa.md: final_review bugs do NOT get smoke label" {
+    local qa_md="$SCRIPTS_DIR/../agents/qa.md"
 
     # The bug creation template in final_review section should NOT have --label=smoke
     local final_review_section
@@ -344,8 +344,8 @@ load '../helpers/setup'
     impl_block=$(sed -n '/CODING)/,/;;/p' "$hype_sh")
 
     # All three scripts must have || log protection
-    echo "$impl_block" | grep 'run-executors.sh' | grep -q '|| log'
-    echo "$impl_block" | grep 'run-reviewers.sh' | grep -q '|| log'
+    echo "$impl_block" | grep 'run-coders.sh' | grep -q '|| log'
+    echo "$impl_block" | grep 'run-seniors.sh' | grep -q '|| log'
     echo "$impl_block" | grep 'run-merge-queue.sh' | grep -q '|| log'
 }
 
@@ -376,7 +376,7 @@ load '../helpers/setup'
 }
 
 @test "get_ready_tasks: pipeline has fallback (|| echo)" {
-    local exec_sh="$SCRIPTS_DIR/run-executors.sh"
+    local exec_sh="$SCRIPTS_DIR/run-coders.sh"
 
     local fn_block
     fn_block=$(sed -n '/^get_ready_tasks/,/^}/p' "$exec_sh")
@@ -385,7 +385,7 @@ load '../helpers/setup'
 }
 
 @test "get_review_tasks: pipeline has fallback (|| echo)" {
-    local rev_sh="$SCRIPTS_DIR/run-reviewers.sh"
+    local rev_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     local fn_block
     fn_block=$(sed -n '/^get_review_tasks/,/^}/p' "$rev_sh")

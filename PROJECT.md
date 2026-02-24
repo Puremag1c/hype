@@ -6,7 +6,7 @@
 
 Запустите `hype init` в любом проекте, опишите что хотите словами — система сама создаст план, распределит задачи между агентами и выдаст готовый результат.
 
-**Версия:** 2.4.1
+**Версия:** 2.4.2
 
 ## Целевая аудитория
 
@@ -32,18 +32,18 @@ hype/
 ├── core/
 │   ├── agents/              # Промпты агентов (26 шт)
 │   │   ├── manager.md           # Координатор фаз (Sonnet)
-│   │   ├── tech-writer.md       # Сбор требований (Opus)
-│   │   ├── architect-planner.md # Создание плана из SPEC (Opus)
-│   │   ├── architect-reviewer.md# Ревью добавлений аналитиков (Opus)
-│   │   ├── architect-qa.md      # Final review + regression (Opus)
-│   │   ├── architect-ops.md     # Conflicts, cycles (Sonnet)
-│   │   ├── executor.md          # Реализация задач (по label)
-│   │   ├── reviewer.md            # Code review only (v2.2)
+│   │   ├── manager.md       # Сбор требований (Opus)
+│   │   ├── architect.md # Создание плана из SPEC (Opus)
+│   │   ├── plan-reviewer.md# Ревью добавлений аналитиков (Opus)
+│   │   ├── qa.md      # Final review + regression (Opus)
+│   │   ├── ops.md     # Conflicts, cycles (Sonnet)
+│   │   ├── coder.md          # Реализация задач (по label)
+│   │   ├── senior.md            # Code review only (v2.2)
 │   │   ├── auditor.md           # Аудит задач с label:audit (Sonnet→Opus)
 │   │   ├── analyzer.md          # Deep analysis кода (Opus)
 │   │   ├── completion.md         # VERSION + CHANGELOG + report (Opus)
-│   │   ├── architect-troubleshooter.md # Persistent failure resolution (Opus)
-│   │   ├── tech-writer-review.md  # Non-technical user report (Sonnet)
+│   │   ├── troubleshooter.md # Persistent failure resolution (Opus)
+│   │   ├── manager-review.md  # Non-technical user report (Sonnet)
 │   │   ├── analyst-*.md         # 5 аналитиков (Sonnet)
 │   │   └── tester-*.md          # 6 тестеров (по типу проекта)
 │   ├── scripts/             # Bash скрипты (14 шт)
@@ -51,8 +51,8 @@ hype/
 │   │   ├── detect-phase.sh      # Определение фазы (JSON output)
 │   │   ├── common.sh            # Shared functions
 │   │   ├── run-analysts.sh      # Параллельный запуск аналитиков
-│   │   ├── run-executors.sh     # Параллельный запуск исполнителей
-│   │   ├── run-reviewers.sh       # Parallel code review (v2.2)
+│   │   ├── run-coders.sh     # Параллельный запуск исполнителей
+│   │   ├── run-seniors.sh       # Parallel code review (v2.2)
 │   │   ├── run-merge-queue.sh    # Hybrid merge queue: script + agent (v2.3.11)
 │   │   ├── run-testers.sh       # Параллельный запуск тестеров
 │   │   └── ...
@@ -76,15 +76,15 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
 
 | Фаза | Агент | Что происходит |
 |------|-------|----------------|
-| PREPARING | Tech Writer | Собирает требования, создаёт SPEC.md (+ deep analysis для больших проектов) |
-| PLANNING | Architect-Planner | Создаёт задачи в beads, расставляет deps |
+| PREPARING | Manager | Собирает требования, создаёт SPEC.md (+ deep analysis для больших проектов) |
+| PLANNING | Architect | Создаёт задачи в beads, расставляет deps |
 | ANALYZE | Analysts ×5 | Параллельный аудит плана |
-| THINKING | Architect-Reviewer | Ревью добавлений от Analysts |
-| CODING | Executors + Reviewers + Merge Queue | Параллельная реализация + review + merge (v2.2) |
+| THINKING | Plan-Reviewer | Ревью добавлений от Analysts |
+| CODING | Coders + Seniors + Merge Queue | Параллельная реализация + review + merge (v2.2) |
 | TESTING | Testers ×6 | Параллельная проверка (по типу проекта) |
-| REFLEXING | Architect-QA | Триаж smoke test находок (smoke + regression) |
-| CONSULTATION | Tech-Writer-Review | Отчёт для пользователя, daemon stops |
-| VALIDATING | Architect-QA | Проверка целостности |
+| REFLEXING | QA | Триаж smoke test находок (smoke + regression) |
+| CONSULTATION | Manager-Review | Отчёт для пользователя, daemon stops |
+| VALIDATING | QA | Проверка целостности |
 | REPORTING | Completion (Opus) | Version bump + CHANGELOG + SPEC_REPORT + commit + push |
 | DONE | — | Проект завершён |
 
@@ -101,7 +101,7 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
 
 **Hard gate:** P0 bugs блокируют milestone:testing-done → возврат в CODING
 
-**Smoke triage:** ВСЕ баги из TESTING получают label `smoke`. Regression reopens получают `smoke` + `regression`. Architect-QA триажит каждый баг в REFLEXING перед тем как executors смогут его взять.
+**Smoke triage:** ВСЕ баги из TESTING получают label `smoke`. Regression reopens получают `smoke` + `regression`. QA триажит каждый баг в REFLEXING перед тем как coders смогут его взять.
 
 **Regression counter:** `regress:N` — script-driven счётчик в `run-testers.sh`. Отслеживает сколько раз баг возвращался.
 
@@ -109,7 +109,7 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
 
 ### Deep Analysis (PREPARING)
 
-Для существующих проектов с >50 файлами кода и без хорошего README — автоматически запускается глубокий анализ через Claude (Opus). Tech Writer получает обогащённый контекст об архитектуре проекта.
+Для существующих проектов с >50 файлами кода и без хорошего README — автоматически запускается глубокий анализ через Claude (Opus). Manager получает обогащённый контекст об архитектуре проекта.
 
 ## Ключевые принципы
 
@@ -126,17 +126,17 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
 - **Таймауты** — 10 мин на задачу, escalation ladder до Troubleshooter
 
 ### Git workflow
-- Executor: работает в ветке `task/beads-xxx`, WIP commit перед rebase
-- Reviewer: проверяет diff (parallel, lock-based backpressure, v2.2)
+- Coder: работает в ветке `task/beads-xxx`, WIP commit перед rebase
+- Senior: проверяет diff (parallel, lock-based backpressure, v2.2)
 - Merge Queue: squash merge approved задач (sequential, v2.2)
-- Backpressure: лимит параллельных executors/reviewers через lock files в `.hype-worktrees/`
+- Backpressure: лимит параллельных coders/seniors через lock files в `.hype-worktrees/`
 
 ## Конфигурация проекта
 
 После `hype init` создаётся `.hype/config.sh`:
 
 ```bash
-MAX_PARALLEL_EXECUTORS=3    # Лимит параллельных задач
+MAX_PARALLEL_CODERS=3    # Лимит параллельных задач
 RETRY_LIMIT=3               # Retry до эскалации
 TASK_TIMEOUT="10m"          # Таймаут на задачу
 ```
@@ -183,8 +183,8 @@ startup_timeout: 30          # Секунды на запуск сервера
    - Running processes
    - Git status + worktrees + locks
    - HYPE markers (locks, needs-spec, force-phase)
-   - Executor worktrees
-   - Review pipeline state (v2.2): reviewer slots, review locks, reviewing/approved tasks, triggers, secrets-warning
+   - Coder worktrees
+   - Review pipeline state (v2.2): senior slots, review locks, reviewing/approved tasks, triggers, secrets-warning
    - Recent logs (last 30 lines)
 3. `load_knowledge()` — загружает `docs/architecture.md` + `docs/troubleshooting.md` как knowledge base
 4. `build_prompt()` — собирает: agent prompt (`doctor.md`) + context + knowledge → Claude
@@ -202,21 +202,21 @@ startup_timeout: 30          # Секунды на запуск сервера
 
 ## v2.2.0: Parallel Review Pipeline (завершено)
 
-- **Parallel Reviewers** — `run-reviewers.sh` запускает до `MAX_PARALLEL_REVIEWERS` ревьюеров одновременно
-- **Merge Queue** — `run-merge-queue.sh` hybrid: fast script path (rebase+squash+push) → merger agent fallback (opus) → executor (v2.3.11)
-- **Reviewer agent** — `reviewer.md` — review-only промпт (без merge/push)
+- **Parallel Seniors** — `run-seniors.sh` запускает до `MAX_PARALLEL_SENIORS` ревьюеров одновременно
+- **Merge Queue** — `run-merge-queue.sh` hybrid: fast script path (rebase+squash+push) → merger agent fallback (opus) → coder (v2.3.11)
+- **Senior agent** — `senior.md` — review-only промпт (без merge/push)
 - **Label state machine** — `needs-review` → `reviewing` → `approved` → `reviewed` (closed)
 - **Atomic claims** — `try_claim_for_review()` через mkdir lock + bd label
 - **Self-healing** — reviewing stuck >3min → return to queue; approved stuck >5min → warning
 - **detect-phase.sh** — отслеживает reviewing/approved counts в JSON output
-- **Doctor** — собирает reviewer slots, review locks, reviewing/approved tasks
+- **Doctor** — собирает senior slots, review locks, reviewing/approved tasks
 
 ## v2.1.0: Review Escalation & Model Switching (завершено)
 
-- **reject:N counter** — счётчик code quality отказов от Reviewer (merge конфликты обрабатываются hybrid merge queue с v2.3.11)
+- **reject:N counter** — счётчик code quality отказов от Senior (merge конфликты обрабатываются hybrid merge queue с v2.3.11)
 - **Model escalation ladder** — автоматическая эскалация: reject:1→retry, reject:2-3→upgrade model, reject:4→Troubleshooter
 - **Architect Troubleshooter** — новый агент для persistent failures (reformulate / split / remove / escalate to user)
-- **CONSULTATION phase** — daemon stops, tech-writer-review генерирует отчёт для пользователя
+- **CONSULTATION phase** — daemon stops, manager-review генерирует отчёт для пользователя
 - **Regression counter regress:N** — script-driven, отслеживает regression cycles
 - **Smoke triage gate** — все баги из TESTING проходят через Architect review
 - **Regression-aware validating** — 3-step протокол (check open → check closed → create new)

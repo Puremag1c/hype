@@ -488,10 +488,10 @@ load '../helpers/mock_bd'
     # Every set_counter_label call (except the definition) should have 4 args
     # Match: set_counter_label "$var" "prefix" "$val" "$json"
     local calls_without_json
-    calls_without_json=$(grep -n 'set_counter_label ' "$SCRIPTS_DIR/run-reviewers.sh" "$SCRIPTS_DIR/run-merge-queue.sh" "$SCRIPTS_DIR/hype.sh" "$SCRIPTS_DIR/run-testers.sh" 2>/dev/null | grep -v '^\s*#' | grep -cv '"$' || echo "0")
+    calls_without_json=$(grep -n 'set_counter_label ' "$SCRIPTS_DIR/run-seniors.sh" "$SCRIPTS_DIR/run-merge-queue.sh" "$SCRIPTS_DIR/hype.sh" "$SCRIPTS_DIR/run-testers.sh" 2>/dev/null | grep -v '^\s*#' | grep -cv '"$' || echo "0")
     # All calls should end with a 4th argument (quoted variable)
     local total_calls
-    total_calls=$(grep -n 'set_counter_label ' "$SCRIPTS_DIR/run-reviewers.sh" "$SCRIPTS_DIR/run-merge-queue.sh" "$SCRIPTS_DIR/hype.sh" "$SCRIPTS_DIR/run-testers.sh" 2>/dev/null | grep -cv '^\s*#' || echo "0")
+    total_calls=$(grep -n 'set_counter_label ' "$SCRIPTS_DIR/run-seniors.sh" "$SCRIPTS_DIR/run-merge-queue.sh" "$SCRIPTS_DIR/hype.sh" "$SCRIPTS_DIR/run-testers.sh" 2>/dev/null | grep -cv '^\s*#' || echo "0")
     [[ "$total_calls" -gt 0 ]]
 }
 
@@ -515,36 +515,36 @@ load '../helpers/mock_bd'
 }
 
 @test "hype.sh CODING shares cache via HYPE_IN_PROGRESS_CACHE" {
-    grep -q 'HYPE_IN_PROGRESS_CACHE=.*run-reviewers.sh' "$SCRIPTS_DIR/hype.sh"
+    grep -q 'HYPE_IN_PROGRESS_CACHE=.*run-seniors.sh' "$SCRIPTS_DIR/hype.sh"
     grep -q 'HYPE_IN_PROGRESS_CACHE=.*run-merge-queue.sh' "$SCRIPTS_DIR/hype.sh"
 }
 
-@test "run-reviewers.sh uses HYPE_IN_PROGRESS_CACHE when available" {
-    grep -q 'HYPE_IN_PROGRESS_CACHE' "$SCRIPTS_DIR/run-reviewers.sh"
+@test "run-seniors.sh uses HYPE_IN_PROGRESS_CACHE when available" {
+    grep -q 'HYPE_IN_PROGRESS_CACHE' "$SCRIPTS_DIR/run-seniors.sh"
 }
 
 @test "run-merge-queue.sh uses HYPE_IN_PROGRESS_CACHE when available" {
     grep -q 'HYPE_IN_PROGRESS_CACHE' "$SCRIPTS_DIR/run-merge-queue.sh"
 }
 
-@test "run-executors.sh: single bd show for status check + details" {
+@test "run-coders.sh: single bd show for status check + details" {
     # Should NOT have two consecutive bd_safe show calls for same task
     # The merged pattern: task_json=$(bd_safe show...) then current_status=$(echo "$task_json"|jq...)
     local main_loop
-    main_loop=$(sed -n '/for task_id in \$tasks/,/done/p' "$SCRIPTS_DIR/run-executors.sh")
+    main_loop=$(sed -n '/for task_id in \$tasks/,/done/p' "$SCRIPTS_DIR/run-coders.sh")
     # Should have exactly ONE bd_safe show in the pre-launch section
     local show_count
     show_count=$(echo "$main_loop" | grep -c 'bd_safe show' || true)
-    # One show in the loop (pre-check), plus potentially in run_executor (post-claim)
+    # One show in the loop (pre-check), plus potentially in run_coder (post-claim)
     # The key: the two adjacent shows (lines 498+508) should now be one
     echo "$main_loop" | grep -q 'task_json=.*bd_safe show'
     echo "$main_loop" | grep -q 'current_status=.*echo.*task_json.*jq'
 }
 
-@test "run-reviewers.sh: title from cache, no bd show in main loop" {
+@test "run-seniors.sh: title from cache, no bd show in main loop" {
     # Main loop should extract title from all_in_progress, not bd_safe show
     local main_loop
-    main_loop=$(sed -n '/for task_id in \$tasks/,/done/p' "$SCRIPTS_DIR/run-reviewers.sh")
+    main_loop=$(sed -n '/for task_id in \$tasks/,/done/p' "$SCRIPTS_DIR/run-seniors.sh")
     ! echo "$main_loop" | grep -q 'bd_safe show'
     echo "$main_loop" | grep -q 'all_in_progress.*jq.*title'
 }
@@ -583,11 +583,11 @@ load '../helpers/mock_bd'
     echo "$main_fn" | grep -q 'merge_task.*task_id'
 }
 
-@test "merge queue: agent fallback returns to executor on total failure" {
+@test "merge queue: agent fallback returns to coder on total failure" {
     local merge_fn
     merge_fn=$(sed -n '/^merge_task()/,/^}/p' "$SCRIPTS_DIR/run-merge-queue.sh")
 
-    # After agent fails: status=open (return to executor)
+    # After agent fails: status=open (return to coder)
     echo "$merge_fn" | grep -q 'Merger agent failed'
     echo "$merge_fn" | grep -q 'status=open'
 }

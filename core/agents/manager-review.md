@@ -1,5 +1,5 @@
 ---
-name: tech-writer-review
+name: manager-review
 description: Generates non-technical user report for escalated tasks
 model: sonnet
 ---

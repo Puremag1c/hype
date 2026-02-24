@@ -47,13 +47,13 @@ load '../helpers/setup'
     echo "$fn_block" | grep -q '\-\-status=open'
 }
 
-@test "reject_from_review: removes executor label (prevent re-claim)" {
+@test "reject_from_review: removes coder label (prevent re-claim)" {
     local common_sh="$SCRIPTS_DIR/common.sh"
 
     local fn_block
     fn_block=$(sed -n '/^reject_from_review()/,/^}/p' "$common_sh")
 
-    echo "$fn_block" | grep -q '\-\-remove-label=executor'
+    echo "$fn_block" | grep -q '\-\-remove-label=coder'
 }
 
 # =============================================================================
@@ -189,10 +189,10 @@ load '../helpers/setup'
     grep -q 'force-with-lease' "$merge_sh"
 }
 
-@test "merge queue: agent failure returns task to executor (v2.3.11)" {
+@test "merge queue: agent failure returns task to coder (v2.3.11)" {
     local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
 
-    # v2.3.11: After agent fails, return to executor with notes
+    # v2.3.11: After agent fails, return to coder with notes
     local merge_fn
     merge_fn=$(sed -n '/^merge_task()/,/^}/p' "$merge_sh")
 
@@ -209,11 +209,11 @@ load '../helpers/setup'
 }
 
 # =============================================================================
-# reviewer.md: prompt structure
+# senior.md: prompt structure
 # =============================================================================
 
 @test "reviewer prompt: does NOT contain merge/push instructions (only prohibition)" {
-    local reviewer_md="$SCRIPTS_DIR/../agents/reviewer.md"
+    local reviewer_md="$SCRIPTS_DIR/../agents/senior.md"
 
     # Should NOT have merge/push as instructions (code blocks)
     ! grep -q '^git merge --squash' "$reviewer_md"
@@ -223,7 +223,7 @@ load '../helpers/setup'
 }
 
 @test "reviewer prompt: uses approve label (not bd close for approve)" {
-    local reviewer_md="$SCRIPTS_DIR/../agents/reviewer.md"
+    local reviewer_md="$SCRIPTS_DIR/../agents/senior.md"
 
     grep -q 'add-label=approved' "$reviewer_md"
 }

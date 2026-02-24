@@ -1,5 +1,5 @@
 ---
-name: reviewer
+name: senior
 description: Code review — approve or reject, no merge
 model: sonnet  # tiered: reject:2+ → opus
 ---

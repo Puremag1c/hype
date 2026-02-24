@@ -7,11 +7,11 @@
 
 # === Основные настройки ===
 
-# Максимум параллельных Executor агентов
-MAX_PARALLEL_EXECUTORS=3
+# Максимум параллельных Coder агентов
+MAX_PARALLEL_CODERS=3
 
-# Максимум параллельных Reviewer агентов (v2.2)
-MAX_PARALLEL_REVIEWERS=3
+# Максимум параллельных Senior агентов (v2.2)
+MAX_PARALLEL_SENIORS=3
 
 # Лимит retry перед эскалацией к Architect
 RETRY_LIMIT=3
@@ -21,7 +21,7 @@ ITERATION_DELAY=30
 
 # === Таймауты ===
 
-# Таймаут выполнения задачи агентом (executor)
+# Таймаут выполнения задачи агентом (coder)
 TASK_TIMEOUT="10m"
 
 # Таймаут code review (короче т.к. контекст передаётся в prompt)
@@ -65,12 +65,11 @@ TASK_STALE_TIMEOUT=600
 ALLOWED_MODELS="opus,sonnet,haiku"
 
 # Модели для каждой роли (применяется map_model с ALLOWED_MODELS)
-MODEL_TECH_WRITER="opus"
+MODEL_MANAGER="opus"
 MODEL_ARCHITECT="opus"
 MODEL_ANALYSTS="sonnet"
-# Модель для reviewer (v2.2): sonnet по умолчанию, opus при reject:2+
-MODEL_REVIEWER="sonnet"
-MODEL_MANAGER="sonnet"
+# Модель для senior (v2.2): sonnet по умолчанию, opus при reject:2+
+MODEL_SENIOR="sonnet"
 MODEL_ANALYZER="opus"
 
 # Модели для TESTING testers

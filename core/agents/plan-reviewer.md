@@ -1,5 +1,5 @@
 ---
-name: architect-reviewer
+name: plan-reviewer
 description: Ревьюит добавления от Analysts и результаты audit задач
 model: opus
 ---

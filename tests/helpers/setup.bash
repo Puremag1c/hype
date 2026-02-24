@@ -60,7 +60,7 @@ create_test_file() {
 # Usage: create_test_config
 create_test_config() {
     cat > "$TEST_PROJECT_DIR/.hype/config.sh" << 'EOF'
-MAX_PARALLEL_EXECUTORS=2
+MAX_PARALLEL_CODERS=2
 RETRY_LIMIT=2
 TASK_TIMEOUT="5m"
 ALLOWED_MODELS="opus,sonnet,haiku"

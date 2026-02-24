@@ -1,12 +1,12 @@
 #!/bin/bash
-# core/scripts/run-reviewers.sh
+# core/scripts/run-seniors.sh
 # Parallel reviewer launcher — part of v2.2 review pipeline.
-# Runs up to MAX_PARALLEL_REVIEWERS concurrent code reviews.
+# Runs up to MAX_PARALLEL_SENIORS concurrent code reviews.
 #
 # Each reviewer: claim → build context → claude review → handle result
 # Lock-based backpressure via .hype-worktrees/reviewer-N.lock
 #
-# Usage: ./scripts/run-reviewers.sh
+# Usage: ./scripts/run-seniors.sh
 
 set -euo pipefail
 
@@ -24,7 +24,7 @@ if [ -f "$CONFIG_FILE" ]; then
     source "$CONFIG_FILE"
 fi
 
-MAX_PARALLEL="${MAX_PARALLEL_REVIEWERS:-3}"
+MAX_PARALLEL="${MAX_PARALLEL_SENIORS:-3}"
 REVIEW_TIMEOUT="${REVIEW_TIMEOUT:-8m}"
 WORKTREES_DIR="$PROJECT_DIR/.hype-worktrees"
 
@@ -60,7 +60,7 @@ count_active_reviewers() {
 find_free_reviewer_slot() {
     local slot=0
     while true; do
-        local lock_dir="$WORKTREES_DIR/reviewer-$slot.lock"
+        local lock_dir="$WORKTREES_DIR/senior-$slot.lock"
 
         # Stale lock cleanup (>20 minutes = crashed reviewer)
         if [ -d "$lock_dir" ]; then
@@ -85,7 +85,7 @@ find_free_reviewer_slot() {
 
 cleanup_reviewer_slot() {
     local slot=$1
-    rmdir "$WORKTREES_DIR/reviewer-$slot.lock" 2>/dev/null || true
+    rmdir "$WORKTREES_DIR/senior-$slot.lock" 2>/dev/null || true
 }
 
 # === Review context builder ===
@@ -121,10 +121,10 @@ build_review_context() {
     diff_stat=$(git diff --stat "origin/main..origin/$branch_name" 2>/dev/null | tail -5 || echo "No changes")
     diff=$(git diff "origin/main..origin/$branch_name" 2>/dev/null | head -500 || echo "No diff")
 
-    local executor_log=""
-    local executor_log_file="$LOGS_DIR/executor-$task_id.log"
-    if [ -f "$executor_log_file" ]; then
-        executor_log=$(tail -50 "$executor_log_file" 2>/dev/null || true)
+    local coder_log=""
+    local coder_log_file="$LOGS_DIR/coder-$task_id.log"
+    if [ -f "$coder_log_file" ]; then
+        coder_log=$(tail -50 "$coder_log_file" 2>/dev/null || true)
     fi
 
     # Security warning (v2.1.8: soft scanner)
@@ -169,7 +169,7 @@ $diff
 
 ### Executor Log (last 50 lines)
 \`\`\`
-$executor_log
+$coder_log
 \`\`\`
 ${changelog_context:+
 $changelog_context
@@ -259,7 +259,7 @@ run_reviewer() {
             ;;
         NO_BRANCH|NO_COMMITS)
             log "WARN" "Preflight failed for $task_id: $preflight"
-            # Reject back to executor with circuit breaker check
+            # Reject back to coder with circuit breaker check
             local reject_count
             reject_count=$(get_counter_value "$task_json" "reject")
             ((reject_count++))
@@ -275,7 +275,7 @@ run_reviewer() {
                     # CIRCUIT BREAKER: same reason after reformulation → escalate to user
                     log "WARN" "CIRCUIT BREAKER: $task_id - $preflight after reformulation (same reason). Escalating to user."
                     bd_safe update "$task_id" --status=open \
-                        --remove-label=reviewing --remove-label=executor \
+                        --remove-label=reviewing --remove-label=coder \
                         --remove-label=blocked:troubleshoot \
                         --add-label=user-escalation \
                         --notes="Circuit breaker: $preflight persists after reformulation. Automated resolution impossible — escalating to user." >/dev/null 2>&1 || true
@@ -309,7 +309,7 @@ run_reviewer() {
 
     # Build full prompt
     local reviewer_prompt
-    reviewer_prompt=$(cat "$PROJECT_DIR/.claude/agents/reviewer.md" 2>/dev/null || cat "$SCRIPT_DIR/../agents/reviewer.md" 2>/dev/null)
+    reviewer_prompt=$(cat "$PROJECT_DIR/.claude/agents/senior.md" 2>/dev/null || cat "$SCRIPT_DIR/../agents/senior.md" 2>/dev/null)
 
     local review_model
     review_model=$(get_review_model "$task_json")
@@ -332,7 +332,7 @@ $context
 4. If bad: bd update --status=open --remove-label=reviewing --notes=\"reason\""
 
     # Run reviewer
-    local output_file="$LOGS_DIR/reviewer-$task_id.log"
+    local output_file="$LOGS_DIR/senior-$task_id.log"
     local exit_code=0
     run_claude_with_progress "$full_prompt" "$mapped_model" "$REVIEW_TIMEOUT" "$output_file" "REVIEW $slot" "$LOGS_DIR" || exit_code=$?
 
@@ -350,12 +350,12 @@ $context
     local updated_json
     updated_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
 
-    # v2.3.19: Ownership check — if executor label appeared, another process claimed the task
-    # (reviewer claude rejects → sets open → executor claims → in_progress+executor)
-    local has_executor
-    has_executor=$(echo "$updated_json" | jq -r '[.[0].labels[]? | select(. == "executor")] | length' 2>/dev/null || echo "0")
-    if [ "$has_executor" != "0" ]; then
-        log "WARN" "Review lost ownership of $task_id (executor label present), skipping post-processing"
+    # v2.3.19: Ownership check — if coder label appeared, another process claimed the task
+    # (reviewer claude rejects → sets open → coder claims → in_progress+coder)
+    local has_coder
+    has_coder=$(echo "$updated_json" | jq -r '[.[0].labels[]? | select(. == "coder")] | length' 2>/dev/null || echo "0")
+    if [ "$has_coder" != "0" ]; then
+        log "WARN" "Review lost ownership of $task_id (coder label present), skipping post-processing"
         release_review_lock "$task_id" "$WORKTREES_DIR"
         cleanup_reviewer_slot "$slot"
         trap - EXIT INT TERM
@@ -388,7 +388,7 @@ $context
                 --notes="Escalated: returned $reject_count times. Last: $notes" >/dev/null 2>&1 || true
             log "WARN" "TROUBLESHOOT: $task_id (reject:$reject_count)"
         elif [ "$reject_count" -ge 2 ]; then
-            # Model escalation for executor
+            # Model escalation for coder
             local current_model
             current_model=$(echo "$updated_json" | jq -r '.[0].labels[]? | select(startswith("model:")) | split(":")[1]' 2>/dev/null | head -1)
             current_model=${current_model:-sonnet}
@@ -449,7 +449,7 @@ get_review_tasks() {
         echo "$cache"
     else
         bd_safe list --status=in_progress --json --limit 0 2>/dev/null || echo "[]"
-    fi | jq -r '.[] | select((.labels // []) | index("needs-review")) | select((.labels // []) | index("executor") | not) | select((.labels // []) | index("trigger") | not) | select(.title | test("^milestone:") | not) | .id' 2>/dev/null || echo ""
+    fi | jq -r '.[] | select((.labels // []) | index("needs-review")) | select((.labels // []) | index("coder") | not) | select((.labels // []) | index("trigger") | not) | select(.title | test("^milestone:") | not) | .id' 2>/dev/null || echo ""
 }
 
 # === Main ===
@@ -477,7 +477,7 @@ main() {
     fi
 
     local tasks
-    tasks=$(echo "$all_in_progress" | jq -r '.[] | select((.labels // []) | index("needs-review")) | select((.labels // []) | index("executor") | not) | select((.labels // []) | index("trigger") | not) | select(.title | test("^milestone:") | not) | .id' 2>/dev/null || echo "")
+    tasks=$(echo "$all_in_progress" | jq -r '.[] | select((.labels // []) | index("needs-review")) | select((.labels // []) | index("coder") | not) | select((.labels // []) | index("trigger") | not) | select(.title | test("^milestone:") | not) | .id' 2>/dev/null || echo "")
 
     if [ -z "$tasks" ]; then
         log "INFO" "No tasks need review"

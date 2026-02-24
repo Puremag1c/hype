@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # tests/unit/reviewers_test.bats
-# Unit tests for v2.2 run-reviewers.sh
+# Unit tests for v2.2 run-seniors.sh
 
 load '../helpers/setup'
 
@@ -9,7 +9,7 @@ load '../helpers/setup'
 # =============================================================================
 
 @test "reviewers: lock-based slot management (reviewer-N.lock)" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     grep -q 'reviewer-.*\.lock' "$reviewers_sh"
     grep -q 'count_active_reviewers' "$reviewers_sh"
@@ -17,7 +17,7 @@ load '../helpers/setup'
 }
 
 @test "reviewers: stale lock cleanup" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     local fn_block
     fn_block=$(sed -n '/^find_free_reviewer_slot()/,/^}/p' "$reviewers_sh")
@@ -31,13 +31,13 @@ load '../helpers/setup'
 # =============================================================================
 
 @test "reviewers: uses try_claim_for_review for atomic claim" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     grep -q 'try_claim_for_review' "$reviewers_sh"
 }
 
 @test "reviewers: runs preflight check before review" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     grep -q 'preflight_check' "$reviewers_sh"
     grep -q 'NO_BRANCH' "$reviewers_sh"
@@ -45,25 +45,25 @@ load '../helpers/setup'
 }
 
 @test "reviewers: builds review context with diff, commits, logs" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     local fn_block
     fn_block=$(sed -n '/^build_review_context()/,/^}/p' "$reviewers_sh")
 
     echo "$fn_block" | grep -q 'git log.*oneline'
     echo "$fn_block" | grep -q 'git diff'
-    echo "$fn_block" | grep -q 'executor_log'
+    echo "$fn_block" | grep -q 'coder_log'
 }
 
 @test "reviewers: includes secrets-warning in context (v2.1.8 compat)" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     grep -q 'secrets-warning' "$reviewers_sh"
     grep -q 'SECURITY WARNING' "$reviewers_sh"
 }
 
 @test "reviewers: preflight scans diff for secrets (SECRETS_WARNING)" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     # preflight_check should grep for credential patterns
     local fn_block
@@ -74,7 +74,7 @@ load '../helpers/setup'
 }
 
 @test "reviewers: SECRETS_WARNING adds label and falls through to review" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     # SECRETS_WARNING case should add secrets-warning label
     local block
@@ -86,7 +86,7 @@ load '../helpers/setup'
 }
 
 @test "reviewers: circuit breaker on preflight rejection (reformulated + same reason)" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     # Should check for reformulated label and last-reject match
     grep -q 'CIRCUIT BREAKER' "$reviewers_sh"
@@ -95,14 +95,14 @@ load '../helpers/setup'
 }
 
 @test "reviewers: tracks last-reject reason for circuit breaker" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     # Should add last-reject:{TYPE} label before escalating to troubleshooter
     grep -q 'add-label="last-reject:' "$reviewers_sh"
 }
 
 @test "reviewers: uses run_claude_with_progress" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     grep -q 'run_claude_with_progress' "$reviewers_sh"
 }
@@ -112,33 +112,33 @@ load '../helpers/setup'
 # =============================================================================
 
 @test "reviewers: handles approved result" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     grep -q 'has_approved' "$reviewers_sh"
     grep -q 'APPROVED:' "$reviewers_sh"
 }
 
 @test "reviewers: handles rejection with reject:N increment" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     grep -q 'set_counter_label.*reject' "$reviewers_sh"
     grep -q 'REJECTED:' "$reviewers_sh"
 }
 
 @test "reviewers: escalates to troubleshooter at reject:4" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     grep -q 'blocked:troubleshoot' "$reviewers_sh"
 }
 
 @test "reviewers: model escalation at reject:2+" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     grep -q 'clean_model_label' "$reviewers_sh"
 }
 
 @test "reviewers: re-adds needs-review on no-action (v2.1.10 compat)" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     # The "no action" path should re-add needs-review
     local no_action_block
@@ -151,14 +151,14 @@ load '../helpers/setup'
 # Backpressure and --limit 0
 # =============================================================================
 
-@test "reviewers: respects MAX_PARALLEL_REVIEWERS" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+@test "reviewers: respects MAX_PARALLEL_SENIORS" {
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
-    grep -q 'MAX_PARALLEL_REVIEWERS' "$reviewers_sh"
+    grep -q 'MAX_PARALLEL_SENIORS' "$reviewers_sh"
 }
 
 @test "reviewers: uses --limit 0 for bd list" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     local missing
     missing=$(grep 'bd_safe list.*--json' "$reviewers_sh" | grep -cv '\-\-limit 0' || true)
@@ -166,7 +166,7 @@ load '../helpers/setup'
 }
 
 @test "reviewers: releases lock on all exit paths" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     # Trap for cleanup
     grep -q 'trap.*release_review_lock' "$reviewers_sh"
@@ -178,20 +178,20 @@ load '../helpers/setup'
 # v2.3.7: Executor race condition guard
 # =============================================================================
 
-@test "reviewers: get_review_tasks excludes tasks with executor label" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+@test "reviewers: get_review_tasks excludes tasks with coder label" {
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
-    # get_review_tasks function body must reject executor-labeled tasks
+    # get_review_tasks function body must reject coder-labeled tasks
     local func_body
     func_body=$(sed -n '/^get_review_tasks()/,/^}/p' "$reviewers_sh")
-    echo "$func_body" | grep -q 'index("executor") | not'
+    echo "$func_body" | grep -q 'index("coder") | not'
 }
 
-@test "reviewers: main task filter excludes executor label" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+@test "reviewers: main task filter excludes coder label" {
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
-    # The main() inline jq filter must also exclude executor
+    # The main() inline jq filter must also exclude coder
     local main_filter
     main_filter=$(sed -n '/tasks=.*all_in_progress.*jq/p' "$reviewers_sh")
-    echo "$main_filter" | grep -q 'index("executor") | not'
+    echo "$main_filter" | grep -q 'index("coder") | not'
 }

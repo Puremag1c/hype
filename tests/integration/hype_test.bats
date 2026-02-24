@@ -24,7 +24,7 @@ setup() {
 
     # Create valid config
     cat > "$TEST_TMPDIR/.hype/config.sh" << 'EOF'
-MAX_PARALLEL_EXECUTORS=3
+MAX_PARALLEL_CODERS=3
 RETRY_LIMIT=3
 ITERATION_DELAY=5
 TASK_STALE_TIMEOUT=600
@@ -181,7 +181,7 @@ validate_config_test() {
     local errors=0
 
     # Validate integers
-    for var in MAX_PARALLEL_EXECUTORS RETRY_LIMIT ITERATION_DELAY; do
+    for var in MAX_PARALLEL_CODERS RETRY_LIMIT ITERATION_DELAY; do
         local value="${!var}"
         if ! [[ "$value" =~ ^[0-9]+$ ]]; then
             echo "Invalid $var: must be integer, got '$value'"
@@ -213,10 +213,10 @@ validate_config_test() {
 }
 
 @test "validate_config: invalid integer fails" {
-    echo "MAX_PARALLEL_EXECUTORS=abc" >> "$TEST_TMPDIR/.hype/config.sh"
+    echo "MAX_PARALLEL_CODERS=abc" >> "$TEST_TMPDIR/.hype/config.sh"
     run validate_config_test "$TEST_TMPDIR/.hype/config.sh"
     [[ "$status" -ne 0 ]]
-    [[ "$output" == *"Invalid MAX_PARALLEL_EXECUTORS"* ]]
+    [[ "$output" == *"Invalid MAX_PARALLEL_CODERS"* ]]
 }
 
 @test "validate_config: invalid boolean fails" {
@@ -299,12 +299,12 @@ validate_config_test() {
 
     # User config missing NEW_VAR
     cat > "$user_config" << 'EOF'
-MAX_PARALLEL_EXECUTORS=3
+MAX_PARALLEL_CODERS=3
 EOF
 
     # Template has NEW_VAR
     cat > "$template" << 'EOF'
-MAX_PARALLEL_EXECUTORS=2
+MAX_PARALLEL_CODERS=2
 NEW_VAR=default
 EOF
 
@@ -449,16 +449,16 @@ configure_flush_debounce() {
     local template="$TEST_TMPDIR/template.sh"
 
     cat > "$user_config" << 'EOF'
-MAX_PARALLEL_EXECUTORS=5
+MAX_PARALLEL_CODERS=5
 EOF
 
     cat > "$template" << 'EOF'
-MAX_PARALLEL_EXECUTORS=2
+MAX_PARALLEL_CODERS=2
 EOF
 
     # Merge should keep user's value
     # (In real merge, we don't overwrite existing)
 
-    run grep "MAX_PARALLEL_EXECUTORS=" "$user_config"
-    [[ "$output" == "MAX_PARALLEL_EXECUTORS=5" ]]
+    run grep "MAX_PARALLEL_CODERS=" "$user_config"
+    [[ "$output" == "MAX_PARALLEL_CODERS=5" ]]
 }

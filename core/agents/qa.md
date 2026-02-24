@@ -1,5 +1,5 @@
 ---
-name: architect-qa
+name: qa
 description: Финальная проверка и обработка regression bugs
 model: opus
 ---

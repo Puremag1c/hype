@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
-# tests/integration/executors_test.bats
-# Integration tests for run-executors.sh functions
+# tests/integration/coders_test.bats
+# Integration tests for run-coders.sh functions
 
 load '../helpers/setup'
 load '../helpers/mock_bd'
@@ -28,7 +28,7 @@ setup() {
 
     # Create config
     cat > "$TEST_TMPDIR/.hype/config.sh" << 'EOF'
-MAX_PARALLEL_EXECUTORS=3
+MAX_PARALLEL_CODERS=3
 RETRY_LIMIT=3
 TASK_TIMEOUT="10m"
 ALLOWED_MODELS="opus,sonnet,haiku"
@@ -56,11 +56,11 @@ teardown() {
 # find_free_slot tests
 # =============================================================================
 
-# Define function locally (extracted from run-executors.sh)
+# Define function locally (extracted from run-coders.sh)
 NEXT_SLOT=0
 
 find_free_slot() {
-    while [ -d "$WORKTREES_DIR/executor-$NEXT_SLOT" ]; do
+    while [ -d "$WORKTREES_DIR/coder-$NEXT_SLOT" ]; do
         ((NEXT_SLOT++))
     done
     local slot=$NEXT_SLOT
@@ -76,8 +76,8 @@ find_free_slot() {
 
 @test "find_free_slot: skips existing worktree directories" {
     NEXT_SLOT=0
-    mkdir -p "$WORKTREES_DIR/executor-0"
-    mkdir -p "$WORKTREES_DIR/executor-1"
+    mkdir -p "$WORKTREES_DIR/coder-0"
+    mkdir -p "$WORKTREES_DIR/coder-1"
 
     run find_free_slot
     [[ "$output" == "2" ]]
@@ -85,14 +85,14 @@ find_free_slot() {
 
 @test "find_free_slot: increments for sequential calls" {
     # NOTE: NEXT_SLOT is a global counter in real script that prevents
-    # race conditions within a single run-executors.sh invocation.
+    # race conditions within a single run-coders.sh invocation.
     # In bats, $() runs in subshell so global state doesn't persist.
     # This test verifies the logic works by checking directory skipping.
-    rm -rf "$WORKTREES_DIR"/executor-*
+    rm -rf "$WORKTREES_DIR"/coder-*
 
     # Create directories 0,1 to simulate previous allocations
-    mkdir -p "$WORKTREES_DIR/executor-0"
-    mkdir -p "$WORKTREES_DIR/executor-1"
+    mkdir -p "$WORKTREES_DIR/coder-0"
+    mkdir -p "$WORKTREES_DIR/coder-1"
 
     # find_free_slot should skip existing and return next available
     NEXT_SLOT=0
@@ -107,7 +107,7 @@ find_free_slot() {
 create_worktree() {
     local slot=$1
     local task_id=$2
-    local worktree_path="$WORKTREES_DIR/executor-$slot"
+    local worktree_path="$WORKTREES_DIR/coder-$slot"
 
     if [ -d "$worktree_path" ]; then
         git worktree remove --force "$worktree_path" 2>/dev/null || rm -rf "$worktree_path"
@@ -127,7 +127,7 @@ create_worktree() {
 @test "create_worktree: creates worktree directory" {
     local path=$(create_worktree 0 "test-123")
 
-    [[ "$path" == "$WORKTREES_DIR/executor-0" ]]
+    [[ "$path" == "$WORKTREES_DIR/coder-0" ]]
     [[ -d "$path" ]]
 }
 
@@ -138,8 +138,8 @@ create_worktree() {
 }
 
 @test "create_worktree: replaces existing stale worktree" {
-    mkdir -p "$WORKTREES_DIR/executor-0"
-    touch "$WORKTREES_DIR/executor-0/stale-file"
+    mkdir -p "$WORKTREES_DIR/coder-0"
+    touch "$WORKTREES_DIR/coder-0/stale-file"
 
     local path=$(create_worktree 0 "test-123")
 
@@ -154,7 +154,7 @@ create_worktree() {
 
 cleanup_worktree() {
     local slot=$1
-    local worktree_path="$WORKTREES_DIR/executor-$slot"
+    local worktree_path="$WORKTREES_DIR/coder-$slot"
 
     if [ -d "$worktree_path" ]; then
         git worktree remove --force "$worktree_path" 2>/dev/null || rm -rf "$worktree_path"
@@ -163,10 +163,10 @@ cleanup_worktree() {
 
 @test "cleanup_worktree: removes worktree" {
     create_worktree 0 "test-123"
-    [[ -d "$WORKTREES_DIR/executor-0" ]]
+    [[ -d "$WORKTREES_DIR/coder-0" ]]
 
     cleanup_worktree 0
-    [[ ! -d "$WORKTREES_DIR/executor-0" ]]
+    [[ ! -d "$WORKTREES_DIR/coder-0" ]]
 }
 
 @test "cleanup_worktree: handles non-existent worktree" {
@@ -175,35 +175,35 @@ cleanup_worktree() {
 }
 
 # =============================================================================
-# count_active_executors tests
+# count_active_coders tests
 # =============================================================================
 
-count_active_executors() {
+count_active_coders() {
     local count=0
-    for lock in "$WORKTREES_DIR"/executor-*.lock; do
+    for lock in "$WORKTREES_DIR"/coder-*.lock; do
         [ -d "$lock" ] && ((count++))
     done
     echo "$count"
 }
 
-@test "count_active_executors: returns 0 for empty worktrees" {
-    run count_active_executors
+@test "count_active_coders: returns 0 for empty worktrees" {
+    run count_active_coders
     [[ "$output" == "0" ]]
 }
 
-@test "count_active_executors: counts lock directories" {
-    mkdir -p "$WORKTREES_DIR/executor-0.lock"
-    mkdir -p "$WORKTREES_DIR/executor-1.lock"
-    run count_active_executors
+@test "count_active_coders: counts lock directories" {
+    mkdir -p "$WORKTREES_DIR/coder-0.lock"
+    mkdir -p "$WORKTREES_DIR/coder-1.lock"
+    run count_active_coders
     [[ "$output" == "2" ]]
-    rmdir "$WORKTREES_DIR/executor-0.lock" "$WORKTREES_DIR/executor-1.lock"
+    rmdir "$WORKTREES_DIR/coder-0.lock" "$WORKTREES_DIR/coder-1.lock"
 }
 
-@test "count_active_executors: ignores non-lock items" {
-    mkdir -p "$WORKTREES_DIR/executor-0"
-    run count_active_executors
+@test "count_active_coders: ignores non-lock items" {
+    mkdir -p "$WORKTREES_DIR/coder-0"
+    run count_active_coders
     [[ "$output" == "0" ]]
-    rmdir "$WORKTREES_DIR/executor-0"
+    rmdir "$WORKTREES_DIR/coder-0"
 }
 
 # =============================================================================
@@ -322,22 +322,22 @@ count_active_executors() {
 
 @test "backpressure: MAX_PARALLEL limits concurrent tasks" {
     MAX_PARALLEL=2
-    mkdir -p "$WORKTREES_DIR/executor-0.lock" "$WORKTREES_DIR/executor-1.lock"
+    mkdir -p "$WORKTREES_DIR/coder-0.lock" "$WORKTREES_DIR/coder-1.lock"
 
-    local active=$(count_active_executors)
+    local active=$(count_active_coders)
 
     # With 2 active and MAX_PARALLEL=2, should not start more
     [[ "$active" -ge "$MAX_PARALLEL" ]]
-    rmdir "$WORKTREES_DIR/executor-0.lock" "$WORKTREES_DIR/executor-1.lock"
+    rmdir "$WORKTREES_DIR/coder-0.lock" "$WORKTREES_DIR/coder-1.lock"
 }
 
 @test "backpressure: allows new task when under limit" {
     MAX_PARALLEL=3
-    mkdir -p "$WORKTREES_DIR/executor-0.lock"
+    mkdir -p "$WORKTREES_DIR/coder-0.lock"
 
-    local active=$(count_active_executors)
+    local active=$(count_active_coders)
     local available=$((MAX_PARALLEL - active))
 
     [[ "$available" -gt 0 ]]
-    rmdir "$WORKTREES_DIR/executor-0.lock"
+    rmdir "$WORKTREES_DIR/coder-0.lock"
 }

@@ -274,7 +274,7 @@ reset_stale_tasks() {
                 # Append to notes instead of overwriting (preserve review feedback)
                 local updated_notes
                 updated_notes=$(append_notes "$task_id" "Reset: $log_prefix (${age}s without update)")
-                bd_safe update "$task_id" --status=open --remove-label=executor --notes="$updated_notes" >/dev/null 2>&1 || true
+                bd_safe update "$task_id" --status=open --remove-label=coder --notes="$updated_notes" >/dev/null 2>&1 || true
                 ((reset_count++)) || true
             fi
         fi
@@ -714,10 +714,10 @@ export -f approve_task 2>/dev/null || true
 
 # reject_from_review - return a task to the review queue after rejection
 # Usage: reject_from_review TASK_ID
-# Transitions: reviewing → needs-review (task reopened for re-work by executor)
+# Transitions: reviewing → needs-review (task reopened for re-work by coder)
 reject_from_review() {
     local task_id="$1"
-    bd_safe update "$task_id" --remove-label=reviewing --add-label=needs-review --status=open --remove-label=executor >/dev/null 2>&1
+    bd_safe update "$task_id" --remove-label=reviewing --add-label=needs-review --status=open --remove-label=coder >/dev/null 2>&1
 }
 export -f reject_from_review 2>/dev/null || true
 
@@ -1066,7 +1066,7 @@ cleanup_iteration() {
 
     # SPEC.md
     [ -f "$project_dir/SPEC.md" ] && echo "  • SPEC.md → SPEC.prev.md (archived)"
-    [ -f "$project_dir/SPEC_REPORT.md" ] && echo "  • SPEC_REPORT.md → SPEC_REPORT.prev.md (archived)"
+    [ -f "$project_dir/SPEC_REPORT.prev.md" ] && echo "  • SPEC_REPORT.prev.md will be deleted"
 
     echo ""
     echo "Starting cleanup..."
@@ -1141,10 +1141,10 @@ cleanup_iteration() {
         mv "$project_dir/SPEC.md" "$project_dir/SPEC.prev.md"
     fi
 
-    # 6b. Archive SPEC_REPORT.md
-    if [ -f "$project_dir/SPEC_REPORT.md" ]; then
-        echo "  → Archiving SPEC_REPORT.md → SPEC_REPORT.prev.md..."
-        mv "$project_dir/SPEC_REPORT.md" "$project_dir/SPEC_REPORT.prev.md"
+    # 6b. Delete stale SPEC_REPORT.prev.md (completion writes directly to .prev.md)
+    if [ -f "$project_dir/SPEC_REPORT.prev.md" ]; then
+        echo "  → Deleting SPEC_REPORT.prev.md..."
+        rm -f "$project_dir/SPEC_REPORT.prev.md"
     fi
 
     # 7. Create needs-spec marker for next iteration

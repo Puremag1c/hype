@@ -151,7 +151,7 @@ gather_context() {
     context+="\`\`\`\n"
     context+="Version: $(cat "$HYPE_HOME/VERSION" 2>/dev/null || cat "VERSION" 2>/dev/null || echo "unknown")\n"
     local missing_scripts=""
-    for script in detect-phase.sh run-executors.sh run-analysts.sh run-reviewers.sh run-merge-queue.sh; do
+    for script in detect-phase.sh run-coders.sh run-analysts.sh run-seniors.sh run-merge-queue.sh; do
         if [[ ! -x "./scripts/$script" ]] && [[ ! -x "$SCRIPT_DIR/$script" ]]; then
             missing_scripts+="MISSING: $script\n"
         fi
@@ -224,8 +224,8 @@ gather_context() {
     # v2.2: Reviewer slots and review pipeline state
     context+="## Review Pipeline (v2.2)\n"
     context+="\`\`\`\n"
-    context+="Reviewer slots:\n"
-    context+=$(ls -la .hype-worktrees/reviewer-*.lock 2>/dev/null || echo "no active reviewers")
+    context+="Senior slots:\n"
+    context+=$(ls -la .hype-worktrees/senior-*.lock 2>/dev/null || echo "no active seniors")
     context+="\n"
     context+="Review locks:\n"
     context+=$(ls -la .hype-worktrees/review-*.lock 2>/dev/null || echo "no review locks")

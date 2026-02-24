@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # tests/unit/v237_test.bats
-# Tests for v2.3.7: bd_safe auto-recovery, heal-before-dispatch, executor restrictions
+# Tests for v2.3.7: bd_safe auto-recovery, heal-before-dispatch, coder restrictions
 
 load '../helpers/setup'
 
@@ -131,23 +131,23 @@ load '../helpers/setup'
 }
 
 # =============================================================================
-# P2: executor.md restricts bd create
+# P2: coder.md restricts bd create
 # =============================================================================
 
-@test "executor.md: has explicit bd create restriction" {
-    local executor_md="$CORE_DIR/agents/executor.md"
+@test "coder.md: has explicit bd create restriction" {
+    local coder_md="$CORE_DIR/agents/coder.md"
 
-    grep -q 'НИКОГДА не создавай новые задачи.*bd create' "$executor_md"
+    grep -q 'НИКОГДА не создавай новые задачи.*bd create' "$coder_md"
 }
 
-@test "executor.md: allows bd create exception for rebase conflicts" {
-    local executor_md="$CORE_DIR/agents/executor.md"
+@test "coder.md: allows bd create exception for rebase conflicts" {
+    local coder_md="$CORE_DIR/agents/coder.md"
 
     # Rule mentions rebase as exception
-    grep -q 'rebase' "$executor_md" | head -1
+    grep -q 'rebase' "$coder_md" | head -1
 
     # The actual bd create in the rebase section still exists
-    grep -q 'bd create.*Resolve rebase conflict' "$executor_md"
+    grep -q 'bd create.*Resolve rebase conflict' "$coder_md"
 }
 
 # =============================================================================
@@ -559,21 +559,21 @@ load '../helpers/setup'
     echo "$func_body" | grep -q 'Empty merge.*branch changes already in main'
 }
 
-@test "run-merge-queue.sh: agent failure returns task to executor" {
+@test "run-merge-queue.sh: agent failure returns task to coder" {
     local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
 
     local func_body
     func_body=$(sed -n '/^merge_task()/,/^}/p' "$merge_sh")
 
-    # After agent fails: clean state + return to executor
+    # After agent fails: clean state + return to coder
     echo "$func_body" | grep -q 'Merger agent failed'
     echo "$func_body" | grep -q 'status=open.*remove-label=approved'
 }
 
 # === v2.3.12: Task granularity directive in architect agents ===
 
-@test "architect-reviewer.md: has task granularity directive (1-5 min)" {
-    local reviewer="$AGENTS_DIR/architect-reviewer.md"
+@test "plan-reviewer.md: has task granularity directive (1-5 min)" {
+    local reviewer="$AGENTS_DIR/plan-reviewer.md"
 
     # Critical rule about task size
     grep -q '1-5 минут' "$reviewer"
@@ -582,8 +582,8 @@ load '../helpers/setup'
     grep -q '>3 файлов' "$reviewer"
 }
 
-@test "architect-qa.md: has task granularity directive (1-5 min)" {
-    local qa="$AGENTS_DIR/architect-qa.md"
+@test "qa.md: has task granularity directive (1-5 min)" {
+    local qa="$AGENTS_DIR/qa.md"
 
     # Critical rule about task size
     grep -q '1-5 минут' "$qa"
@@ -599,8 +599,8 @@ load '../helpers/setup'
     echo "$section_35" | grep -q '1-5 минут'
 }
 
-@test "architect-planner.md: has task granularity directive (baseline)" {
-    local planner="$AGENTS_DIR/architect-planner.md"
+@test "architect.md: has task granularity directive (baseline)" {
+    local planner="$AGENTS_DIR/architect.md"
 
     # Both locations
     grep -q '1-5 минут каждая' "$planner"
@@ -609,7 +609,7 @@ load '../helpers/setup'
 
 @test "all architect agents: consistent granularity rule" {
     # All three architect agents that create/manage tasks should have the directive
-    for agent in architect-planner.md architect-reviewer.md architect-qa.md; do
+    for agent in architect.md plan-reviewer.md qa.md; do
         local file="$AGENTS_DIR/$agent"
         grep -q '1-5 минут' "$file" || {
             echo "MISSING in $agent"
@@ -692,15 +692,15 @@ load '../helpers/setup'
 }
 
 # =============================================================================
-# v2.3.16: Race condition fixes — executor vs troubleshooter
+# v2.3.16: Race condition fixes — coder vs troubleshooter
 # =============================================================================
 
 @test "v2.3.16: get_ready_tasks excludes tasks with blocked: labels" {
-    local executors_sh="$SCRIPTS_DIR/run-executors.sh"
+    local coders_sh="$SCRIPTS_DIR/run-coders.sh"
 
     # jq filter in get_ready_tasks must exclude blocked:* labels
     local func_body
-    func_body=$(sed -n '/^get_ready_tasks()/,/^}/p' "$executors_sh")
+    func_body=$(sed -n '/^get_ready_tasks()/,/^}/p' "$coders_sh")
     echo "$func_body" | grep -q 'startswith("blocked:")'
     echo "$func_body" | grep -q '| not'
 }
@@ -719,20 +719,20 @@ load '../helpers/setup'
     [ "$show_line" -lt "$route_line" ]
 }
 
-@test "v2.3.16: check_and_route_troubleshoot checks executor label" {
+@test "v2.3.16: check_and_route_troubleshoot checks coder label" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
     local func_body
     func_body=$(sed -n '/^check_and_route_troubleshoot()/,/^}/p' "$hype_sh")
 
-    # Must check for executor label
-    echo "$func_body" | grep -q 'executor'
-    # Must skip if executor label present (v2.3.19: regardless of status)
-    echo "$func_body" | grep -q 'has_executor_label'
+    # Must check for coder label
+    echo "$func_body" | grep -q 'coder'
+    # Must skip if coder label present (v2.3.19: regardless of status)
+    echo "$func_body" | grep -q 'has_coder_label'
 }
 
 @test "v2.3.16: reject:4 no-review-action removes reviewing label" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     # Find the reject_count >= 4 block
     local block
@@ -742,7 +742,7 @@ load '../helpers/setup'
 }
 
 @test "v2.3.16: reject:4 no-review-action sets status=open" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     local block
     block=$(sed -n '/reject_count.*-ge 4/,/TROUBLESHOOT/p' "$reviewers_sh")
@@ -751,7 +751,7 @@ load '../helpers/setup'
 }
 
 @test "v2.3.16: reject:4 no-review-action adds blocked:troubleshoot" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     local block
     block=$(sed -n '/reject_count.*-ge 4/,/TROUBLESHOOT/p' "$reviewers_sh")
@@ -803,53 +803,53 @@ load '../helpers/setup'
     echo "$func_body" | grep -q '\.hype/\*'
 }
 
-@test "v2.3.17: executor.md prohibits .gitignore modification" {
-    local executor_md="$AGENTS_DIR/executor.md"
-    [ -f "$executor_md" ]
+@test "v2.3.17: coder.md prohibits .gitignore modification" {
+    local coder_md="$AGENTS_DIR/coder.md"
+    [ -f "$coder_md" ]
 
-    grep -q '\.gitignore' "$executor_md"
-    grep -q 'НИКОГДА.*gitignore\|gitignore.*НИКОГДА' "$executor_md"
+    grep -q '\.gitignore' "$coder_md"
+    grep -q 'НИКОГДА.*gitignore\|gitignore.*НИКОГДА' "$coder_md"
 }
 
-@test "v2.3.17: heal_stuck_tasks detects executor+needs-review deadlock" {
+@test "v2.3.17: heal_stuck_tasks detects coder+needs-review deadlock" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
     local func_body
     func_body=$(sed -n '/^heal_stuck_tasks()/,/^}/p' "$hype_sh")
 
-    # Must check for both executor AND needs-review simultaneously
-    echo "$func_body" | grep -q 'executor.*needs-review\|needs-review.*executor'
-    # Must remove executor label to break deadlock
-    echo "$func_body" | grep -q 'remove-label=executor'
+    # Must check for both coder AND needs-review simultaneously
+    echo "$func_body" | grep -q 'coder.*needs-review\|needs-review.*coder'
+    # Must remove coder label to break deadlock
+    echo "$func_body" | grep -q 'remove-label=coder'
 }
 
 # =============================================================================
-# v2.3.19: Reviewer vs executor race condition
+# v2.3.19: Senior vs coder race condition
 # =============================================================================
 
-@test "v2.3.19: reviewer post-processing checks executor label before acting" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+@test "v2.3.19: reviewer post-processing checks coder label before acting" {
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     # Ownership check must happen BEFORE the decision tree (closed/approved/open/else)
     local post_proc
     post_proc=$(sed -n '/Post-processing: check what reviewer did/,/if.*task_status.*closed/p' "$reviewers_sh")
 
-    # Must check for executor label
-    echo "$post_proc" | grep -q 'executor'
-    # Must skip post-processing if executor present
+    # Must check for coder label
+    echo "$post_proc" | grep -q 'coder'
+    # Must skip post-processing if coder present
     echo "$post_proc" | grep -q 'skipping post-processing\|return 0'
 }
 
-@test "v2.3.19: troubleshooter guard checks executor label regardless of status" {
+@test "v2.3.19: troubleshooter guard checks coder label regardless of status" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
     local func_body
     func_body=$(sed -n '/^check_and_route_troubleshoot()/,/^}/p' "$hype_sh")
 
-    # Must NOT require in_progress for executor check (no "in_progress.*executor" AND guard)
-    # Should check executor label independently
+    # Must NOT require in_progress for coder check (no "in_progress.*coder" AND guard)
+    # Should check coder label independently
     local guard_line
-    guard_line=$(echo "$func_body" | grep 'has_executor_label.*!=.*0' | grep -v 'fresh_status')
+    guard_line=$(echo "$func_body" | grep 'has_coder_label.*!=.*0' | grep -v 'fresh_status')
     [ -n "$guard_line" ]
 }
 
@@ -896,9 +896,9 @@ load '../helpers/setup'
     grep -q 'Client Language' "$agent"
 }
 
-@test "v2.4.0: completion.md creates SPEC_REPORT.md" {
+@test "v2.4.0: completion.md creates SPEC_REPORT.prev.md" {
     local agent="$SCRIPTS_DIR/../agents/completion.md"
-    grep -q 'SPEC_REPORT.md' "$agent"
+    grep -q 'SPEC_REPORT.prev.md' "$agent"
 }
 
 @test "v2.4.0: completion.md includes git push step" {
@@ -916,27 +916,27 @@ load '../helpers/setup'
     grep -q 'MODEL_COMPLETION:-opus' "$hype_sh"
 }
 
-@test "v2.4.0: hype.sh DONE phase shows SPEC_REPORT.md" {
+@test "v2.4.0: hype.sh DONE phase shows SPEC_REPORT.prev.md" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
-    grep -q 'SPEC_REPORT.md' "$hype_sh"
+    grep -q 'SPEC_REPORT.prev.md' "$hype_sh"
 }
 
-@test "v2.4.0: tech-writer.md includes Client Language in SPEC template" {
-    local agent="$SCRIPTS_DIR/../agents/tech-writer.md"
+@test "v2.4.0: manager.md includes Client Language in SPEC template" {
+    local agent="$SCRIPTS_DIR/../agents/manager.md"
     grep -q 'Client Language' "$agent"
 }
 
-@test "v2.4.0: tech-writer.md reads SPEC_REPORT.prev.md at startup" {
-    local agent="$SCRIPTS_DIR/../agents/tech-writer.md"
+@test "v2.4.0: manager.md reads SPEC_REPORT.prev.md at startup" {
+    local agent="$SCRIPTS_DIR/../agents/manager.md"
     grep -q 'SPEC_REPORT.prev.md' "$agent"
 }
 
-@test "v2.4.0: common.sh cleanup archives SPEC_REPORT.md" {
+@test "v2.4.0: common.sh cleanup deletes SPEC_REPORT.prev.md" {
     local common_sh="$SCRIPTS_DIR/common.sh"
 
     local func_body
     func_body=$(sed -n '/^cleanup_iteration()/,/^}/p' "$common_sh")
 
-    echo "$func_body" | grep -q 'SPEC_REPORT.md'
+    # Cleanup should handle SPEC_REPORT.prev.md (delete, not archive)
     echo "$func_body" | grep -q 'SPEC_REPORT.prev.md'
 }

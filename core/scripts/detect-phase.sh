@@ -71,7 +71,7 @@ if [ $? -ne 0 ] || ! echo "$ALL_TASKS_JSON" | jq -e 'type == "array"' >/dev/null
     >&2 echo "bd sync --import-only recovery succeeded"
 fi
 
-# v2.3.9: Пишем tick-cache для всех скриптов (run-reviewers, heal, merge queue)
+# v2.3.9: Пишем tick-cache для всех скриптов (run-seniors, heal, merge queue)
 # Один bd call за цикл — остальные читают из файла
 echo "$ALL_TASKS_JSON" > "$PROJECT_ROOT/.hype/tick-cache.json" 2>/dev/null || true
 
@@ -287,8 +287,8 @@ if [ -f "$TESTERS_PID_FILE" ] && kill -0 "$(cat "$TESTERS_PID_FILE" 2>/dev/null)
     exit 0
 fi
 
-# REFLEXING: smoke/regression tasks найдены - Architect триажит перед executors
-# Предотвращает race condition между Architect и Executor
+# REFLEXING: smoke/regression tasks найдены - Architect триажит перед coders
+# Предотвращает race condition между Architect и Coder
 # Reached only when testers are NOT running (PID check above)
 if [ "$SMOKE_TRIAGE_OPEN" -gt 0 ]; then
     output_json "REFLEXING"

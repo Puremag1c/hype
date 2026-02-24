@@ -104,7 +104,7 @@ validate_config() {
     }
 
     # Run validations
-    validate_int "MAX_PARALLEL_EXECUTORS" "$MAX_PARALLEL_EXECUTORS"
+    validate_int "MAX_PARALLEL_CODERS" "$MAX_PARALLEL_CODERS"
     validate_int "RETRY_LIMIT" "$RETRY_LIMIT"
     validate_int "ITERATION_DELAY" "$ITERATION_DELAY"
     validate_int "TASK_STALE_TIMEOUT" "${TASK_STALE_TIMEOUT:-600}"
@@ -119,11 +119,11 @@ validate_config() {
         exit 1
     fi
 
-    log "INFO" "Config loaded: MAX_PARALLEL=$MAX_PARALLEL_EXECUTORS, RETRY=$RETRY_LIMIT, DELAY=${ITERATION_DELAY}s"
+    log "INFO" "Config loaded: MAX_PARALLEL=$MAX_PARALLEL_CODERS, RETRY=$RETRY_LIMIT, DELAY=${ITERATION_DELAY}s"
 }
 
 ensure_hype_dir() {
-    # Защита от удаления .hype/ executor'ами
+    # Защита от удаления .hype/ coder'ами
     if [ ! -d "$CLAUDEV_DIR" ]; then
         log "WARN" ".hype/ directory missing, recreating..."
         mkdir -p "$CLAUDEV_DIR"
@@ -187,7 +187,7 @@ check_symlinks_health() {
     fi
 
     # Check required scripts exist
-    local required_scripts=("detect-phase.sh" "run-executors.sh" "run-analysts.sh" "run-reviewers.sh" "run-merge-queue.sh")
+    local required_scripts=("detect-phase.sh" "run-coders.sh" "run-analysts.sh" "run-seniors.sh" "run-merge-queue.sh")
     for script in "${required_scripts[@]}"; do
         if [[ ! -x "./scripts/$script" ]]; then
             log "ERROR" "Required script not found or not executable: scripts/$script"
@@ -439,9 +439,9 @@ check_and_route_troubleshoot() {
         return 0
     fi
 
-    local troubleshooter_file=".claude/agents/architect-troubleshooter.md"
+    local troubleshooter_file=".claude/agents/troubleshooter.md"
     if [ ! -f "$troubleshooter_file" ]; then
-        log "WARN" "architect-troubleshooter.md not found, skipping troubleshoot routing"
+        log "WARN" "troubleshooter.md not found, skipping troubleshoot routing"
         return 0
     fi
 
@@ -450,18 +450,18 @@ check_and_route_troubleshoot() {
 
     for task_id in $troubleshoot_ids; do
         # v2.3.16: Fresh state check — tick-cache is stale after dispatch
-        local fresh_json fresh_status has_executor_label
+        local fresh_json fresh_status has_coder_label
         fresh_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
         fresh_status=$(echo "$fresh_json" | jq -r '.[0].status // "unknown"' 2>/dev/null || echo "unknown")
-        has_executor_label=$(echo "$fresh_json" | jq -r '[.[0].labels[]? | select(. == "executor")] | length' 2>/dev/null || echo "0")
+        has_coder_label=$(echo "$fresh_json" | jq -r '[.[0].labels[]? | select(. == "coder")] | length' 2>/dev/null || echo "0")
 
         if [ "$fresh_status" = "closed" ]; then
             log "INFO" "Troubleshoot skip $task_id: already closed"
             continue
         fi
-        # v2.3.19: Check executor label regardless of status (open+executor = executor claimed during review)
-        if [ "$has_executor_label" != "0" ]; then
-            log "INFO" "Troubleshoot skip $task_id: executor label present (status=$fresh_status)"
+        # v2.3.19: Check coder label regardless of status (open+coder = coder claimed during review)
+        if [ "$has_coder_label" != "0" ]; then
+            log "INFO" "Troubleshoot skip $task_id: coder label present (status=$fresh_status)"
             continue
         fi
 
@@ -523,60 +523,81 @@ check_problems_and_consult_manager() {
     fi
 }
 
-# === Call Manager for problem resolution ===
+# === Resolve problems (bash-based, replaces LLM manager agent) ===
 
 call_manager_for_problems() {
     local blocked=$1
     local retry_limit=$2
     local bd_cache=${3:-"[]"}  # Cached bd list (v1.9.0+)
 
-    local manager_file=".claude/agents/manager.md"
-    if [ ! -f "$manager_file" ]; then
-        log "WARN" "manager.md not found, skipping problem resolution"
-        return 0
-    fi
+    log "INFO" "Resolving problems: blocked=$blocked, retry_limit=$retry_limit"
 
-    log "INFO" "Consulting Manager for problem resolution..."
+    local resolved=0 escalated=0 closed=0
 
-    local manager_prompt
-    manager_prompt=$(cat "$manager_file")
+    # --- Handle blocked tasks ---
+    local blocked_ids
+    blocked_ids=$(echo "$bd_cache" | jq -r '.[] | select(.labels[]? | startswith("blocked:")) | .id' 2>/dev/null || echo "")
 
-    # Get problem details from cache (no extra bd calls)
-    local blocked_tasks
-    blocked_tasks=$(echo "$bd_cache" | jq -r '.[] | select(.labels[]? | startswith("blocked:")) | "\(.id): \(.title)"' 2>/dev/null || echo "none")
+    for task_id in $blocked_ids; do
+        local labels
+        labels=$(echo "$bd_cache" | jq -r --arg id "$task_id" '.[] | select(.id == $id) | (.labels // [])[]' 2>/dev/null || echo "")
 
-    local retry_tasks
-    retry_tasks=$(echo "$bd_cache" | jq -r ".[] | select(.labels[]? | test(\"^retry:[$RETRY_LIMIT-9]\")) | \"\(.id): \(.title)\"" 2>/dev/null || echo "none")
+        if echo "$labels" | grep -q "^blocked:dependency$"; then
+            # Check if dependency is closed
+            local dep_id
+            dep_id=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].blocked_by[0] // empty' 2>/dev/null || echo "")
+            if [ -n "$dep_id" ]; then
+                local dep_status
+                dep_status=$(bd_safe show "$dep_id" --json 2>/dev/null | jq -r '.[0].status // empty' 2>/dev/null || echo "")
+                if [ "$dep_status" = "closed" ]; then
+                    bd_safe update "$task_id" --status=open --remove-label=blocked:dependency --notes="Unblocked: dependency $dep_id closed" 2>/dev/null || true
+                    log "INFO" "Manager: unblocked $task_id (dependency $dep_id closed)"
+                    ((resolved++))
+                fi
+            fi
+        elif echo "$labels" | grep -q "^blocked:conflict$"; then
+            bd_safe create --title="Resolve conflict for $task_id" --type=task --priority=0 --labels=model:opus,escalation 2>/dev/null || true
+            bd_safe update "$task_id" --notes="Escalated to Architect for conflict resolution" 2>/dev/null || true
+            log "INFO" "Manager: escalated $task_id (conflict → architect)"
+            ((escalated++))
+        elif echo "$labels" | grep -q "^blocked:missing-info$"; then
+            bd_safe create --title="Clarify requirements for $task_id" --type=task --priority=1 --labels=model:opus 2>/dev/null || true
+            log "INFO" "Manager: created clarification task for $task_id"
+            ((escalated++))
+        elif echo "$labels" | grep -q "^blocked:escalation-limit$"; then
+            bd_safe update "$task_id" --remove-label=blocked:escalation-limit --add-label=blocked:troubleshoot \
+                --notes="Manager: routed to Troubleshooter for persistent failure" 2>/dev/null || true
+            log "INFO" "Manager: routed $task_id to troubleshooter"
+            ((escalated++))
+        fi
+    done
 
-    local output_file="$LOGS_DIR/manager-problems-$(date +%s).log"
+    # --- Handle retry limit tasks ---
+    local retry_ids
+    retry_ids=$(echo "$bd_cache" | jq -r ".[] | select(.labels[]? | test(\"^retry:[$RETRY_LIMIT-9]\")) | .id" 2>/dev/null || echo "")
 
-    # Manager with tool use — resolves problems autonomously
-    local full_prompt="$manager_prompt
+    for task_id in $retry_ids; do
+        local task_labels
+        task_labels=$(echo "$bd_cache" | jq -r --arg id "$task_id" '.[] | select(.id == $id) | (.labels // [])[]' 2>/dev/null || echo "")
 
----
-PROBLEM_RESOLUTION_MODE: true
-PROJECT_ROOT: $PROJECT_DIR
+        if echo "$task_labels" | grep -q "model:opus"; then
+            # Already Opus and still failing → close
+            bd_safe close "$task_id" --reason="Unresolvable after multiple attempts with Opus" 2>/dev/null || true
+            log "INFO" "Manager: closed $task_id (Opus retry limit exceeded)"
+            ((closed++))
+        else
+            # Escalate to Opus
+            bd_safe update "$task_id" --status=open --set-labels=model:opus --notes="Reassigned to Opus after retry limit" 2>/dev/null || true
+            log "INFO" "Manager: escalated $task_id to Opus"
+            ((escalated++))
+        fi
+    done
 
-BLOCKED_TASKS ($blocked):
-$blocked_tasks
-
-RETRY_LIMIT_TASKS ($retry_limit):
-$retry_tasks
-
-Разреши проблемы автономно:
-1. Для blocked — проверь зависимости, разблокируй если dependency closed
-2. Для retry limit — эскалируй к Architect (создай задачу) или закрой как невозможную"
-
-    # Use stdin to avoid issues with prompts starting with "---"
-    local mgr_model
-    mgr_model=$(map_model "${MODEL_MANAGER:-sonnet}")
-    printf '%s' "$full_prompt" | timeout_cmd "$TASK_TIMEOUT" claude --model "$mgr_model" > "$output_file" 2>&1 || true
-
-    log "INFO" "Manager problem resolution complete (see $output_file)"
+    log "INFO" "Manager: resolved=$resolved, escalated=$escalated, closed=$closed"
 }
 
 # === Stale tasks check ===
-# Reset in_progress tasks older than 10 minutes (executor likely crashed)
+# Reset in_progress tasks older than 10 minutes (coder likely crashed)
 
 check_stale_tasks() {
     local in_progress_cache="${1:-}"
@@ -589,8 +610,8 @@ check_stale_tasks() {
 }
 
 # === Self-healing: stuck tasks without needs-review ===
-# Executor completed but fallback bd_safe update failed (e.g. beads sync contention)
-# Task stays in_progress without executor or needs-review labels — stuck forever
+# Coder completed but fallback bd_safe update failed (e.g. beads sync contention)
+# Task stays in_progress without coder or needs-review labels — stuck forever
 # Fix: add needs-review if stuck > 2 minutes
 
 heal_stuck_tasks() {
@@ -606,7 +627,7 @@ heal_stuck_tasks() {
 
     local stuck_ids
     stuck_ids=$(echo "$in_progress_json" | jq -r '.[] | select(
-        ((.labels // []) | index("executor") | not) and
+        ((.labels // []) | index("coder") | not) and
         ((.labels // []) | index("needs-review") | not) and
         ((.labels // []) | index("trigger") | not) and
         ((.labels // []) | index("reviewing") | not) and
@@ -629,23 +650,23 @@ heal_stuck_tasks() {
         task_age=$((now - task_epoch))
 
         if [ "$task_age" -gt "$threshold" ]; then
-            log "WARN" "HEAL: $task_id stuck in_progress without executor/needs-review for ${task_age}s, adding needs-review"
+            log "WARN" "HEAL: $task_id stuck in_progress without coder/needs-review for ${task_age}s, adding needs-review"
             bd_safe update "$task_id" --add-label=needs-review >/dev/null 2>&1 || true
         fi
     done
 
-    # v2.3.18: Heal executor+needs-review deadlock
-    # When executor agent adds needs-review but safety net fails to remove executor label,
-    # task becomes invisible to both executor pipeline and review pipeline.
+    # v2.3.18: Heal coder+needs-review deadlock
+    # When coder agent adds needs-review but safety net fails to remove coder label,
+    # task becomes invisible to both coder pipeline and review pipeline.
     local deadlock_ids
     deadlock_ids=$(echo "$in_progress_json" | jq -r '.[] | select(
-        ((.labels // []) | index("executor")) and
+        ((.labels // []) | index("coder")) and
         ((.labels // []) | index("needs-review"))
     ) | .id' 2>/dev/null || true)
 
     for task_id in $deadlock_ids; do
-        log "WARN" "HEAL: $task_id has executor+needs-review deadlock, removing executor label"
-        bd_safe update "$task_id" --remove-label=executor >/dev/null 2>&1 || true
+        log "WARN" "HEAL: $task_id has coder+needs-review deadlock, removing coder label"
+        bd_safe update "$task_id" --remove-label=coder >/dev/null 2>&1 || true
     done
 
     # v2.2: Heal tasks stuck in reviewing (reviewer crashed, >3 min)
@@ -693,8 +714,8 @@ heal_stuck_tasks() {
         task_age=$((now - task_epoch))
 
         if [ "$task_age" -gt "$approved_recover_threshold" ]; then
-            # Recovery: return to executor for rebase/retry
-            log "WARN" "HEAL: $task_id approved but not merged for ${task_age}s — returning to executor"
+            # Recovery: return to coder for rebase/retry
+            log "WARN" "HEAL: $task_id approved but not merged for ${task_age}s — returning to coder"
             local task_json_heal
             task_json_heal=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
             local reject_count
@@ -715,7 +736,7 @@ heal_stuck_tasks() {
 }
 
 # === Stale worktrees cleanup ===
-# Remove worktrees older than 15 minutes (executor crashed or orphaned)
+# Remove worktrees older than 15 minutes (coder crashed or orphaned)
 
 cleanup_stale_worktrees() {
     local worktrees_dir="$PROJECT_DIR/.hype-worktrees"
@@ -729,7 +750,7 @@ cleanup_stale_worktrees() {
     local now
     now=$(date +%s)
 
-    for worktree in "$worktrees_dir"/executor-*; do
+    for worktree in "$worktrees_dir"/coder-*; do
         if [ ! -d "$worktree" ]; then
             continue
         fi
@@ -741,7 +762,7 @@ cleanup_stale_worktrees() {
 
         if [ "$age" -gt "$stale_threshold" ]; then
             local slot
-            slot=$(basename "$worktree" | sed 's/executor-//')
+            slot=$(basename "$worktree" | sed 's/coder-//')
             log "INFO" "Removing stale worktree: $worktree (age: ${age}s)"
             git worktree remove --force "$worktree" 2>/dev/null || rm -rf "$worktree"
             ((cleanup_count++)) || true
@@ -820,10 +841,10 @@ generate_iteration_stats() {
     blocked=$(jq '[.[] | select(.labels[]? | startswith("blocked:"))] | length' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "0")
 
     # Count agent runs from logs
-    local manager_runs architect_runs executor_runs analyst_runs senior_runs
+    local manager_runs architect_runs coder_runs analyst_runs senior_runs
     manager_runs=$(grep -c "\[HYPE\].*Manager" "$LOGS_DIR/hype.log" 2>/dev/null || echo "0")
     architect_runs=$(grep -c "Running agent: architect" "$LOGS_DIR/hype.log" 2>/dev/null || echo "0")
-    executor_runs=$(grep -c "Starting executor for" "$LOGS_DIR/hype.log" 2>/dev/null || echo "0")
+    coder_runs=$(grep -c "Starting coder for" "$LOGS_DIR/hype.log" 2>/dev/null || echo "0")
     analyst_runs=$(grep -c "Starting analyst-" "$LOGS_DIR/hype.log" 2>/dev/null || echo "0")
     senior_runs=$(grep -c "Processing review for" "$LOGS_DIR/hype.log" 2>/dev/null || echo "0")
 
@@ -855,7 +876,7 @@ generate_iteration_stats() {
 |-------|------|
 | Manager | $manager_runs |
 | Architect | $architect_runs |
-| Executors | $executor_runs |
+| Executors | $coder_runs |
 | Analysts | $analyst_runs |
 | Senior Executor | $senior_runs |
 
@@ -889,7 +910,7 @@ dispatch_phase() {
             # Check draft TTL first
             check_draft_ttl
 
-            # Deep analysis for large existing projects (before Tech Writer)
+            # Deep analysis for large existing projects (before Manager)
             # Only runs once per project (marker: .hype/deep-analyzed)
             if [ -f "$PROJECT_DIR/PROJECT_CONTEXT.md" ] && [ ! -f "$CLAUDEV_DIR/deep-analyzed" ]; then
                 # Source needs_deep_analysis function from deep-analyze.sh
@@ -906,13 +927,13 @@ dispatch_phase() {
                 fi
             fi
 
-            # Tech Writer creates SPEC.md (INTERACTIVE - needs user dialogue)
-            if [ -f ".claude/agents/tech-writer.md" ]; then
-                log "INFO" "PREPARING: Starting Tech Writer (interactive)..."
+            # Manager creates SPEC.md (INTERACTIVE - needs user dialogue)
+            if [ -f ".claude/agents/manager.md" ]; then
+                log "INFO" "PREPARING: Starting Manager (interactive)..."
                 local tw_model
-                tw_model=$(map_model "${MODEL_TECH_WRITER:-opus}")
-                if ! run_interactive_agent "tech-writer" ".claude/agents/tech-writer.md" "$tw_model"; then
-                    log "WARN" "Tech Writer exited with error. Check SPEC.draft.md for progress."
+                tw_model=$(map_model "${MODEL_MANAGER:-${MODEL_TECH_WRITER:-opus}}")
+                if ! run_interactive_agent "manager" ".claude/agents/manager.md" "$tw_model"; then
+                    log "WARN" "Manager exited with error. Check SPEC.draft.md for progress."
                     if [ -f "$PROJECT_DIR/SPEC.draft.md" ]; then
                         log "INFO" "Draft exists — will continue from draft next cycle"
                     else
@@ -920,7 +941,7 @@ dispatch_phase() {
                     fi
                 fi
             else
-                log "WARN" "tech-writer.md not found, skipping PREPARING"
+                log "WARN" "manager.md not found, skipping PREPARING"
             fi
 
             # Clean up after PREPARING phase if SPEC.md was created
@@ -947,7 +968,7 @@ dispatch_phase() {
             arch_model=$(map_model "${MODEL_ARCHITECT:-opus}")
             local spec_content
             spec_content=$(cat SPEC.md 2>/dev/null || echo "SPEC.md not found")
-            run_agent_with_mode "architect" ".claude/agents/architect-planner.md" "$arch_model" "create_plan" "SPEC:
+            run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "create_plan" "SPEC:
 $spec_content" "${PLANNING_TIMEOUT:-15m}"
 
             # Ensure milestone exists (architect may forget step 7)
@@ -994,7 +1015,7 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             bd_cache=$(cat "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "[]")
             cleanup_stale_trigger "run-plan-review" "$bd_cache"
             bd_safe create --title="run-plan-review" --type=task --priority=0 --label=trigger >/dev/null 2>&1 || true
-            run_agent_with_mode "architect" ".claude/agents/architect-reviewer.md" "$arch_model" "plan_review" "" "${THINKING_TIMEOUT:-10m}"
+            run_agent_with_mode "architect" ".claude/agents/plan-reviewer.md" "$arch_model" "plan_review" "" "${THINKING_TIMEOUT:-10m}"
             ;;
 
         CONSULTATION)
@@ -1005,14 +1026,14 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             # v2.3.9: read from tick-cache (written by detect-phase.sh this cycle)
             user_tasks=$(jq -r '.[] | select(.status == "open") | select((.labels // []) | index("user-escalation")) | "\(.id): \(.title)\n  Notes: \(.notes // "none")"' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "")
 
-            # Run tech-writer-review agent if available
-            local tw_review_file=".claude/agents/tech-writer-review.md"
+            # Run manager-review agent if available
+            local tw_review_file=".claude/agents/manager-review.md"
             if [ -f "$tw_review_file" ]; then
                 local tw_prompt
                 tw_prompt=$(cat "$tw_review_file")
                 local output_file="$LOGS_DIR/user-review-$(date +%s).log"
                 local tw_model
-                tw_model=$(map_model "${MODEL_TECH_WRITER:-sonnet}")
+                tw_model=$(map_model "${MODEL_MANAGER:-${MODEL_TECH_WRITER:-sonnet}}")
 
                 local full_prompt="$tw_prompt
 
@@ -1043,7 +1064,7 @@ $user_tasks"
             # the dead PID as "testers just finished" — skipping actual test launch.
             rm -f "$CLAUDEV_DIR/run-testers.pid"
 
-            # Architect triages ALL smoke test findings before executors can grab them
+            # Architect triages ALL smoke test findings before coders can grab them
             log "INFO" "REFLEXING: Processing smoke test findings..."
 
             local arch_model
@@ -1073,7 +1094,7 @@ For each task:
    c) Needs to be split → CREATE subtasks, close original, remove smoke label
 4. ALWAYS remove 'smoke' label after processing. ALWAYS remove 'regression' label after processing."
 
-            run_agent_with_mode "architect" ".claude/agents/architect-qa.md" "$arch_model" "reflexing" "$triage_prompt" "${REFLEXING_TIMEOUT:-10m}"
+            run_agent_with_mode "architect" ".claude/agents/qa.md" "$arch_model" "reflexing" "$triage_prompt" "${REFLEXING_TIMEOUT:-10m}"
 
             # v2.3.14: Safety net — force-remove smoke/regression labels architect missed
             # Without this, leftover labels trigger another REFLEXING (2x Opus waste)
@@ -1091,15 +1112,15 @@ For each task:
             # v2.3.21: Clean stale testers PID file (covers TESTING→IMPL→TESTING path)
             rm -f "$CLAUDEV_DIR/run-testers.pid"
 
-            # Streaming: launch executors + reviewers + merge queue (all non-blocking)
+            # Streaming: launch coders + seniors + merge queue (all non-blocking)
             # Note: regression tasks are handled in REFLEXING phase before reaching here
             log "INFO" "CODING: Streaming cycle..."
 
-            ./scripts/run-executors.sh || log "ERROR" "run-executors.sh failed (exit $?)"
+            ./scripts/run-coders.sh || log "ERROR" "run-coders.sh failed (exit $?)"
 
             # v2.3.9: reviewers + merge queue read from tick-cache.json (written by detect-phase.sh)
             # No extra bd call needed — tick-cache has all in_progress tasks
-            HYPE_IN_PROGRESS_CACHE="$in_progress_cache" ./scripts/run-reviewers.sh || log "ERROR" "run-reviewers.sh failed (exit $?)"
+            HYPE_IN_PROGRESS_CACHE="$in_progress_cache" ./scripts/run-seniors.sh || log "ERROR" "run-seniors.sh failed (exit $?)"
             HYPE_IN_PROGRESS_CACHE="$in_progress_cache" ./scripts/run-merge-queue.sh || log "ERROR" "run-merge-queue.sh failed (exit $?)"
             ;;
 
@@ -1161,7 +1182,7 @@ For each task:
                 ((validating_attempt++)) || true
                 log "INFO" "VALIDATING: Starting Architect (attempt $validating_attempt/${RETRY_LIMIT:-3})..."
 
-                if run_agent_with_mode "architect" ".claude/agents/architect-qa.md" "$arch_model" "validating" "" "${VALIDATING_TIMEOUT:-15m}"; then
+                if run_agent_with_mode "architect" ".claude/agents/qa.md" "$arch_model" "validating" "" "${VALIDATING_TIMEOUT:-15m}"; then
                     # Check if architect actually completed (wrote PASSED)
                     local latest_log
                     latest_log=$(ls -t "$LOGS_DIR"/architect-*.log 2>/dev/null | head -1)
@@ -1286,7 +1307,7 @@ Then: bd dep remove <task> <dep> for one edge in each cycle" \
             local cycles_output
             cycles_output=$(bd_safe dep cycles 2>&1 || true)
             log "INFO" "Running Architect to fix cycles..."
-            run_agent_with_mode "architect" ".claude/agents/architect-ops.md" "sonnet" "fix_cycles" "CYCLES:
+            run_agent_with_mode "architect" ".claude/agents/ops.md" "sonnet" "fix_cycles" "CYCLES:
 $cycles_output"
             ;;
 
@@ -1318,11 +1339,11 @@ show_active_work() {
         echo "$in_progress_ids" | jq -e "index(\"$tid\")" >/dev/null 2>&1
     }
 
-    # Check executor logs (WORK)
-    for log_file in "$LOGS_DIR"/executor-*.log; do
+    # Check coder logs (WORK)
+    for log_file in "$LOGS_DIR"/coder-*.log; do
         [ -f "$log_file" ] || continue
         local task_id size mtime age status
-        task_id=$(basename "$log_file" .log | sed 's/executor-//')
+        task_id=$(basename "$log_file" .log | sed 's/coder-//')
 
         # Skip if task is not in_progress (using cached list, no bd show)
         is_in_progress "$task_id" || continue
@@ -1331,7 +1352,7 @@ show_active_work() {
         mtime=$(stat -f%m "$log_file" 2>/dev/null || stat -c%Y "$log_file" 2>/dev/null || echo "0")
         age=$((now - mtime))
 
-        # Only show if file was modified in last 10 minutes (active executor)
+        # Only show if file was modified in last 10 minutes (active coder)
         if [ "$age" -lt 600 ]; then
             if [ "$age" -lt "$stale_threshold" ]; then
                 status="active"
@@ -1387,8 +1408,8 @@ show_active_work() {
         fi
     done
 
-    # Check other agent logs (tech-writer, architect, manager)
-    for agent in tech-writer architect manager; do
+    # Check other agent logs (manager, architect, completion)
+    for agent in manager architect completion; do
         local log_file="$LOGS_DIR/$agent.log"
         [ -f "$log_file" ] || continue
         local size mtime age status
@@ -1538,13 +1559,13 @@ main() {
             log "INFO" "PROJECT COMPLETE"
             log "INFO" "=========================================="
 
-            # Show completion report (SPEC_REPORT.md) or fall back to architect log
+            # Show completion report (SPEC_REPORT.prev.md) or fall back to architect log
             local project_dir
             project_dir=$(pwd)
-            if [ -f "$project_dir/SPEC_REPORT.md" ]; then
+            if [ -f "$project_dir/SPEC_REPORT.prev.md" ]; then
                 echo ""
                 echo "=== ITERATION REPORT ==="
-                cat "$project_dir/SPEC_REPORT.md"
+                cat "$project_dir/SPEC_REPORT.prev.md"
                 echo "========================"
                 echo ""
             else
@@ -1602,7 +1623,7 @@ main() {
         # 8. Reset stale tasks (uses pre-dispatch cache — 600s threshold makes this safe)
         check_stale_tasks "$in_progress_cache"
 
-        # 9. Cleanup stale worktrees (orphaned from crashed executors)
+        # 9. Cleanup stale worktrees (orphaned from crashed coders)
         cleanup_stale_worktrees
 
         # 10. Pause before next iteration (adaptive delay)

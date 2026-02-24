@@ -60,7 +60,7 @@ bd show <id>                # Детали задачи
 Редактируйте `.hype/config.sh`:
 
 ```bash
-MAX_PARALLEL_EXECUTORS=3    # Параллельные Executors
+MAX_PARALLEL_CODERS=3       # Параллельные Coders
 RETRY_LIMIT=3               # Retry перед эскалацией
 TASK_TIMEOUT="10m"          # Таймаут на задачу
 ```

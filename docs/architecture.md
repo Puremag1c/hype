@@ -10,17 +10,17 @@ hype.sh (bash loop с lock file)
     ├─► detect-phase.sh → определяет текущую фазу (JSON output)
     │
     ├─► НАПРЯМУЮ вызывает по фазе:
-    │   ├─► PREPARING: Tech Writer (Opus, interactive)
-    │   ├─► PLANNING: Architect-Planner (Opus)
+    │   ├─► PREPARING: Manager (Opus, interactive)
+    │   ├─► PLANNING: Architect (Opus)
     │   ├─► ANALYZE: run-analysts.sh → Analysts (Sonnet × 5)
-    │   ├─► THINKING: Architect-Reviewer (Opus)
-    │   ├─► CODING: run-executors.sh + run-reviewers.sh + run-merge-queue.sh
+    │   ├─► THINKING: Plan-Reviewer (Opus)
+    │   ├─► CODING: run-coders.sh + run-seniors.sh + run-merge-queue.sh
     │   ├─► TESTING: run-testers.sh (background) → Testers × 6
-    │   ├─► REFLEXING: Architect-QA (Opus)
-    │   ├─► CONSULTATION: Tech-Writer-Review (Sonnet) → daemon stops
-    │   ├─► VALIDATING: Architect-QA (Opus)
+    │   ├─► REFLEXING: QA (Opus)
+    │   ├─► CONSULTATION: Manager-Review (Sonnet) → daemon stops
+    │   ├─► VALIDATING: QA (Opus)
     │   ├─► REPORTING: Completion (Opus)
-    │   └─► BLOCKED_CYCLES: Architect-Ops (Sonnet)
+    │   └─► BLOCKED_CYCLES: Ops (Sonnet)
     │
     ├─► Troubleshooter (Opus) — при blocked:troubleshoot (reject:4+)
     │
@@ -40,15 +40,15 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
 
 | Фаза | Условие перехода | Агент | Действие |
 |------|-----------------|-------|----------|
-| PREPARING | Нет SPEC.md | Tech Writer | Собирает требования от user (+ deep analysis для больших проектов) |
-| PLANNING | Есть SPEC.md | Architect-Planner | Создаёт задачи в beads |
+| PREPARING | Нет SPEC.md | Manager | Собирает требования от user (+ deep analysis для больших проектов) |
+| PLANNING | Есть SPEC.md | Architect | Создаёт задачи в beads |
 | ANALYZE | milestone:planning-done | Analysts ×5 | Параллельный аудит плана |
-| THINKING | milestone:analysts-done | Architect-Reviewer | Ревьюит добавления Analysts |
-| CODING | milestone:plan-reviewed | Executors + Auditor | Реализуют задачи + аудит |
+| THINKING | milestone:analysts-done | Plan-Reviewer | Ревьюит добавления Analysts |
+| CODING | milestone:plan-reviewed | Coders + Auditor | Реализуют задачи + аудит |
 | TESTING | все задачи closed | Testers ×6 | Параллельная проверка работоспособности |
-| REFLEXING | smoke/regression tasks найдены | Architect-QA | Триаж всех smoke test находок |
-| CONSULTATION | user-escalation label | Tech-Writer-Review | Генерирует отчёт, daemon stops |
-| VALIDATING | milestone:testing-done | Architect-QA | Проверяет целостность |
+| REFLEXING | smoke/regression tasks найдены | QA | Триаж всех smoke test находок |
+| CONSULTATION | user-escalation label | Manager-Review | Генерирует отчёт, daemon stops |
+| VALIDATING | milestone:testing-done | QA | Проверяет целостность |
 | REPORTING | milestone:validating-done | Completion (Opus) | Version bump + CHANGELOG + SPEC_REPORT + commit + push |
 | DONE | milestone:project-done | — | Проект завершён |
 
@@ -60,7 +60,7 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
 - **Задача:** Анализировать проблемы, давать рекомендации
 - **Не делает:** НЕ координирует фазы, НЕ запускает скрипты
 
-### Tech Writer (Opus)
+### Manager (Opus)
 - **Роль:** Сбор требований
 - **Задача:** Через диалог с user создать SPEC.md
 - **Особенности:** Интерактивный режим, без timeout
@@ -71,10 +71,10 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
 
 | Агент | Model | Задача |
 |-------|-------|--------|
-| architect-planner | opus | Создание плана из SPEC.md, разбивка на задачи, deps |
-| architect-reviewer | opus | Ревью добавлений от Analysts |
-| architect-qa | opus | Final review, обработка regression bugs |
-| architect-ops | sonnet | Разрешение git conflicts, dependency cycles |
+| architect | opus | Создание плана из SPEC.md, разбивка на задачи, deps |
+| plan-reviewer | opus | Ревью добавлений от Analysts |
+| qa | opus | Final review, обработка regression bugs |
+| ops | sonnet | Разрешение git conflicts, dependency cycles |
 
 **Принцип:** Opus для решений, Sonnet для механических операций.
 
@@ -88,7 +88,7 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
   - Architecture — структура кода, зависимости
 - **Правило:** Только добавляют задачи, не удаляют
 
-### Executor (по задаче)
+### Coder (по задаче)
 - **Роль:** Реализация одной задачи
 - **Модель:** Из label задачи (model:haiku/sonnet/opus)
 - **Workflow:**
@@ -97,23 +97,23 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
   3. Rebase на main
   4. Push и пометить `needs-review`
 
-### Reviewer (v2.2, parallel)
+### Senior (v2.2, parallel)
 - **Роль:** Code review (без merge)
 - **Модель:** sonnet по умолчанию, opus при reject:2+ или reject:4
-- **Управление:** `run-reviewers.sh`, до `MAX_PARALLEL_REVIEWERS` параллельно
+- **Управление:** `run-seniors.sh`, до `MAX_PARALLEL_SENIORS` параллельно
 - **Workflow:**
   1. Atomic claim: `try_claim_for_review()` (mkdir lock + label)
   2. Preflight: проверка ветки, коммитов, secret scanning (v2.2.1)
-  3. Build context: diff, commits, executor log, secrets warning
-  4. Claude review с `reviewer.md` промптом
+  3. Build context: diff, commits, coder log, secrets warning
+  4. Claude review с `senior.md` промптом
   5. Результат: approve (label) / reject (status=open) / no-merge (close)
 - **Preflight checks (v2.2.1):**
   - Проверка что ветка существует (`NO_BRANCH` → reject)
   - Проверка что есть коммиты (`NO_COMMITS` → reject)
-  - Secret scanning: grep по diff на API keys, passwords, secrets, .env → `SECRETS_WARNING` + label `secrets-warning` → reviewer решает (soft, не hard reject)
+  - Secret scanning: grep по diff на API keys, passwords, secrets, .env → `SECRETS_WARNING` + label `secrets-warning` → senior решает (soft, не hard reject)
   - Circuit breaker: если reformulated задача ломается по той же причине (`last-reject:{TYPE}` label) → `user-escalation`
 - **Timeout handling (v2.2.2):** Если Claude таймаутится (exit 124) — задача возвращается в `needs-review` БЕЗ инкремента `reject:N`. Timeout = инфраструктурная проблема, не отказ
-- **Backpressure:** Lock-based (`reviewer-N.lock`), stale cleanup >20 min
+- **Backpressure:** Lock-based (`senior-N.lock`), stale cleanup >20 min
 - **Escalation:** reject:1→retry, reject:2-3→model, reject:4→troubleshooter
 
 ### Merge Queue (v2.2 → v2.3.11, hybrid)
@@ -122,7 +122,7 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
 - **Hybrid workflow (v2.3.11):**
   1. **Fast path** (`try_fast_merge`): rebase → squash → commit → push. Бесплатно, ~5 сек
   2. **Agent fallback** (`run_merger_agent`): если fast path fails — запускает Claude merger agent (opus) с контекстом конфликта. Агент понимает diff, разрешает конфликты, мержит
-  3. **Executor fallback**: если и агент не справился — задача возвращается executor с подробными notes
+  3. **Coder fallback**: если и агент не справился — задача возвращается coder с подробными notes
   4. **Empty merge detection**: между fast path и agent — проверка diff. Если branch changes уже в main → close без agent call
 - **Hook isolation (v2.3.4):** Все git операции через `git_nh()` (`core.hooksPath=/dev/null`). Target project hooks вызывают `bd` напрямую — под нагрузкой убивают daemon
 - **Pre-flight check (v2.3.4):** Проверка `git status --porcelain` перед merge. Dirty tree → reset --hard
@@ -152,7 +152,7 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
   - REMOVE FROM SCOPE — закрыть как нерешаемую
   - ESCALATE TO USER — label `user-escalation`, daemon stops
 
-### Tech Writer Review (Sonnet)
+### Manager Review (Sonnet)
 - **Роль:** Генерация non-technical отчёта для пользователя
 - **Когда:** Фаза CONSULTATION (задачи с `user-escalation` label)
 - **Выход:** `.hype/evidence/user-review-report.md`
@@ -175,7 +175,7 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
 - **Вызывается:** `hype doctor` (интерактивно) или `hype doctor --report` (автоматически)
 - **Pre-flight:** `check_beads()` проверяет daemon через `bd daemon status` (v2.3.1). Без daemon — Doctor работает с ограниченными данными
 - **Workflow:**
-  1. `gather_context()` — 11 категорий: HYPE version, beads status, in-progress tasks, blocked tasks, current phase, running processes, git status, HYPE markers, executor worktrees, review pipeline (v2.2), recent logs
+  1. `gather_context()` — 11 категорий: HYPE version, beads status, in-progress tasks, blocked tasks, current phase, running processes, git status, HYPE markers, coder worktrees, review pipeline (v2.2), recent logs
   2. `load_knowledge()` — загружает `architecture.md` + `troubleshooting.md` как knowledge base
   3. `build_prompt()` — agent prompt + context + knowledge → Claude
   4. Claude диагностирует и создаёт doctor-log в `.hype/logs/doctor-TIMESTAMP.md`
@@ -195,8 +195,8 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
 | `hype.sh` | Главный цикл с lock file |
 | `detect-phase.sh` | Определение текущей фазы (1 bd call, всё через jq, JSON output) |
 | `run-analysts.sh` | Параллельный запуск 5 Analysts |
-| `run-executors.sh` | Параллельный запуск Executors с backpressure |
-| `run-reviewers.sh` | Параллельный запуск Reviewers с backpressure (v2.2) |
+| `run-coders.sh` | Параллельный запуск Coders с backpressure |
+| `run-seniors.sh` | Параллельный запуск Seniors с backpressure (v2.2) |
 | `run-merge-queue.sh` | Sequential merge approved задач (v2.2) |
 | `run-testers.sh` | Параллельный запуск Testers (TESTING) |
 | `common.sh` | Общие функции (bd_safe, timeout, milestones, backoff, audit detection) |
@@ -211,7 +211,7 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
 ### `.hype/config.sh`
 
 ```bash
-MAX_PARALLEL_EXECUTORS=3    # Лимит параллельных Executors
+MAX_PARALLEL_CODERS=3    # Лимит параллельных Coders
 RETRY_LIMIT=3               # Retry до эскалации к Architect
 TASK_TIMEOUT="10m"          # Таймаут на задачу
 WORKTREE_STALE_TIMEOUT=900  # Секунды до удаления stale worktree
@@ -314,9 +314,9 @@ bd daemon start
 ### Статусы задач
 
 - `open` — задача создана, ждёт исполнителя
-- `in_progress` — Executor работает
-- `in_progress` + `needs-review` — ждёт Reviewer (v2.2)
-- `in_progress` + `reviewing` — Reviewer работает (v2.2)
+- `in_progress` — Coder работает
+- `in_progress` + `needs-review` — ждёт Senior (v2.2)
+- `in_progress` + `reviewing` — Senior работает (v2.2)
 - `in_progress` + `approved` — ждёт Merge Queue (v2.2)
 - `closed` — завершено
 
@@ -326,20 +326,20 @@ bd daemon start
 - `added-by:analyst-*` — кто добавил задачу
 - `milestone:*` — маркер завершения фазы
 - `retry:N` — счётчик timeout/failure при execution
-- `reject:N` — счётчик отказов code review (escalation ladder: 1→retry, 2-3→escalate model, 4→troubleshooter). Только для quality rejections от Reviewer
+- `reject:N` — счётчик отказов code review (escalation ladder: 1→retry, 2-3→escalate model, 4→troubleshooter). Только для quality rejections от Senior
 - `merge-conflict:N` — (убран в v2.3.11). Заменён hybrid merge queue: fast script path + merger agent fallback. Нет больше 6-retry loop
 - `regress:N` — счётчик regression cycles (script-driven)
 - `smoke` — баг из TESTING, ждёт тriage от Architect
 - `regression` — баг который вернулся после fix
 - `reformulated` — задача переформулирована Troubleshooter (макс 2 раза)
 - `user-escalation` — требует решения пользователя (trigger CONSULTATION)
-- `reviewing` — Reviewer работает над этой задачей (v2.2)
+- `reviewing` — Senior работает над этой задачей (v2.2)
 - `approved` — задача одобрена, ждёт merge queue (v2.2)
 - `reviewed` — задача замержена и закрыта (v2.2)
 - `blocked:troubleshoot` — исчерпан escalation ladder, ждёт Troubleshooter
 - `blocked:*` — прочие причины блокировки
-- `trigger` — системная задача-координатор (run-analyst-*, run-tester-*, milestone:*). Исключена из executor/reviewer/merge/heal/reset. Автоматически закрывается после запуска агента
-- `secrets-warning` — preflight нашёл credential-like patterns в diff. Reviewer решает: реальный секрет = REJECT, тестовые данные = proceed
+- `trigger` — системная задача-координатор (run-analyst-*, run-tester-*, milestone:*). Исключена из coder/senior/merge/heal/reset. Автоматически закрывается после запуска агента
+- `secrets-warning` — preflight нашёл credential-like patterns в diff. Senior решает: реальный секрет = REJECT, тестовые данные = proceed
 - `last-reject:{TYPE}` — причина последнего reject для circuit breaker (cross-cycle detection, v2.2.1)
 
 ### Trigger Tasks
@@ -350,8 +350,8 @@ bd daemon start
 - **Примеры:** `run-analyst-ux`, `run-tester-functional`, `milestone:analysts-done`
 - **Lifecycle:** create → claim → agent runs → auto-close
 - **Исключены из (v2.2.1):**
-  - `get_ready_tasks()` — executors не берут trigger'ы
-  - `get_review_tasks()` — reviewers не ревьюят trigger'ы
+  - `get_ready_tasks()` — coders не берут trigger'ы
+  - `get_review_tasks()` — seniors не ревьюят trigger'ы
   - `get_approved_tasks()` — merge queue не мержит trigger'ы
   - `heal_stuck_tasks()` — healing не трогает trigger'ы
   - `reset_stale_tasks()` — stale reset не сбрасывает trigger'ы
@@ -381,17 +381,17 @@ bd dep cycles  # Проверка циклов
 
 ### Startup health check (v2.2.2)
 - Проверяет наличие и executable права для всех критичных скриптов:
-  - `detect-phase.sh`, `run-executors.sh`, `run-analysts.sh`, `run-reviewers.sh`, `run-merge-queue.sh`
+  - `detect-phase.sh`, `run-coders.sh`, `run-analysts.sh`, `run-seniors.sh`, `run-merge-queue.sh`
 - При отсутствии любого — fatal error, daemon не стартует
-- Предотвращает silent failure: без проверки executors работали бы, но review pipeline молча бы не запустился
+- Предотвращает silent failure: без проверки coders работали бы, но review pipeline молча бы не запустился
 
 ### Self-healing (heal_stuck_tasks)
 - Запускается в каждой итерации main loop
-- Находит `in_progress` задачи без `executor` и `needs-review` labels
+- Находит `in_progress` задачи без `coder` и `needs-review` labels
 - Если задача stuck >2 минут → автоматически добавляет `needs-review`
-- Закрывает gap когда executor завершился но label не поставился (beads sync race)
-- **v2.2:** Reviewing healing — задачи с `reviewing` >3 мин без reviewer lock → возврат в `needs-review`
-- **v2.2.1:** Approved recovery — задачи с `approved` >5 мин → лог предупреждение; >10 мин → remove approved, increment reject:N, return to executor
+- Закрывает gap когда coder завершился но label не поставился (beads sync race)
+- **v2.2:** Reviewing healing — задачи с `reviewing` >3 мин без senior lock → возврат в `needs-review`
+- **v2.2.1:** Approved recovery — задачи с `approved` >5 мин → лог предупреждение; >10 мин → remove approved, increment reject:N, return to coder
 - **Исключения:** trigger, reviewing (пока есть lock), approved (до 10 мин), user-escalation
 
 ### Startup cleanup (v2.2.5+)
@@ -421,14 +421,14 @@ bd dep cycles  # Проверка циклов
 
 ### Retry & escalation logic
 - Execution failures: `retry:N` (timeout, crash)
-- Review rejections: `reject:N` — только code quality отказы от Reviewer
-- Merge conflicts (v2.3.11): fast script merge → agent fallback → executor. Нет counter loop — один умный attempt агентом вместо 6 слепых retry
+- Review rejections: `reject:N` — только code quality отказы от Senior
+- Merge conflicts (v2.3.11): fast script merge → agent fallback → coder. Нет counter loop — один умный attempt агентом вместо 6 слепых retry
 - Escalation ladder (reject:N): 1→retry, 2-3→escalate model (haiku→sonnet→opus), 4→Troubleshooter
 - Troubleshooter: reformulate / split / remove / escalate to user
 - Max 2 reformulations (label `reformulated`), then only reduce/remove/user
 
 ### Needs-review retry
-- При завершении executor — 3 попытки с 2s delay для `--add-label=needs-review`
+- При завершении coder — 3 попытки с 2s delay для `--add-label=needs-review`
 - Если все 3 fail → логирует ERROR, self-healing подхватит через 2 минуты
 
 ### Graceful shutdown
@@ -446,22 +446,22 @@ bd dep cycles  # Проверка циклов
 ```
 main
   │
-  ├── task/beads-abc  ← Executor 1
-  ├── task/beads-def  ← Executor 2
-  └── task/beads-ghi  ← Executor 3
+  ├── task/beads-abc  ← Coder 1
+  ├── task/beads-def  ← Coder 2
+  └── task/beads-ghi  ← Coder 3
 ```
 
-1. Executor создаёт ветку от main
+1. Coder создаёт ветку от main
 2. Работает, коммитит
 3. Rebase на main (при конфликте — эскалация)
 4. Push с `--force-with-lease`, добавляет `needs-review`
-5. Reviewer проверяет diff (parallel, v2.2) → approve / reject
+5. Senior проверяет diff (parallel, v2.2) → approve / reject
 6. Merge Queue мержит approved задачи (sequential, v2.2)
 
 ## Backpressure
 
-- Лимит = `MAX_PARALLEL_EXECUTORS`
-- Считаем через lock files в `.hype-worktrees/executor-N.lock` (не beads labels — labels ненадёжны из-за sync lag)
+- Лимит = `MAX_PARALLEL_CODERS`
+- Считаем через lock files в `.hype-worktrees/coder-N.lock` (не beads labels — labels ненадёжны из-за sync lag)
 - Lock создаётся при `find_free_slot()` (mkdir atomic), удаляется при `cleanup_worktree()`
 - Работает без GitHub
 

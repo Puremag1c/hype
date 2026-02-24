@@ -91,17 +91,17 @@ load '../helpers/setup'
 # =============================================================================
 
 @test "cleanup_worktree: git worktree remove has timeout" {
-    local executors_sh="$SCRIPTS_DIR/run-executors.sh"
+    local coders_sh="$SCRIPTS_DIR/run-coders.sh"
 
     # Should use timeout command
-    grep -q 'timeout.*git worktree remove' "$executors_sh"
+    grep -q 'timeout.*git worktree remove' "$coders_sh"
 }
 
 @test "cleanup_worktree: falls back to rm -rf on timeout" {
-    local executors_sh="$SCRIPTS_DIR/run-executors.sh"
+    local coders_sh="$SCRIPTS_DIR/run-coders.sh"
 
     # Pattern: timeout Ns git worktree remove ... || rm -rf
-    grep -q 'timeout.*git worktree remove.*|| rm -rf' "$executors_sh"
+    grep -q 'timeout.*git worktree remove.*|| rm -rf' "$coders_sh"
 }
 
 # =============================================================================

@@ -1,5 +1,5 @@
 ---
-name: architect-troubleshooter
+name: troubleshooter
 description: Resolves persistent failures that exhausted the normal escalation ladder
 model: opus
 ---

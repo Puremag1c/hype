@@ -1,5 +1,5 @@
 ---
-name: architect-ops
+name: ops
 description: Разрешает конфликты и циклические зависимости
 model: sonnet
 ---

@@ -487,7 +487,7 @@ EOF
             fi
             ;;
         empty)
-            info "Empty project - Tech Writer will gather requirements"
+            info "Empty project - Manager will gather requirements"
             ;;
     esac
 
@@ -577,17 +577,17 @@ cmd_status() {
 
     echo ""
 
-    # Active executors and pending reviews
+    # Active coders and pending reviews
     if command -v bd &>/dev/null && [[ -d ".beads" ]]; then
         local in_progress
         in_progress=$(bd list --status=in_progress --json --limit 0 2>/dev/null || echo "[]")
 
-        # Active executors (have executor label)
-        local executors
-        executors=$(echo "$in_progress" | jq -r '.[] | select(.labels | index("executor")) | "\(.id)|\(.title)|\(.updated_at)"' 2>/dev/null || true)
+        # Active coders (have coder label)
+        local coders
+        coders=$(echo "$in_progress" | jq -r '.[] | select(.labels | index("coder")) | "\(.id)|\(.title)|\(.updated_at)"' 2>/dev/null || true)
 
-        if [[ -n "$executors" ]]; then
-            echo "Active executors:"
+        if [[ -n "$coders" ]]; then
+            echo "Active coders:"
             local now_epoch
             now_epoch=$(date +%s)
             while IFS='|' read -r task_id title updated_at; do
@@ -606,14 +606,14 @@ cmd_status() {
                 fi
                 # Truncate title
                 title="${title:0:35}"
-                printf "  %-12s %-37s %8s  logs/executor-%s.log\n" "$task_id" "\"$title\"" "$duration_str" "$task_id"
-            done <<< "$executors"
+                printf "  %-12s %-37s %8s  logs/coder-%s.log\n" "$task_id" "\"$title\"" "$duration_str" "$task_id"
+            done <<< "$coders"
             echo ""
         fi
 
-        # Pending reviews (have needs-review label, no executor label)
+        # Pending reviews (have needs-review label, no coder label)
         local reviews
-        reviews=$(echo "$in_progress" | jq -r '.[] | select((.labels // [] | index("needs-review")) and ((.labels // [] | index("executor")) | not)) | "\(.id)|\(.title)"' 2>/dev/null || true)
+        reviews=$(echo "$in_progress" | jq -r '.[] | select((.labels // [] | index("needs-review")) and ((.labels // [] | index("coder")) | not)) | "\(.id)|\(.title)"' 2>/dev/null || true)
 
         if [[ -n "$reviews" ]]; then
             echo "Pending reviews:"
@@ -1228,11 +1228,11 @@ cmd_reset_phase() {
         echo "Usage: hype reset-phase <PHASE>"
         echo ""
         echo "Available phases:"
-        echo "  PREPARING    - Start fresh (Tech Writer)"
+        echo "  PREPARING    - Start fresh (Manager)"
         echo "  PLANNING     - Architect creates plan"
         echo "  ANALYZE      - Analysts run"
         echo "  THINKING     - Architect reviews analysts"
-        echo "  CODING       - Executors work on tasks"
+        echo "  CODING       - Coders work on tasks"
         echo "  TESTING      - Testers verify product"
         echo "  VALIDATING   - Architect final review"
         echo "  REPORTING    - Version bump + changelog + report"
@@ -1273,7 +1273,7 @@ cmd_reset_phase() {
     # Delete milestones AFTER target phase, create milestones BEFORE target phase
     case "$target_phase" in
         PREPARING)
-            # Remove SPEC to trigger Tech Writer
+            # Remove SPEC to trigger Manager
             if [[ -f "SPEC.md" ]]; then
                 warn "Moving SPEC.md to SPEC.md.bak"
                 mv SPEC.md SPEC.md.bak
@@ -1418,7 +1418,7 @@ cmd_stop() {
     success "HYPE stopped"
 
     # Kill ALL claude processes for this project
-    info "Stopping all executor processes..."
+    info "Stopping all coder processes..."
     pkill -9 -f "claude --model" 2>/dev/null || true
     success "All processes stopped"
 }
@@ -1468,7 +1468,7 @@ cmd_help() {
     echo "Commands:"
     echo "  init         Initialize project and start HYPE"
     echo "  start        Start HYPE (project must be initialized)"
-    echo "  stop         Stop HYPE (executors continue running)"
+    echo "  stop         Stop HYPE (coders continue running)"
     echo "  status       Show project and HYPE status"
     echo "  doctor       Diagnose HYPE problems (creates doctor-log)"
     echo "               --report   Non-interactive mode"

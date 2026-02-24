@@ -5,16 +5,16 @@
 load '../helpers/setup'
 
 # =============================================================================
-# CODING phase: calls run-reviewers.sh + run-merge-queue.sh
+# CODING phase: calls run-seniors.sh + run-merge-queue.sh
 # =============================================================================
 
-@test "hype: CODING calls run-reviewers.sh" {
+@test "hype: CODING calls run-seniors.sh" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
     local impl_block
     impl_block=$(sed -n '/CODING)/,/;;/p' "$hype_sh")
 
-    echo "$impl_block" | grep -q 'run-reviewers.sh'
+    echo "$impl_block" | grep -q 'run-seniors.sh'
 }
 
 @test "hype: CODING calls run-merge-queue.sh" {
@@ -26,13 +26,13 @@ load '../helpers/setup'
     echo "$impl_block" | grep -q 'run-merge-queue.sh'
 }
 
-@test "hype: CODING does NOT call run-senior-executor.sh" {
+@test "hype: CODING does NOT call run-senior-coder.sh" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
     local impl_block
     impl_block=$(sed -n '/CODING)/,/;;/p' "$hype_sh")
 
-    ! echo "$impl_block" | grep -q 'run-senior-executor.sh'
+    ! echo "$impl_block" | grep -q 'run-senior-coder.sh'
 }
 
 # =============================================================================
@@ -115,14 +115,14 @@ load '../helpers/setup'
     echo "$heal_block" | grep -q 'merge queue may be stuck'
 }
 
-@test "heal: recovers approved tasks stuck >10min (returns to executor)" {
+@test "heal: recovers approved tasks stuck >10min (returns to coder)" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
     local heal_block
     heal_block=$(sed -n '/^heal_stuck_tasks()/,/^}/p' "$hype_sh")
 
-    # Should return to executor on recovery threshold
-    echo "$heal_block" | grep -q 'returning to executor'
+    # Should return to coder on recovery threshold
+    echo "$heal_block" | grep -q 'returning to coder'
     # Should increment reject:N
     echo "$heal_block" | grep -q 'set_counter_label'
     # Should remove approved and set status=open
@@ -160,10 +160,10 @@ load '../helpers/setup'
 # health check: v2.2 scripts included
 # =============================================================================
 
-@test "hype: health check includes run-reviewers.sh" {
+@test "hype: health check includes run-seniors.sh" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 
-    grep 'required_scripts=' "$hype_sh" | grep -q 'run-reviewers.sh'
+    grep 'required_scripts=' "$hype_sh" | grep -q 'run-seniors.sh'
 }
 
 @test "hype: health check includes run-merge-queue.sh" {
@@ -177,7 +177,7 @@ load '../helpers/setup'
 # =============================================================================
 
 @test "reviewers: timeout returns to queue without reject increment" {
-    local reviewers_sh="$SCRIPTS_DIR/run-reviewers.sh"
+    local reviewers_sh="$SCRIPTS_DIR/run-seniors.sh"
 
     # Timeout handler should exist and return to needs-review
     local timeout_block

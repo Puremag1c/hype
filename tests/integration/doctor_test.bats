@@ -81,16 +81,16 @@ teardown() {
     [[ "$orphaned" -gt 0 ]]
 }
 
-@test "Doctor: executor label on non-in_progress is orphan" {
+@test "Doctor: coder label on non-in_progress is orphan" {
     cd "$TEST_TMPDIR"
-    local id=$(bd create --title="Orphan executor" --type=task --labels="executor" 2>&1 | grep "Created issue:" | sed 's/.*Created issue: //' | awk '{print $1}')
+    local id=$(bd create --title="Orphan coder" --type=task --labels="coder" 2>&1 | grep "Created issue:" | sed 's/.*Created issue: //' | awk '{print $1}')
 
-    # Task is open but has executor label (orphaned)
+    # Task is open but has coder label (orphaned)
     local status=$(bd show "$id" --json 2>/dev/null | jq -r '.[0].status')
-    local has_executor=$(bd show "$id" --json 2>/dev/null | jq -r '.[0].labels | index("executor") != null')
+    local has_coder=$(bd show "$id" --json 2>/dev/null | jq -r '.[0].labels | index("coder") != null')
 
     [[ "$status" == "open" ]]
-    [[ "$has_executor" == "true" ]]
+    [[ "$has_coder" == "true" ]]
 }
 
 # =============================================================================
@@ -211,12 +211,12 @@ EOF
 # Known Issue Patterns (from troubleshooting.md)
 # =============================================================================
 
-@test "Doctor: pattern match for stuck executor" {
-    # Pattern: in_progress + executor label + old updated_at
-    local task_json='[{"id":"t1","status":"in_progress","labels":["executor"],"updated_at":"2026-02-05T10:00:00Z"}]'
+@test "Doctor: pattern match for stuck coder" {
+    # Pattern: in_progress + coder label + old updated_at
+    local task_json='[{"id":"t1","status":"in_progress","labels":["coder"],"updated_at":"2026-02-05T10:00:00Z"}]'
 
     # Check pattern
-    local is_stuck=$(echo "$task_json" | jq '.[0].status == "in_progress" and (.[0].labels | index("executor") != null)')
+    local is_stuck=$(echo "$task_json" | jq '.[0].status == "in_progress" and (.[0].labels | index("coder") != null)')
 
     [[ "$is_stuck" == "true" ]]
 }

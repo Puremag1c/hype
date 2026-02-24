@@ -6,7 +6,7 @@
 # Flow: approved task → try_fast_merge (rebase+squash+push)
 #       → success → close → done
 #       → fail → merger agent resolves conflicts → close → done
-#       → agent fail → return to executor
+#       → agent fail → return to coder
 #
 # Audit tasks: close without merge (no branch).
 #
@@ -320,8 +320,8 @@ merge_task() {
         return 0
     fi
 
-    # === Step 4: Agent failed — return to executor ===
-    log "WARN" "Merger agent failed for $task_id — returning to executor"
+    # === Step 4: Agent failed — return to coder ===
+    log "WARN" "Merger agent failed for $task_id — returning to coder"
     # Clean state in case agent left dirty tree
     git_nh checkout "$main_ref" 2>/dev/null || true
     git_nh reset --hard "origin/$main_ref" 2>/dev/null || true

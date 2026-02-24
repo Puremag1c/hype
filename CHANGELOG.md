@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.4.4] - 2026-02-24
+
+### Fixed
+
+- **Stale agent names in 14 prompt locations** — Agent prompts still referenced old names (Executor, Senior Executor, Tech Writer, Architect Reviewer) after v2.4.2 rename. Coder saw "Senior Executor" in its own instructions, analysts referenced "Executor", senior saw "Executor log". All 14 references updated to new names (Coder, Senior, Manager, Plan Reviewer).
+
+- **Incomplete phase table in CLAUDE.template.md** — Template for new projects listed only 6 phases, missing TESTING, REFLEXING, CONSULTATION, REPORTING. Also had old agent names (Executors, Senior Executor, Tech Writer) in architecture diagram.
+
+- 335 tests (no regressions).
+
+---
+
 ## [2.4.3] - 2026-02-24
 
 ### Fixed

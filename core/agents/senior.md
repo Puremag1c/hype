@@ -39,7 +39,7 @@ model: sonnet  # tiered: reject:2+ → opus
 - Task title и done_when criteria
 - Commits (что сделано)
 - Diff (что изменилось)
-- Executor log (как делалось)
+- Coder log (как делалось)
 
 ### 2. Код ревью
 

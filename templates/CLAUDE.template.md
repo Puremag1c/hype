@@ -13,11 +13,11 @@ hype.sh (bash loop)
             ├─► Запускает агентов
             │
             └─► Агенты:
-                ├─► Tech Writer (Opus) — собирает требования
+                ├─► Manager (Opus) — собирает требования
                 ├─► Architect (Opus) — план, задачи, dependencies
                 ├─► Analysts (Sonnet × 5) — аудит плана
-                ├─► Executors (по задаче) — реализация
-                └─► Senior Executor (Opus) — ревью, merge
+                ├─► Coders (по задаче) — реализация
+                └─► Senior (Opus) — ревью, merge
 ```
 
 ## Запуск
@@ -35,12 +35,16 @@ tail -f logs/hype.log
 
 | Фаза | Описание |
 |------|----------|
-| PREPARING | Нет SPEC.md → Tech Writer собирает требования |
+| PREPARING | Нет SPEC.md → Manager собирает требования |
 | PLANNING | Architect создаёт план из SPEC.md |
 | ANALYZE | 5 Analysts аудитят план параллельно |
 | THINKING | Architect ревьюит добавления Analysts |
-| CODING | Executors реализуют задачи |
+| CODING | Coders реализуют задачи |
+| TESTING | Testers проверяют smoke-тесты |
+| REFLEXING | Architect триажит результаты тестов |
+| CONSULTATION | Manager эскалирует вопросы пользователю |
 | VALIDATING | Architect проверяет целостность |
+| REPORTING | Completion Agent генерирует отчёт |
 | DONE | Проект завершён |
 
 ## Полезные команды

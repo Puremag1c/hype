@@ -73,7 +73,7 @@ bd close $TRIGGER_TASK --reason="UX analysis complete, added N tasks"
 
 ## Code vs Audit задачи
 
-**По умолчанию все задачи — code tasks** (Executor пишет код).
+**По умолчанию все задачи — code tasks** (Coder пишет код).
 
 **Для audit задачи** (только анализ, без изменения кода) добавь label `audit`:
 

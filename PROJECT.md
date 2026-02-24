@@ -6,7 +6,7 @@
 
 Запустите `hype init` в любом проекте, опишите что хотите словами — система сама создаст план, распределит задачи между агентами и выдаст готовый результат.
 
-**Версия:** 2.4.5
+**Версия:** 2.5.0
 
 ## Целевая аудитория
 
@@ -71,7 +71,7 @@ hype/
 PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALIDATING → REPORTING → DONE
                                               ↑                 ↓
                                               └── REFLEXING ←┘ (smoke/regression tasks)
-                                         CONSULTATION ← (user-escalation → daemon stops)
+                                         CONSULTATION ← (user-escalation → hype stops)
 ```
 
 | Фаза | Агент | Что происходит |
@@ -83,7 +83,7 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
 | CODING | Coders + Seniors + Merge Queue | Параллельная реализация + review + merge (v2.2) |
 | TESTING | Testers ×6 | Параллельная проверка (по типу проекта) |
 | REFLEXING | QA | Триаж smoke test находок (smoke + regression) |
-| CONSULTATION | Manager-Review | Отчёт для пользователя, daemon stops |
+| CONSULTATION | Manager-Review | Отчёт для пользователя, hype stops |
 | VALIDATING | QA | Проверка целостности |
 | REPORTING | Completion (Opus) | Version bump + CHANGELOG + SPEC_REPORT + commit + push |
 | DONE | — | Проект завершён |
@@ -117,7 +117,7 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
 - **Bash вызывает bash** — механика в скриптах, LLM только для решений
 - **Beads как источник правды** — всё состояние в задачах, не в файлах
 - **Атомарные операции** — lock file через `set -C`, claim через `bd update --claim`
-- **Fail fast** — daemon down = stop, не продолжаем без sync
+- **Fail fast** — bd backend down = stop, не продолжаем без данных
 
 ### Агенты
 - **Изоляция** — каждый агент работает со своими данными

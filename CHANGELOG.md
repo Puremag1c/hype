@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.5.0] - 2026-02-24
+
+### Changed (Beads Dolt migration)
+
+- **bd_safe rewrite** — Removed dead daemon explosion check (pgrep/pkill), daemon start/restart recovery. Health probe now uses `bd list --limit 1`. Auto-retry covers `set-state` alongside update/close/create.
+
+- **bd sync removal** — Removed all `bd_safe sync` calls (no-op since Dolt v0.51). `detect-phase.sh` recovery replaced `bd sync --import-only` with simple retry+sleep. Dolt auto-commits natively.
+
+- **12 jq pipelines → bd query/count** — Server-side filtering replaces client-side jq for label, title, and status filters. `bd count --status=open` replaces `bd list --json | jq 'length'`. Tick-cache reads intentionally kept (300x faster than per-query calls).
+
+- **Atomic set-state for counters/models** — `clean_model_label` and `set_counter_label` now use `bd set-state` (1 atomic call with audit trail vs 3+ separate bd calls). Review pipeline labels (`needs-review`, `reviewing`, `approved`) intentionally kept as `--add-label/--remove-label` (already atomic in single `bd update`).
+
+- **Agent prompts** — `doctor.md`: removed `bd daemon status/restart`, `bd sync --status`. Replaced with `bd doctor`, `bd info`, `bd admin cleanup`.
+
+- **.beads/ cleanup** — Removed daemon artifacts (pid, lock, sock, log files). `check_beads` → `bd list` probe. `ensure_single_daemon` → no-op stub.
+
+- **Documentation** — PROJECT.md, VERSION updated. Daemon references removed.
+
+- 346 tests (3 new: bd query --limit 0 coverage, set-state patterns).
+
+---
+
 ## [2.4.5] - 2026-02-24
 
 ### Fixed

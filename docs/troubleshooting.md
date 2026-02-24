@@ -6,97 +6,40 @@
 
 ## Beads проблемы
 
-### PROBLEM: Beads daemon frozen
+> **v2.5+ (beads v0.55+):** Daemon удалён в v0.50, sync — no-op в v0.51. Beads использует Dolt embedded.
+> Проблемы daemon frozen/zombie/explosion больше невозможны.
+
+### PROBLEM: bd commands timeout/hang
 
 **Симптомы:**
 - Команды `bd` зависают на 30+ секунд
-- `bd sync --status` не отвечает (или отвечает через SQLite fallback — ложный "ок")
-- В логах: timeout на bd операциях
+- В логах: "bd command timeout" или "bd backend unhealthy"
 
 **Причина:**
-Daemon завис или SQLite lock не освободился.
+Dolt embedded может зависнуть при повреждённой базе или lock contention.
 
 **Диагностика:**
 ```bash
-bd daemon status                # v2.3.1+: проверяет daemon напрямую. "running" = здоров
-timeout 5s bd sync --status     # ВНИМАНИЕ: может работать через SQLite fallback с мёртвым daemon!
-pgrep -f "bd daemon"
-ls -la .beads/daemon.*
+bd doctor                       # Встроенная диагностика
+timeout 5s bd list --limit 1    # Простой health check
+ls -la /tmp/hype-bd.lock.d      # Проверить stale lock
 ```
 
-**Решение (runtime-fix):**
+**Решение:**
 ```bash
-bd daemon restart .
+# 1. Убрать stale lock (если HYPE не запущен)
+rmdir /tmp/hype-bd.lock.d 2>/dev/null
+
+# 2. Проверить базу
+bd admin cleanup --force
+
+# 3. Если ничего не помогает — пересоздать
+rm -rf .beads/*.db
+bd create --title="test" && bd close $(bd list --json | jq -r '.[0].id')
 ```
 
-**Решение (если restart не помогает):**
-```bash
-pkill -9 -f "bd daemon"
-rm -f .beads/daemon.*
-bd daemon start
-```
-
-**Auto-recovery (v2.3.1+):**
-`check_beads()` в hype.sh использует `bd daemon status` (не `bd sync --status` который имеет SQLite fallback). 3 попытки soft restart → hard kill по PID из `.beads/daemon.pid` → очистка stale файлов → fresh start.
-
----
-
-### PROBLEM: Beads daemon zombie (alive but socket gone)
-
-**Симптомы:**
-- `bd list` показывает "Daemon took too long to start (>5s). Running in direct mode."
-- `bd daemon restart` не помогает (лог: "daemon already running (lock held), exiting")
-- `ps aux | grep bd` показывает живой процесс
-- `.beads/daemon.sock` отсутствует
-
-**Причина:**
-Daemon вошёл в feedback loop: import→export→file-change→import. При большом JSONL (много задач/tombstones) loop ускоряется, daemon перегружается, socket теряется. Процесс живой, lock держит, но команды не принимает.
-
-**Диагностика:**
-```bash
-ls -la .beads/daemon.sock    # отсутствует
-cat .beads/daemon.pid        # PID жив
-kill -0 $(cat .beads/daemon.pid) && echo "zombie"
-```
-
-**Решение (ручное):**
-```bash
-kill $(cat .beads/daemon.pid)
-rm -f .beads/daemon.lock .beads/daemon.pid
-bd daemon start --log-level warn
-```
-
-**Auto-recovery (v2.3.1+):**
-`check_beads()` использует `bd daemon status` (различает живой daemon от SQLite fallback) → `hard_kill_beads_daemon()` автоматически: читает PID, проверяет что это bd процесс, kill, cleanup, restart. Также `flush-debounce: "15s"` в config.yaml предотвращает feedback loop. При старте `ensure_single_daemon()` убивает лишние процессы.
-
----
-
-### PROBLEM: Beads daemon explosion (270+ processes)
-
-**Симптомы:**
-- `pgrep -c bd` показывает 100+ процессов
-- Система тормозит
-- Логи: много "socket busy" или connection errors
-
-**Причина:**
-Параллельные bd вызовы перегружают socket daemon'а. Каждый считает что daemon мёртв и спавнит новый.
-
-**Диагностика:**
-```bash
-pgrep -c bd
-ps aux | grep "bd daemon" | wc -l
-```
-
-**Решение (runtime-fix):**
-```bash
-# Убить все bd процессы
-pkill -9 bd
-rm -f .beads/daemon.*
-bd daemon start
-```
-
-**Решение (permanent):**
-HYPE 2.0.14+ использует `bd_safe()` с сериализацией через mkdir-lock. Все bd вызовы выполняются последовательно. Порог explosion detection снижен с 30 до 5 (v2.3.1). При старте `ensure_single_daemon()` проверяет и убивает лишние bd процессы.
+**Auto-recovery (v2.5+):**
+`check_beads()` в common.sh использует `bd list --limit 1` probe. 3 попытки с 2s pause. `bd_safe()` auto-retry для write operations (update, close, create, set-state).
 
 ---
 
@@ -592,15 +535,15 @@ Reopen path "closed but main unchanged" был единственным code pat
 **Fixed in:** 2.1.5
 
 **Симптомы:**
-- Beads daemon медленный (>5s на запрос)
+- Beads backend медленный (>5s на запрос)
 - CPU высокий от bd процессов
 - В логах: много rapid-fire bd calls
 
 **Причина:**
-Cascading failure: backpressure bug (always 0) → infinite claim loop → daemon перегружен → slow responses → timeout/retry → ещё больше нагрузки.
+Cascading failure: backpressure bug (always 0) → infinite claim loop → backend перегружен → slow responses → timeout/retry → ещё больше нагрузки.
 
 **Решение:**
-Обновиться до 2.1.5+. Root cause (backpressure) исправлен. Дополнительно: adaptive backoff удваивает iteration delay при slow daemon (>2s), cap 60s. detect-phase.sh оптимизирован с 2 bd calls до 1.
+Обновиться до 2.1.5+. Root cause (backpressure) исправлен. Дополнительно: adaptive backoff удваивает iteration delay при slow backend (>2s), cap 60s. detect-phase.sh оптимизирован с 2 bd calls до 1.
 
 ---
 
@@ -806,9 +749,9 @@ bd update <milestone-id> --remove-label=milestone:analysts-done
 
 ## TESTING проблемы
 
-### PROBLEM: Testers not running (bd daemon frozen during TESTING)
+### PROBLEM: Testers not running (bd frozen during TESTING)
 
-**Fixed in:** 2.2.6
+**Fixed in:** 2.2.6 (daemon issues eliminated in v2.5 with Dolt backend)
 
 **Симптомы:**
 - `TESTING: testers running (PID X)` в логах, но тестеры не работают
@@ -960,15 +903,15 @@ bd close <id> --reason="Manual: removed from scope"
 
 ---
 
-### PROBLEM: CONSULTATION phase — daemon stopped
+### PROBLEM: CONSULTATION phase — hype stopped
 
 **Симптомы:**
 - Фаза `CONSULTATION`
-- HYPE daemon останавливается с сообщением "Daemon stopping"
+- HYPE останавливается с сообщением о user escalation
 - Задачи с `user-escalation` label
 
 **Причина:**
-Troubleshooter решил что задача требует решения пользователя (label `user-escalation`). Это штатное поведение — daemon останавливается чтобы пользователь принял решение.
+Troubleshooter решил что задача требует решения пользователя (label `user-escalation`). Это штатное поведение — HYPE останавливается чтобы пользователь принял решение.
 
 **Диагностика:**
 ```bash

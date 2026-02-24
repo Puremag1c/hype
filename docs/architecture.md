@@ -17,7 +17,7 @@ hype.sh (bash loop с lock file)
     │   ├─► CODING: run-coders.sh + run-seniors.sh + run-merge-queue.sh
     │   ├─► TESTING: run-testers.sh (background) → Testers × 6
     │   ├─► REFLEXING: QA (Opus)
-    │   ├─► CONSULTATION: Manager-Review (Sonnet) → daemon stops
+    │   ├─► CONSULTATION: Manager-Review (Sonnet) → hype stops
     │   ├─► VALIDATING: QA (Opus)
     │   ├─► REPORTING: Completion (Opus)
     │   └─► BLOCKED_CYCLES: Ops (Sonnet)
@@ -35,7 +35,7 @@ hype.sh (bash loop с lock file)
 PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALIDATING → REPORTING → DONE
                                               ↑                  ↓
                                               └── REFLEXING ←─┘ (smoke/regression tasks)
-                                         CONSULTATION ← (user-escalation label → daemon stops)
+                                         CONSULTATION ← (user-escalation label → hype stops)
 ```
 
 | Фаза | Условие перехода | Агент | Действие |
@@ -47,7 +47,7 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
 | CODING | milestone:plan-reviewed | Coders + Auditor | Реализуют задачи + аудит |
 | TESTING | все задачи closed | Testers ×6 | Параллельная проверка работоспособности |
 | REFLEXING | smoke/regression tasks найдены | QA | Триаж всех smoke test находок |
-| CONSULTATION | user-escalation label | Manager-Review | Генерирует отчёт, daemon stops |
+| CONSULTATION | user-escalation label | Manager-Review | Генерирует отчёт, hype stops |
 | VALIDATING | milestone:testing-done | QA | Проверяет целостность |
 | REPORTING | milestone:validating-done | Completion (Opus) | Version bump + CHANGELOG + SPEC_REPORT + commit + push |
 | DONE | milestone:project-done | — | Проект завершён |
@@ -124,7 +124,7 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
   2. **Agent fallback** (`run_merger_agent`): если fast path fails — запускает Claude merger agent (opus) с контекстом конфликта. Агент понимает diff, разрешает конфликты, мержит
   3. **Coder fallback**: если и агент не справился — задача возвращается coder с подробными notes
   4. **Empty merge detection**: между fast path и agent — проверка diff. Если branch changes уже в main → close без agent call
-- **Hook isolation (v2.3.4):** Все git операции через `git_nh()` (`core.hooksPath=/dev/null`). Target project hooks вызывают `bd` напрямую — под нагрузкой убивают daemon
+- **Hook isolation (v2.3.4):** Все git операции через `git_nh()` (`core.hooksPath=/dev/null`). Target project hooks вызывают `bd` напрямую — под нагрузкой создают lock contention
 - **Pre-flight check (v2.3.4):** Проверка `git status --porcelain` перед merge. Dirty tree → reset --hard
 - **Merger agent (`merger.md`, v2.3.11):** Получает branch diff, conflict info, error context. Использует `git -c core.hooksPath=/dev/null`. Закрывает задачу через `bd close` при успехе
 - **Audit tasks:** Close without merge
@@ -150,7 +150,7 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
   - REFORMULATE — переписать задачу с другим подходом (label `reformulated`, макс 2 раза)
   - SCOPE REDUCTION — разбить на более простые задачи
   - REMOVE FROM SCOPE — закрыть как нерешаемую
-  - ESCALATE TO USER — label `user-escalation`, daemon stops
+  - ESCALATE TO USER — label `user-escalation`, hype stops
 
 ### Manager Review (Sonnet)
 - **Роль:** Генерация non-technical отчёта для пользователя
@@ -173,7 +173,7 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
 ### Doctor (Opus)
 - **Роль:** Диагностика проблем HYPE, формирование doctor-log
 - **Вызывается:** `hype doctor` (интерактивно) или `hype doctor --report` (автоматически)
-- **Pre-flight:** `check_beads()` проверяет daemon через `bd daemon status` (v2.3.1). Без daemon — Doctor работает с ограниченными данными
+- **Pre-flight:** `check_beads()` проверяет backend через `bd list --limit 1` (v2.5). Без ответа — Doctor работает с ограниченными данными
 - **Workflow:**
   1. `gather_context()` — 11 категорий: HYPE version, beads status, in-progress tasks, blocked tasks, current phase, running processes, git status, HYPE markers, coder worktrees, review pipeline (v2.2), recent logs
   2. `load_knowledge()` — загружает `architecture.md` + `troubleshooting.md` как knowledge base
@@ -234,81 +234,66 @@ startup_timeout: 30          # Секунды на запуск сервера
 
 ## Beads интеграция
 
-### Архитектура Beads (КРИТИЧНО)
+### Архитектура Beads (v0.55+ Dolt)
 
-**Beads использует daemon + SQLite. Понимание этой архитектуры критично для HYPE.**
+**Beads v0.55+ использует встроенный Dolt (embedded). Daemon удалён в v0.50, sync — no-op в v0.51.**
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                      bd CLI                             │
-│  (bd list, bd update, bd create, etc.)                  │
+│  (bd list, bd update, bd create, bd query, etc.)        │
 └─────────────────┬───────────────────────────────────────┘
-                  │ RPC (Unix socket)
+                  │ Direct (embedded)
                   ▼
 ┌─────────────────────────────────────────────────────────┐
-│                    bd daemon                            │
-│  - Сериализует все операции                             │
-│  - Держит SQLite connection                             │
-│  - Import/Export между SQLite ↔ JSONL                   │
-│  - Sync с git remote (beads-sync branch)                │
-└─────────────────┬───────────────────────────────────────┘
-                  │ SQLite
-                  ▼
-┌─────────────────────────────────────────────────────────┐
-│              .beads/beads.db (SQLite)                   │
-│  - WAL mode для concurrency                             │
-│  - busy_timeout = 30 сек                                │
-│  - BEGIN IMMEDIATE для write locks                      │
+│              .beads/*.db (Dolt embedded)                 │
+│  - Auto-commit after write operations                   │
+│  - SQL access via bd sql / bd query                     │
+│  - Native git-like versioning (bd diff, bd history)     │
+│  - bd set-state for atomic label transitions            │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ### Правила работы с Beads
 
-**1. ВСЕГДА через daemon**
+**1. Прямой доступ через bd CLI**
 ```bash
-# ✓ Правильно — идёт через daemon
-bd list --json
-bd update $id --status=in_progress
-
-# ✗ НЕПРАВИЛЬНО — direct access создаёт lock contention
-BEADS_NO_DAEMON=1 bd update $id
+bd list --json --limit 0         # Все open/in_progress задачи
+bd query "status=open AND label=coder" --json --limit 0  # Server-side фильтр
+bd count --status=open           # Нативный подсчёт
+bd set-state $id model=opus      # Атомарная смена label
 ```
 
-**2. Worktrees используют redirect**
+**2. Worktrees используют auto-discovery**
 ```
-main-repo/.beads/beads.db     ← единственная база
-worktree/.beads/redirect      ← указывает на main-repo/.beads/
+main-repo/.beads/*.db     ← единственная база
+worktree/                 ← bd auto-discovers из parent
 ```
-Все worktrees идут в одну базу через redirect. Daemon сериализует доступ.
 
-**3. Не смешивать daemon и direct access**
-- Если daemon работает → все запросы через него
-- `BEADS_NO_DAEMON=1` отключает daemon → direct SQLite access
-- Микс daemon + direct = SQLite lock война
+**3. bd_safe сериализация (HYPE-specific)**
+- Все bd вызовы через `bd_safe()` обёртку в common.sh
+- Global lock через `mkdir /tmp/hype-bd.lock.d` (atomic)
+- Auto-retry для write операций (update, close, create, set-state)
+- Health probe: `bd list --limit 1` (вместо daemon status)
 
 **4. Типичные ошибки**
 
 | Симптом | Причина | Решение |
 |---------|---------|---------|
-| `database is locked` | Параллельные direct access | Убрать BEADS_NO_DAEMON |
-| 2+ минуты на bd запрос | Lock contention | Остановить daemon, почистить базу |
-| `failed to handle rename` | Tombstone в JSONL | Удалить tombstone, пересоздать базу |
-| Зависшие `git fetch beads-sync` | Сетевые проблемы | `pkill -f "git fetch.*beads-sync"` |
+| `database is locked` | Stale lock file | `rmdir /tmp/hype-bd.lock.d` |
+| bd command timeout | Dolt embedded slow | `bd doctor`, restart HYPE |
+| Stale data | Lock bypass | Use `bd_safe`, not bare `bd` |
 
 **5. Восстановление после проблем**
 ```bash
-# 1. Остановить всё
-pkill -9 -f "bd daemon"
-pkill -f "git fetch.*beads-sync"
+# 1. Проверить состояние
+bd doctor
 
-# 2. Почистить базу
-rm -f .beads/beads.db .beads/beads.db-* .beads/daemon.*
+# 2. Если lock застрял
+rmdir /tmp/hype-bd.lock.d 2>/dev/null
 
-# 3. Мигрировать
-bd migrate --update-repo-id
-
-# 4. Запустить daemon
-bd daemon start
+# 3. Если база повреждена
+bd admin cleanup --force
 ```
 
 ### Статусы задач
@@ -377,12 +362,13 @@ bd dep cycles  # Проверка циклов
 ### bd_safe сериализация
 - Все bd вызовы через `bd_safe()` обёртку
 - Global lock через `mkdir /tmp/hype-bd.lock.d` (atomic)
-- Предотвращает daemon explosion от параллельных bd вызовов
+- Auto-retry для write ops (update, close, create, set-state)
+- Health probe: `bd list --limit 1` перед retry
 
 ### Startup health check (v2.2.2)
 - Проверяет наличие и executable права для всех критичных скриптов:
   - `detect-phase.sh`, `run-coders.sh`, `run-analysts.sh`, `run-seniors.sh`, `run-merge-queue.sh`
-- При отсутствии любого — fatal error, daemon не стартует
+- При отсутствии любого — fatal error, HYPE не стартует
 - Предотвращает silent failure: без проверки coders работали бы, но review pipeline молча бы не запустился
 
 ### Self-healing (heal_stuck_tasks)
@@ -399,23 +385,15 @@ bd dep cycles  # Проверка циклов
 - Закрывает orphaned triggers от предыдущих сессий (все non-closed задачи с label `trigger`)
 - Предотвращает: zombie trigger блокирует phase detection, stale PID file пропускает запуск тестеров
 
-### Zombie daemon recovery (v2.1.7+, v2.3.1+)
-- `check_beads()` использует `bd daemon status` (v2.3.1) — различает "daemon здоров" vs "bd работает через SQLite fallback"
-- Recovery: 3x soft restart → `hard_kill_beads_daemon()`
-- Hard kill: читает PID из `.beads/daemon.pid`, проверяет что это bd процесс, kill → kill -9 → rm stale files → fresh start
-- Решает проблему когда daemon жив но socket потерян (feedback loop на большом JSONL)
-- Профилактика: `flush-debounce: "15s"` в `.beads/config.yaml` (ставится при `hype init` / `hype start`)
-- Все daemon start с `--log-level warn` для уменьшения лога
-
-### Startup hardening (v2.3.1+)
-- `ensure_single_daemon()` — при старте проверяет `pgrep -x bd`: >1 → killall + restart; 0 → start; 1 → ok
-- `compact_beads_if_large()` — если `.beads/beads.db` > 10MB → `bd admin compact --purge-tombstones`
-- `bd_safe` explosion threshold = 5 (было 30). ChatFilter имел 6 daemons — порог 30 бесполезен
-- Milestones: `bd update --remove-label` вместо `bd delete` — без tombstones (v2.3.1)
+### Backend health check (v2.5+, replaces daemon recovery)
+- `check_beads()` использует `bd list --limit 1` probe — 3 попытки с 2s pause
+- Нет daemon → нет zombie daemon, нет explosion, нет PID tracking
+- `ensure_single_daemon()` — no-op stub (daemon removed в v0.50)
+- `compact_beads_if_large()` — если `.beads/*.db` > 10MB → `bd admin compact --purge-tombstones`
 
 ### Adaptive backoff
-- Если beads daemon отвечает >2s → удваивает iteration delay (max 60s)
-- Предотвращает overload spiral: медленный daemon → больше запросов → ещё медленнее
+- Если bd backend отвечает >2s → удваивает iteration delay (max 60s)
+- Предотвращает overload spiral: медленный backend → больше запросов → ещё медленнее
 - При recovery → сброс к базовому `ITERATION_DELAY`
 - Функция `calculate_backoff_delay()` в common.sh
 
@@ -472,7 +450,7 @@ main
 ```bash
 ./scripts/log.sh MANAGER INFO "Starting phase detection"
 ./scripts/log.sh EXECUTOR TASK_START "hype-abc"
-./scripts/log.sh ORCHESTRATOR FATAL "Beads daemon not running"
+./scripts/log.sh ORCHESTRATOR FATAL "Beads backend not responding"
 ```
 
 ## Установка

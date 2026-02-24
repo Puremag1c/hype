@@ -49,8 +49,7 @@ model: opus
 **Дополнительные команды (по необходимости):**
 ```bash
 # 1. Состояние beads
-bd daemon status               # Проверяет daemon напрямую (v2.3.1). "running" = здоров
-bd sync --status               # Может работать через SQLite fallback даже с мёртвым daemon!
+bd doctor                      # Встроенная диагностика (v0.55+)
 bd stats
 bd list --status=in_progress --json 2>/dev/null | jq -r '.[] | "\(.id): \(.title) [updated: \(.updated_at)]"'
 bd blocked 2>/dev/null || echo "No blocked tasks"
@@ -260,7 +259,7 @@ Doctor-log: .hype/logs/doctor-XXXXXX.md
 
 ### SAFE (без подтверждения)
 - `bd list`, `bd show`, `bd stats`, `bd blocked`, `bd dep cycles`
-- `bd sync --status`
+- `bd doctor`, `bd info`
 - Чтение файлов в `.hype/`, `logs/`, `docs/`
 - `pgrep`, `ps aux`
 - `git status`, `git worktree list`, `git branch -a`
@@ -271,7 +270,7 @@ Doctor-log: .hype/logs/doctor-XXXXXX.md
 - `bd update --label/--remove-label`
 - `bd close`
 - `bd dep remove`
-- `bd daemon restart`
+- `bd admin cleanup`
 - `git worktree remove --force`
 - `git worktree prune`
 - `git merge --abort`
@@ -293,7 +292,7 @@ Doctor-log: .hype/logs/doctor-XXXXXX.md
 ## Антипаттерны (чего НЕ делать)
 
 ❌ **Не делай:**
-- Видишь "bd зависает" → сразу `bd daemon restart`
+- Видишь "bd зависает" → сразу `bd admin cleanup`
 - Видишь stuck task → сразу `bd update --status=open`
 - Первая гипотеза → сразу действие
 

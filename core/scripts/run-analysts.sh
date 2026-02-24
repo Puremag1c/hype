@@ -59,7 +59,8 @@ run_analyst() {
 
     # Find trigger task from cache
     local task_id
-    task_id=$(echo "$bd_cache" | jq -r ".[] | select(.title == \"$trigger_task\") | .id" | head -1 || echo "")
+    # v2.4.5: filter by status=open to avoid picking stale duplicate triggers
+    task_id=$(echo "$bd_cache" | jq -r ".[] | select(.status == \"open\") | select(.title == \"$trigger_task\") | .id" | head -1 || echo "")
 
     if [ -z "$task_id" ]; then
         log "WARN" "No trigger task for analyst-$analyst"
@@ -142,9 +143,18 @@ $spec_content"
         return 0
     fi
 
-    # Close trigger task
-    bd_safe close "$task_id" --reason="Analyst $analyst completed" >/dev/null 2>&1
-    log "INFO" "Analyst $analyst completed"
+    # Close trigger task (v2.4.5: check return code, retry on failure)
+    if bd_safe close "$task_id" --reason="Analyst $analyst completed" 2>/dev/null; then
+        log "INFO" "Analyst $analyst completed"
+    else
+        log "WARN" "Analyst $analyst trigger close failed, retrying..."
+        sleep 1
+        if bd_safe close "$task_id" --reason="Analyst $analyst completed (retry)" 2>/dev/null; then
+            log "INFO" "Analyst $analyst completed (close retried)"
+        else
+            log "ERROR" "Analyst $analyst trigger close FAILED after retry: $task_id"
+        fi
+    fi
 }
 
 # Main

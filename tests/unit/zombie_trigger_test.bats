@@ -366,6 +366,47 @@ load '../helpers/setup'
     grep -q 'exited unexpectedly' "$hype_sh"
 }
 
+# =============================================================================
+# ANALYZE loop fix: trigger close retry + recovery + status filter (v2.4.5)
+# =============================================================================
+
+@test "run-analysts.sh: trigger close checks return code (not silent)" {
+    local analysts_sh="$SCRIPTS_DIR/run-analysts.sh"
+
+    # Close trigger must check return code (if bd_safe close ...)
+    local close_block
+    close_block=$(sed -n '/Close trigger task/,/^}/p' "$analysts_sh")
+
+    # Must use if/then pattern, not bare bd_safe close >/dev/null
+    echo "$close_block" | grep -q 'if bd_safe close'
+
+    # Must have retry on failure
+    echo "$close_block" | grep -q 'retrying'
+}
+
+@test "run-analysts.sh: trigger select filters by status=open" {
+    local analysts_sh="$SCRIPTS_DIR/run-analysts.sh"
+
+    # jq select must filter by status == "open" to avoid stale duplicates
+    grep 'select(.title ==' "$analysts_sh" | grep -q 'select(.status == \\"open\\")'
+}
+
+@test "hype.sh: ANALYZE force-closes orphan triggers after analysts finish" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    local analyze_block
+    analyze_block=$(sed -n '/ANALYZE)/,/;;/p' "$hype_sh")
+
+    # Must have force-close recovery when pending_triggers > 0
+    echo "$analyze_block" | grep -q 'force-closing'
+
+    # Must close orphans
+    echo "$analyze_block" | grep -q 'Force cleanup'
+
+    # Must re-check after force close
+    echo "$analyze_block" | grep -q 'Re-check'
+}
+
 @test "get_approved_tasks: pipeline has fallback (|| echo)" {
     local merge_sh="$SCRIPTS_DIR/run-merge-queue.sh"
 

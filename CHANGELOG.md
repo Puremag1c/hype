@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.4.5] - 2026-02-24
+
+### Fixed
+
+- **ANALYZE infinite loop** (GitHub #15, #16) — When 5 analysts ran in parallel, `bd_safe close` could fail silently under daemon contention. Trigger stayed open, `milestone:analysts-done` was never created, next cycle re-entered ANALYZE indefinitely. Three fixes:
+  1. `run-analysts.sh:146` — Check `bd_safe close` return code with retry on failure (was `>/dev/null 2>&1` with unconditional "completed" log)
+  2. `run-analysts.sh:62` — Filter trigger by `status == "open"` to avoid picking stale duplicate triggers via `head -1`
+  3. `hype.sh` ANALYZE handler — Force-close orphan triggers after `run-analysts.sh` finishes (recovery when close fails despite retry)
+
+- 338 tests (3 new for ANALYZE loop fix).
+
+---
+
 ## [2.4.4] - 2026-02-24
 
 ### Fixed

@@ -996,11 +996,31 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             # Fresh bd call needed: analysts just ran and may have closed triggers
             pending_triggers=$(bd_safe list --json --limit 0 2>/dev/null | \
                 jq '[.[] | select(.status == "open" or .status == "in_progress") | select(.title | startswith("run-analyst-"))] | length' 2>/dev/null || echo "0")
+
+            # v2.4.5: Recovery — run-analysts.sh finished (all 5 processes exited),
+            # but some triggers stayed open due to bd_safe close failure under contention.
+            # Force-close orphan triggers (no parallel contention now, bd_safe should work).
+            if [ "$pending_triggers" -gt 0 ]; then
+                log "WARN" "ANALYZE: $pending_triggers triggers still open after analysts finished, force-closing"
+                local orphan_ids
+                orphan_ids=$(bd_safe list --json --limit 0 2>/dev/null | \
+                    jq -r '.[] | select(.status == "open" or .status == "in_progress") | select(.title | startswith("run-analyst-")) | .id' 2>/dev/null || true)
+                for oid in $orphan_ids; do
+                    bd_safe close "$oid" --reason="Force cleanup: analysts finished" >/dev/null 2>&1 || true
+                done
+                sleep 1
+                # Re-check
+                pending_triggers=$(bd_safe list --json --limit 0 2>/dev/null | \
+                    jq '[.[] | select(.status == "open" or .status == "in_progress") | select(.title | startswith("run-analyst-"))] | length' 2>/dev/null || echo "0")
+            fi
+
             if [ "$pending_triggers" -eq 0 ]; then
                 if ! has_milestone "milestone:analysts-done"; then
                     log "INFO" "All analysts done, creating milestone"
                     ensure_milestone "milestone:analysts-done" "Analysts complete"
                 fi
+            else
+                log "ERROR" "ANALYZE: $pending_triggers triggers still open after force-close — will retry next cycle"
             fi
             ;;
 

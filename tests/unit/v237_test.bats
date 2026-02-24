@@ -867,14 +867,14 @@ load '../helpers/setup'
     echo "$func_body" | grep -q 'sleep'
 }
 
-@test "v2.3.23: cleanup_iteration has bd delete fallback for leftover tasks" {
+@test "v2.3.23: cleanup_iteration has bd_safe delete fallback for leftover tasks" {
     local common_sh="$SCRIPTS_DIR/common.sh"
 
     local func_body
     func_body=$(sed -n '/^cleanup_iteration()/,/^}/p' "$common_sh")
 
-    # After retry loop, must check remaining and delete individually
-    echo "$func_body" | grep -q 'bd delete.*--force'
+    # v2.4.5: uses bd_safe delete (not bare bd delete) for proper serialization
+    echo "$func_body" | grep -q 'bd_safe delete.*--force'
     # Must only trigger when remaining > 0
     echo "$func_body" | grep -q 'remaining.*-gt 0'
 }

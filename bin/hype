@@ -1222,7 +1222,7 @@ cmd_reset_phase() {
     fi
 
     # Valid phases
-    local valid_phases="PREPARING PLANNING ANALYZE THINKING CODING TESTING VALIDATING REPORTING"
+    local valid_phases="PREPARING PLANNING ANALYZE THINKING CONSULTATION REFLEXING CODING TESTING VALIDATING REPORTING DONE"
 
     if [[ -z "$target_phase" ]]; then
         echo "Usage: hype reset-phase <PHASE>"

@@ -417,8 +417,12 @@ load '../helpers/mock_bd'
 # v2.3.1: Daemon Resilience — source code pattern tests
 # =============================================================================
 
-@test "no bd_safe delete in common.sh (tombstone prevention)" {
-    ! grep -q 'bd_safe delete' "$SCRIPTS_DIR/common.sh"
+@test "bd_safe delete only in cleanup_iteration (tombstone prevention)" {
+    # bd_safe delete should ONLY appear in cleanup_iteration (hype clear),
+    # not in runtime code paths (which would create tombstones during normal operation)
+    local non_cleanup_deletes
+    non_cleanup_deletes=$(sed '/^cleanup_iteration()/,/^}/d' "$SCRIPTS_DIR/common.sh" | grep -c 'bd_safe delete' || true)
+    [ "$non_cleanup_deletes" -eq 0 ]
 }
 
 @test "no bd_safe delete in detect-phase.sh (tombstone prevention)" {

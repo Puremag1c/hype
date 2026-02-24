@@ -1089,12 +1089,13 @@ cleanup_iteration() {
         bd_safe close "$task_id" --reason="Closed by hype clear" 2>/dev/null || true
     done
     # Run cleanup with retry loop — bd admin cleanup can miss tasks due to daemon flush timing
+    # v2.4.5: use bd_safe everywhere (direct bd bypasses serialization lock → stale data)
     local cleanup_pass=0
     local remaining=0
     while [ $cleanup_pass -lt 3 ]; do
         bd_safe admin cleanup --force 2>&1 || true
-        sleep 1
-        remaining=$(bd list --all --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+        sleep 2
+        remaining=$(bd_safe list --all --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
         if [ "$remaining" -eq 0 ]; then
             break
         fi
@@ -1102,11 +1103,19 @@ cleanup_iteration() {
     done
     # Fallback: if bd admin cleanup missed tasks, delete them individually
     if [ "$remaining" -gt 0 ]; then
+        echo "  ⚠ $remaining task(s) survived cleanup, deleting individually..."
         local leftover_ids
-        leftover_ids=$(bd list --all --json --limit 0 2>/dev/null | jq -r '.[].id' 2>/dev/null || true)
+        leftover_ids=$(bd_safe list --all --json --limit 0 2>/dev/null | jq -r '.[].id' 2>/dev/null || true)
         for leftover_id in $leftover_ids; do
-            bd delete "$leftover_id" --force 2>/dev/null || true
+            bd_safe delete "$leftover_id" --force 2>/dev/null || true
+            sleep 0.5
         done
+        # Final verification
+        sleep 1
+        remaining=$(bd_safe list --all --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+        if [ "$remaining" -gt 0 ]; then
+            echo "  ⚠ WARNING: $remaining task(s) still remain after cleanup. Run 'bd list --all' to inspect."
+        fi
     fi
 
     # 4. Delete all milestones + tick-cache (using function from this file)

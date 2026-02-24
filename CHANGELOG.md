@@ -9,7 +9,15 @@
   2. `run-analysts.sh:62` — Filter trigger by `status == "open"` to avoid picking stale duplicate triggers via `head -1`
   3. `hype.sh` ANALYZE handler — Force-close orphan triggers after `run-analysts.sh` finishes (recovery when close fails despite retry)
 
-- 338 tests (3 new for ANALYZE loop fix).
+- **`hype clear` leaves stale tasks** (GitHub #15 root cause) — `cleanup_iteration` used direct `bd list`/`bd delete` instead of `bd_safe`, bypassing serialization lock. Under slow daemon, stale data caused tasks to survive cleanup. Fixed: all operations use `bd_safe`, added sleep between operations, final verification with user warning.
+
+- **`reset-phase` missing phases** — Valid phases list in `bin/hype` didn't include CONSULTATION, REFLEXING, DONE. Users couldn't reset to these phases.
+
+- **Stale `run-versioning` trigger references** — `detect-phase.sh` still excluded old `run-versioning` trigger (renamed to `run-completion` in v2.4.0). Updated 3 locations.
+
+- **`troubleshooter.md` stale agent name** — Line 15 referenced "executor logs" instead of "coder logs".
+
+- 343 tests (8 new: 3 for ANALYZE loop, 5 for cleanup/detect-phase/reset-phase).
 
 ---
 

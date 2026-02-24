@@ -391,6 +391,64 @@ load '../helpers/setup'
     grep 'select(.title ==' "$analysts_sh" | grep -q 'select(.status == \\"open\\")'
 }
 
+# =============================================================================
+# cleanup_iteration: bd_safe everywhere, no direct bd calls (v2.4.5)
+# =============================================================================
+
+@test "cleanup_iteration: uses bd_safe for remaining count (not direct bd)" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    # Extract cleanup retry loop
+    local cleanup_block
+    cleanup_block=$(sed -n '/Run cleanup with retry/,/fi$/p' "$common_sh" | head -30)
+
+    # remaining= must use bd_safe, not bare bd
+    echo "$cleanup_block" | grep 'remaining=' | grep -q 'bd_safe list'
+}
+
+@test "cleanup_iteration: fallback delete uses bd_safe (not direct bd)" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    # Extract fallback delete block
+    local fallback_block
+    fallback_block=$(sed -n '/Fallback.*cleanup missed/,/fi$/p' "$common_sh" | head -20)
+
+    # Must use bd_safe delete, not bare bd delete
+    echo "$fallback_block" | grep 'delete' | grep -v '^#' | grep -q 'bd_safe'
+
+    # Must NOT have bare 'bd delete' (without _safe)
+    ! echo "$fallback_block" | grep -v '^#' | grep -E '^\s+bd delete'
+}
+
+@test "cleanup_iteration: final verification after fallback delete" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    # After individual deletes, must re-check remaining
+    local fallback_block
+    fallback_block=$(sed -n '/Fallback.*cleanup missed/,/fi$/p' "$common_sh")
+
+    # Must have "Final verification" or "still remain" warning
+    echo "$fallback_block" | grep -q 'still remain\|Final verification'
+}
+
+@test "detect-phase.sh: trigger exclusion uses run-completion (not run-versioning)" {
+    local detect_sh="$SCRIPTS_DIR/detect-phase.sh"
+
+    # Must reference run-completion, not run-versioning
+    grep -q 'run-completion' "$detect_sh"
+    ! grep -q 'run-versioning' "$detect_sh"
+}
+
+@test "bin/hype: reset-phase includes CONSULTATION and REFLEXING" {
+    local hype_bin="$SCRIPTS_DIR/../../bin/hype"
+
+    local phases_line
+    phases_line=$(grep 'valid_phases=' "$hype_bin")
+
+    echo "$phases_line" | grep -q 'CONSULTATION'
+    echo "$phases_line" | grep -q 'REFLEXING'
+}
+
 @test "hype.sh: ANALYZE force-closes orphan triggers after analysts finish" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 

@@ -105,7 +105,7 @@ P0_BUGS_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] |
   select(.priority == 0) |
   select((.labels // []) | index("trigger") | not) |
   select(.title | test("^run-(tester|analyst|smoke|plan)-") | not) |
-  select(.title | test("^run-versioning$") | not)
+  select(.title | test("^run-completion$") | not)
 ] | length' 2>/dev/null || echo "0")
 
 # Smoke tasks needing triage (from TESTING, need Architect review)
@@ -137,7 +137,7 @@ TRIGGERS_OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] |
   select(
     ((.labels // []) | index("trigger")) or
     (.title | test("^run-(tester|analyst|smoke|plan)-")) or
-    (.title == "run-versioning")
+    (.title == "run-completion")
   )
 ] | length' 2>/dev/null || echo "0")
 
@@ -305,7 +305,7 @@ if [ "$TESTER_TRIGGERS_OPEN" -gt 0 ] && [ "$IN_PROGRESS" -eq 0 ]; then
       select(
         ((.labels // []) | index("trigger") | not) and
         (.title | test("^run-(tester|analyst|smoke|plan)-") | not) and
-        (.title != "run-versioning")
+        (.title != "run-completion")
       )
     ] | length' 2>/dev/null || echo "0")
 

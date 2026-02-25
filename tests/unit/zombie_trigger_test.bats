@@ -505,3 +505,110 @@ load '../helpers/setup'
 
     echo "$fn_block" | grep -q '|| echo'
 }
+
+# =============================================================================
+# v2.5.7 fixes
+# =============================================================================
+
+@test "hype.sh: all run_agent_with_mode calls have || guard (#23)" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    # Every run_agent_with_mode call must be guarded against set -e:
+    # Either has || on same/next line, or is inside an if condition (which suppresses set -e)
+    # Get line numbers of all run_agent_with_mode calls
+    local unguarded=""
+    while IFS=: read -r linenum line; do
+        # Skip comments
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        # Check if this line or next line has || guard
+        local nextline
+        nextline=$(sed -n "$((linenum+1))p" "$hype_sh")
+        if echo "$line $nextline" | grep -q '|| '; then
+            continue
+        fi
+        # Check if inside an 'if' condition (set -e doesn't fire in if)
+        if echo "$line" | grep -q 'if run_agent_with_mode'; then
+            continue
+        fi
+        unguarded="$unguarded\nLine $linenum: $line"
+    done < <(grep -n 'run_agent_with_mode ' "$hype_sh")
+
+    [ -z "$unguarded" ]
+}
+
+@test "hype.sh: run_interactive_agent uses -- before positional arg" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    local func_block
+    func_block=$(sed -n '/^run_interactive_agent()/,/^}/p' "$hype_sh")
+
+    # Must have -- separator before positional arg (prevents --allowedTools consuming it)
+    echo "$func_block" | grep -q '\-\- "Начни"'
+}
+
+@test "bin/hype: cmd_stop does NOT use system-wide pkill" {
+    local hype_bin="$SCRIPTS_DIR/../../bin/hype"
+
+    # Must NOT have pkill -f "claude" (kills all claude processes)
+    ! grep -q 'pkill.*-f.*claude' "$hype_bin"
+}
+
+@test "bin/hype: cmd_stop uses collect_descendants for process tree" {
+    local hype_bin="$SCRIPTS_DIR/../../bin/hype"
+
+    grep -q 'collect_descendants' "$hype_bin"
+}
+
+@test "bin/hype: cmd_init health check skips if no .beads/" {
+    local hype_bin="$SCRIPTS_DIR/../../bin/hype"
+
+    # Health check in cmd_init must be conditional on .beads/ existing
+    local init_block
+    init_block=$(sed -n '/^cmd_init()/,/^}/p' "$hype_bin")
+
+    echo "$init_block" | grep -q '\-d "\.beads"'
+}
+
+@test "bin/hype: cmd_wipe uses --limit 0 for bd list" {
+    local hype_bin="$SCRIPTS_DIR/../../bin/hype"
+
+    local wipe_block
+    wipe_block=$(sed -n '/^cmd_wipe()/,/^}/p' "$hype_bin")
+
+    # All bd list --json calls must have --limit 0
+    local unguarded
+    unguarded=$(echo "$wipe_block" | grep 'bd list.*--json' | grep -v '\-\-limit 0' || true)
+    [ -z "$unguarded" ]
+}
+
+@test "bin/hype: no configure_flush_debounce (daemon removed)" {
+    local hype_bin="$SCRIPTS_DIR/../../bin/hype"
+
+    ! grep -q 'configure_flush_debounce' "$hype_bin"
+}
+
+@test "bin/hype: reset-phase legacy cleanup includes milestone:validating-done" {
+    local hype_bin="$SCRIPTS_DIR/../../bin/hype"
+
+    grep -q 'milestone:validating-done' "$hype_bin"
+}
+
+@test "bin/hype: reset-phase help lists DONE phase" {
+    local hype_bin="$SCRIPTS_DIR/../../bin/hype"
+
+    local help_block
+    help_block=$(sed -n '/Available phases/,/Current phase/p' "$hype_bin")
+
+    echo "$help_block" | grep -q 'DONE'
+}
+
+@test "bin/hype: cmd_status uses parse_utc_epoch (not manual date parsing)" {
+    local hype_bin="$SCRIPTS_DIR/../../bin/hype"
+
+    local status_block
+    status_block=$(sed -n '/^cmd_status()/,/^}/p' "$hype_bin")
+
+    echo "$status_block" | grep -q 'parse_utc_epoch'
+    # Must NOT have manual date -j -f parsing
+    ! echo "$status_block" | grep -q 'date -j -f'
+}

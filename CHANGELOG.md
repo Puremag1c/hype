@@ -1,5 +1,37 @@
 # Changelog
 
+## [2.5.7] - 2026-02-25
+
+### Fixed
+
+- **set -e crash kills HYPE on agent timeout (GitHub #23)** — `run_agent_with_mode` returns 1 on timeout/failure, and `set -euo pipefail` in hype.sh killed the entire script. 4 unguarded calls: PLANNING, THINKING, REFLEXING, BLOCKED_CYCLES. CODING phase already had `|| log` guards. Reproduced twice on ChatFilter (architect timeout in REFLEXING → hype.sh dies silently). All calls now guarded with `|| log "WARN"`.
+
+- **--allowedTools eats Manager's initial message** — `--allowedTools` is variadic in claude CLI and greedily consumed the positional argument `"Начни"`. Manager launched with empty prompt, user saw silent Claude Code UI. Added `--` separator before positional arg.
+
+- **hype stop kills ALL claude processes system-wide** — `pkill -9 -f "claude --model"` in `cmd_stop` was unscoped, killing claude processes from other HYPE projects. Replaced with `collect_descendants()` — recursively collects the HYPE process tree via `pgrep -P` before stopping, then kills only those PIDs.
+
+- **hype init fails on fresh projects** — `bd list --limit 1` health check ran before `bd init`, so projects without `.beads/` got "Beads backend not responding" and never reached initialization. Health check now conditional: skipped if `.beads/` doesn't exist yet.
+
+- **hype wipe skips tasks >50** — `bd list --json` in `cmd_wipe` was missing `--limit 0`, defaulting to 50 results. Projects with >50 tasks got partial wipe. Added `--limit 0`.
+
+- **hype status shows wrong task duration** — Manual `date -j -f` parsing treated UTC timestamps as local time (same class of bug as #18). Replaced with `parse_utc_epoch()` from common.sh.
+
+- **reset-phase missing milestone:validating-done in legacy cleanup** — Legacy bd milestone label cleanup loop had 5 of 6 milestones, missing `milestone:validating-done`. Old validating milestone could persist and skip re-validation.
+
+### Removed
+
+- **configure_flush_debounce()** — Dead code from beads daemon era (removed in v0.50). Function + 2 call sites in `cmd_init` and `cmd_start` + stale comments.
+
+### Improved
+
+- **reset-phase help** — Added missing DONE phase to the available phases list.
+- **cmd_help** — Stop description updated from "coders continue running" to "Stop HYPE and all agent processes" (matches actual behavior after process tree fix).
+- **cmd_clear** — Stale "Sync beads (backup to issues.jsonl)" message replaced with "Close and delete beads tasks" (bd sync is no-op since v0.51).
+
+- 434 tests (+10 new: set -e guards, `--` separator, no system-wide pkill, collect_descendants, conditional init health check, wipe --limit 0, no flush_debounce, milestone:validating-done, DONE in help, parse_utc_epoch in status).
+
+---
+
 ## [2.5.6] - 2026-02-25
 
 ### Fixed

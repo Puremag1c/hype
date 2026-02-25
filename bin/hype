@@ -365,24 +365,6 @@ detect_project_type() {
     fi
 }
 
-# === Beads Tuning ===
-
-configure_flush_debounce() {
-    local config=".beads/config.yaml"
-    [ -f "$config" ] || return 0
-
-    # Skip if already configured (uncommented)
-    if grep -q '^flush-debounce:' "$config" 2>/dev/null; then
-        return 0
-    fi
-
-    # Uncomment and set to 15s (prevents daemon feedback loop on large JSONL)
-    if grep -q '^# flush-debounce:' "$config" 2>/dev/null; then
-        sed -i '' 's/^# flush-debounce: "5s"/flush-debounce: "15s"/' "$config"
-        success "beads flush-debounce set to 15s"
-    fi
-}
-
 # === Init ===
 
 cmd_init() {
@@ -391,10 +373,12 @@ cmd_init() {
 
     check_deps
 
-    # Beads health check (Dolt embedded, no daemon since v0.50)
-    if ! bd list --limit 1 &>/dev/null; then
-        error "Beads backend not responding. Run 'bd doctor --fix'"
-        exit 1
+    # Beads health check (only if already initialized — fresh projects get bd init below)
+    if [[ -d ".beads" ]]; then
+        if ! bd list --limit 1 &>/dev/null; then
+            error "Beads backend not responding. Run 'bd doctor --fix'"
+            exit 1
+        fi
     fi
 
     # Detect project type BEFORE init
@@ -426,11 +410,6 @@ cmd_init() {
     else
         success "beads already initialized"
     fi
-
-    # Beads daemon tuning: increase flush-debounce to prevent feedback loops
-    # Default 5s is too aggressive for projects with many tasks — daemon can enter
-    # import→export→file-change→import loop that kills the socket
-    configure_flush_debounce
 
     # .hype/config.sh
     mkdir -p .hype
@@ -613,9 +592,6 @@ cmd_start() {
         exit 1
     fi
 
-    # Ensure flush-debounce is tuned (safe for existing projects)
-    configure_flush_debounce
-
     # If DONE, inform user about cleanup
     local current_phase phase_json
     phase_json=$(./scripts/detect-phase.sh 2>/dev/null || echo '{"phase":"UNKNOWN"}')
@@ -678,11 +654,8 @@ cmd_status() {
             while IFS='|' read -r task_id title updated_at; do
                 [[ -z "$task_id" ]] && continue
                 # Calculate duration
-                local clean_date="${updated_at%%.*}"
-                clean_date="${clean_date%%+*}"
-                clean_date="${clean_date%%Z*}"
                 local task_epoch duration_s duration_str
-                task_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%S" "$clean_date" +%s 2>/dev/null || date -d "$clean_date" +%s 2>/dev/null || echo "$now_epoch")
+                task_epoch=$(parse_utc_epoch "$updated_at")
                 duration_s=$((now_epoch - task_epoch))
                 if [[ $duration_s -ge 60 ]]; then
                     duration_str="$((duration_s / 60))m $((duration_s % 60))s"
@@ -1310,7 +1283,7 @@ cmd_wipe() {
     if [[ -d ".beads" ]] && command -v bd &>/dev/null; then
         info "Closing all beads tasks..."
         local task_ids
-        task_ids=$(bd list --json 2>/dev/null | jq -r '.[].id' 2>/dev/null || true)
+        task_ids=$(bd list --json --limit 0 2>/dev/null | jq -r '.[].id' 2>/dev/null || true)
         if [[ -n "$task_ids" ]]; then
             for task_id in $task_ids; do
                 bd close "$task_id" --reason="wipe" 2>/dev/null || true
@@ -1405,6 +1378,7 @@ cmd_reset_phase() {
         echo "  TESTING      - Testers verify product"
         echo "  VALIDATING   - Architect final review"
         echo "  REPORTING    - Version bump + changelog + report"
+        echo "  DONE         - Project complete"
         echo ""
         echo "Current phase:"
         if [[ -x "./scripts/detect-phase.sh" ]]; then
@@ -1529,7 +1503,7 @@ cmd_reset_phase() {
     # Without this, detect-phase.sh fallback finds old bd milestones that should be deleted
     local all_bd_tasks
     all_bd_tasks=$(bd_safe list --all --json --limit 0 2>/dev/null || echo "[]")
-    for milestone_label in "milestone:planning-done" "milestone:analysts-done" "milestone:plan-reviewed" "milestone:testing-done" "milestone:project-done"; do
+    for milestone_label in "milestone:planning-done" "milestone:analysts-done" "milestone:plan-reviewed" "milestone:testing-done" "milestone:validating-done" "milestone:project-done"; do
         # Only clean if this milestone was DELETED (not if it was ensured)
         if ! has_milestone "$milestone_label"; then
             local legacy_ids
@@ -1568,6 +1542,11 @@ cmd_stop() {
         exit 0
     fi
 
+    # Collect full process tree BEFORE killing HYPE
+    # (after SIGTERM, children become orphans and we lose the tree)
+    local descendants
+    descendants=$(collect_descendants "$pid")
+
     info "Stopping HYPE (PID $pid)..."
     kill -TERM "$pid" 2>/dev/null || true
 
@@ -1586,10 +1565,25 @@ cmd_stop() {
     rm -f "$lock_file"
     success "HYPE stopped"
 
-    # Kill ALL claude processes for this project
-    info "Stopping all coder processes..."
-    pkill -9 -f "claude --model" 2>/dev/null || true
-    success "All processes stopped"
+    # Kill only descendant processes of this HYPE instance (not system-wide)
+    if [[ -n "$descendants" ]]; then
+        info "Stopping agent processes..."
+        for dpid in $descendants; do
+            kill -9 "$dpid" 2>/dev/null || true
+        done
+        success "Agent processes stopped"
+    fi
+}
+
+# Recursively collect all descendant PIDs of a process
+collect_descendants() {
+    local parent=$1
+    local children
+    children=$(pgrep -P "$parent" 2>/dev/null) || return 0
+    for child in $children; do
+        echo "$child"
+        collect_descendants "$child"
+    done
 }
 
 # === Clear ===
@@ -1602,7 +1596,7 @@ cmd_clear() {
 
     echo "This will clean up the project:"
     echo ""
-    echo "  - Sync beads (backup to issues.jsonl)"
+    echo "  - Close and delete beads tasks"
     echo "  - Delete all logs"
     echo "  - Clear beads tasks"
     echo "  - Delete milestones"
@@ -1637,7 +1631,7 @@ cmd_help() {
     echo "Commands:"
     echo "  init         Initialize project and start HYPE"
     echo "  start        Start HYPE (project must be initialized)"
-    echo "  stop         Stop HYPE (coders continue running)"
+    echo "  stop         Stop HYPE and all agent processes"
     echo "  status       Show project and HYPE status"
     echo "  doctor       Diagnose HYPE problems (creates doctor-log)"
     echo "               --report   Non-interactive mode"

@@ -318,7 +318,7 @@ EOF
     # Интерактивный режим: передаём содержимое промпта как системную инструкцию
     # Без --print, без timeout, без перенаправления в файл
     # "Начни" — trigger для первого сообщения (Claude Code ждёт user input)
-    if claude --model "$model" --system-prompt "$full_prompt" --allowedTools "$allowed_tools" "Начни"; then
+    if claude --model "$model" --system-prompt "$full_prompt" --allowedTools "$allowed_tools" -- "Начни"; then
         log "INFO" "Interactive agent $agent_name completed"
         return 0
     else
@@ -968,7 +968,7 @@ dispatch_phase() {
             local spec_content
             spec_content=$(cat SPEC.md 2>/dev/null || echo "SPEC.md not found")
             run_agent_with_mode "architect" ".claude/agents/architect.md" "$arch_model" "create_plan" "SPEC:
-$spec_content" "${PLANNING_TIMEOUT:-15m}"
+$spec_content" "${PLANNING_TIMEOUT:-15m}" || log "WARN" "Architect failed in PLANNING (will retry next cycle)"
 
             # Ensure milestone exists (architect may forget step 7)
             local task_count
@@ -1034,7 +1034,7 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             bd_cache=$(cat "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "[]")
             cleanup_stale_trigger "run-plan-review" "$bd_cache"
             bd_safe create --title="run-plan-review" --type=task --priority=0 --label=trigger >/dev/null 2>&1 || true
-            run_agent_with_mode "architect" ".claude/agents/plan-reviewer.md" "$arch_model" "plan_review" "" "${THINKING_TIMEOUT:-10m}"
+            run_agent_with_mode "architect" ".claude/agents/plan-reviewer.md" "$arch_model" "plan_review" "" "${THINKING_TIMEOUT:-10m}" || log "WARN" "Plan-reviewer failed in THINKING (will retry next cycle)"
             ;;
 
         CONSULTATION)
@@ -1113,7 +1113,7 @@ For each task:
    c) Needs to be split → CREATE subtasks, close original, remove smoke label
 4. ALWAYS remove 'smoke' label after processing. ALWAYS remove 'regression' label after processing."
 
-            run_agent_with_mode "architect" ".claude/agents/qa.md" "$arch_model" "reflexing" "$triage_prompt" "${REFLEXING_TIMEOUT:-10m}"
+            run_agent_with_mode "architect" ".claude/agents/qa.md" "$arch_model" "reflexing" "$triage_prompt" "${REFLEXING_TIMEOUT:-10m}" || log "WARN" "Architect failed in REFLEXING (will retry next cycle)"
 
             # v2.3.14: Safety net — force-remove smoke/regression labels architect missed
             # Without this, leftover labels trigger another REFLEXING (2x Opus waste)
@@ -1327,7 +1327,7 @@ Then: bd dep remove <task> <dep> for one edge in each cycle" \
             cycles_output=$(bd_safe dep cycles 2>&1 || true)
             log "INFO" "Running Architect to fix cycles..."
             run_agent_with_mode "architect" ".claude/agents/ops.md" "sonnet" "fix_cycles" "CYCLES:
-$cycles_output"
+$cycles_output" || log "WARN" "Ops failed in BLOCKED_CYCLES (will retry next cycle)"
             ;;
 
         *)

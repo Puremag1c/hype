@@ -48,6 +48,45 @@ load '../helpers/setup'
 }
 
 # =============================================================================
+# Behavioral: timezone-forcing tests (reproduces GitHub #18)
+# These run parse_utc_epoch under non-UTC timezone to catch the exact bug
+# =============================================================================
+
+@test "tz: parse_utc_epoch gives same result under TZ=Europe/Moscow" {
+    local utc_result msk_result
+    utc_result=$(TZ=UTC parse_utc_epoch "2026-01-01T12:00:00Z")
+    msk_result=$(TZ=Europe/Moscow parse_utc_epoch "2026-01-01T12:00:00Z")
+    [[ "$utc_result" -eq "$msk_result" ]]
+}
+
+@test "tz: parse_utc_epoch gives same result under TZ=US/Pacific" {
+    local utc_result pst_result
+    utc_result=$(TZ=UTC parse_utc_epoch "2026-06-15T08:30:00Z")
+    pst_result=$(TZ=US/Pacific parse_utc_epoch "2026-06-15T08:30:00Z")
+    [[ "$utc_result" -eq "$pst_result" ]]
+}
+
+@test "tz: parse_utc_epoch gives same result under TZ=Asia/Tokyo (+9)" {
+    local utc_result jst_result
+    utc_result=$(TZ=UTC parse_utc_epoch "2026-03-10T23:59:59Z")
+    jst_result=$(TZ=Asia/Tokyo parse_utc_epoch "2026-03-10T23:59:59Z")
+    [[ "$utc_result" -eq "$jst_result" ]]
+}
+
+@test "tz: age calculation is correct under non-UTC timezone" {
+    # Simulate what reset_stale_tasks does: now - task_epoch
+    local task_ts="2026-01-01T12:00:00Z"
+    # Known epoch for this timestamp: 1767268800
+    local expected_epoch=1767268800
+
+    local msk_epoch
+    msk_epoch=$(TZ=Europe/Moscow parse_utc_epoch "$task_ts")
+
+    # The epoch must match regardless of local timezone
+    [[ "$msk_epoch" -eq "$expected_epoch" ]]
+}
+
+# =============================================================================
 # All date parsing uses parse_utc_epoch (no raw date commands)
 # =============================================================================
 

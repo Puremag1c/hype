@@ -501,17 +501,15 @@ main() {
     echo ""
     echo "" >> "$LOGS_DIR/hype.log"
 
-    # Health check: verify bd daemon is responsive before starting
-    # Prevents hanging if daemon is frozen (common failure mode)
+    # Health check: verify beads backend is responsive before starting
     if ! bd_safe stats >/dev/null 2>&1; then
-        log "ERROR" "Beads daemon unresponsive! Attempting restart..."
-        timeout_cmd 10s bd daemon restart . >/dev/null 2>&1 || true
+        log "ERROR" "Beads backend unresponsive! Retrying..."
         sleep 2
         if ! bd_safe stats >/dev/null 2>&1; then
-            log "FATAL" "Beads daemon failed to recover. Run: pkill -9 -f 'bd daemon' && bd daemon start"
+            log "FATAL" "Beads backend failed to recover. Run: bd doctor --fix"
             return 1
         fi
-        log "INFO" "Beads daemon recovered"
+        log "INFO" "Beads backend recovered"
     fi
 
     # Get project type first

@@ -781,10 +781,8 @@ bd list --all --json --limit 0 2>/dev/null | jq '.[] | select(.title | startswit
 
 **Manual fix (для старых версий):**
 ```bash
-# 1. Kill frozen daemon
-pkill -9 -f "bd daemon"
-rm -f .beads/daemon.*
-bd daemon start --log-level warn
+# 1. Clean stale locks
+bd doctor --fix
 
 # 2. Restart HYPE
 hype stop && hype
@@ -802,7 +800,7 @@ hype stop && hype
 - Phase never transitions to TESTING
 
 **Причина:**
-До v2.2.5 `detect-phase.sh` counted trigger tasks in OPEN/IN_PROGRESS totals. A zombie trigger (from crashed session) was counted as real work, blocking phase transition. `cleanup_stale_trigger()` couldn't help when bd daemon was also frozen.
+До v2.2.5 `detect-phase.sh` counted trigger tasks in OPEN/IN_PROGRESS totals. A zombie trigger (from crashed session) was counted as real work, blocking phase transition. `cleanup_stale_trigger()` couldn't help when the beads backend was also unresponsive.
 
 **Диагностика:**
 ```bash

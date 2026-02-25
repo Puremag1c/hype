@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.5.3] - 2026-02-25
+
+### Fixed
+
+- **"hype не запускается" (GitHub #17)** — `bin/hype` cmd_init/cmd_start called `bd daemon start` which was removed in beads v0.50. With `set -euo pipefail`, the unknown command exit(1) killed the script silently after "Starting beads daemon...". Replaced with `bd list --limit 1` health probe (same as core/scripts). Also cleaned `bd daemon` from `run-testers.sh` and `docs/troubleshooting.md`.
+
+- 371 tests (+5 new: bin/hype no daemon calls, cmd_init/cmd_start health probe, run-testers.sh, troubleshooting.md).
+
+---
+
+## [2.5.2] - 2026-02-25
+
+### Added
+
+- **Dependency version management** — New `deps.conf` manifest defines supported version ranges for all dependencies (beads, gh, jq, gitleaks, claude). `hype update` now checks and auto-upgrades deps via brew when below minimum. Warns if dep is newer than supported max. `--no-deps` flag to skip.
+
+- **`check_dep_versions()`** — Replaces hardcoded `check_deps()`. Reads `deps.conf`, blocks on missing required deps, warns on version mismatch. Fallback to hardcoded check if `deps.conf` absent.
+
+- **`version_compare()`** — Semver comparison via `sort -V`. Used by both `check_dep_versions` (at init/start) and `update_dependencies` (at update).
+
+- 366 tests (+20 new: deps.conf format, version_compare logic, integration patterns).
+
+---
+
 ## [2.5.1] - 2026-02-25
 
 ### Fixed

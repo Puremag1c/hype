@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.5.4] - 2026-02-25
+## [2.5.5] - 2026-02-25
 
 ### Fixed
 
@@ -10,11 +10,13 @@
 
 - **Manager writes code instead of SPEC** — `run_interactive_agent()` launched Claude without `--allowedTools`, giving the manager full tool access (Edit, arbitrary Bash). Now whitelisted: `Read,Glob,Grep,Write` + read-only Bash (`cat,grep,find,ls,head,tail,wc`). No `Edit`, no arbitrary `Bash`.
 
+- **Doctor asks permission for every read** — `allowedTools` whitelist was too narrow (no Write, no grep/find, no bd update/close). Expanded: read everything without prompts, Write for doctor-log, bd runtime-fix commands (update/close/admin), git log/diff. Destructive commands (pkill, rm, git reset/push) still blocked.
+
 - **"hype не запускается" (GitHub #17)** — `bin/hype` cmd_init/cmd_start called `bd daemon start` which was removed in beads v0.50. Replaced with `bd list --limit 1` health probe. Also cleaned `bd daemon` from `run-testers.sh` and `docs/troubleshooting.md`.
 
 - **Full daemon reference audit** — Removed all remaining "daemon" references from active code and documentation: `common.sh` (stub + comments), `hype.sh`, `run-merge-queue.sh`, `docs/architecture.md`, `docs/troubleshooting.md` (`bd sync --force` → `bd doctor --fix`), `AGENTS.md` (stale `bd sync`).
 
-- 385 tests (+11 new: UTC parsing, timezone safety, needs-review exclusion, manager tools).
+- 391 tests (+17 new: UTC parsing, timezone-forcing behavioral, needs-review exclusion, manager/doctor tool restrictions).
 
 ---
 

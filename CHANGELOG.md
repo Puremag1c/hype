@@ -1,14 +1,16 @@
 # Changelog
 
-## [2.5.3] - 2026-02-25
+## [2.5.4] - 2026-02-25
 
 ### Fixed
+
+- **Manager writes code instead of SPEC** — `run_interactive_agent()` launched Claude without `--allowedTools`, giving the manager full tool access (Edit, arbitrary Bash). Despite prompt prohibition ("НИКОГДА не пиши код"), LLM with full toolset would write code when user described concrete features. Now whitelisted: `Read,Glob,Grep,Write` + read-only Bash (`cat,grep,find,ls,head,tail,wc`). No `Edit`, no arbitrary `Bash`.
 
 - **"hype не запускается" (GitHub #17)** — `bin/hype` cmd_init/cmd_start called `bd daemon start` which was removed in beads v0.50. With `set -euo pipefail`, the unknown command exit(1) killed the script silently after "Starting beads daemon...". Replaced with `bd list --limit 1` health probe (same as core/scripts). Also cleaned `bd daemon` from `run-testers.sh` and `docs/troubleshooting.md`.
 
 - **Full daemon reference audit** — Removed all remaining "daemon" references from active code and documentation: `common.sh` (comments + `ensure_single_daemon` stub removed), `hype.sh` (4 comments), `run-merge-queue.sh` (1 comment), `docs/architecture.md`, `docs/troubleshooting.md` (`bd sync --force` → `bd doctor --fix`), `AGENTS.md` (removed stale `bd sync` from session protocol). Only CHANGELOG history and test assertions remain.
 
-- 371 tests (3 test descriptions updated for v2.5.3 cleanup).
+- 374 tests (+3 new: manager allowedTools whitelist, no Edit, Read+Grep present).
 
 ---
 

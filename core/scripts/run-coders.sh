@@ -76,16 +76,31 @@ create_worktree() {
         timeout 30s git worktree remove --force "$worktree_path" 2>/dev/null || rm -rf "$worktree_path"
     fi
 
+    # Prune stale worktree tracking entries (fixes 56% failure rate when
+    # previous worktree was rm -rf'd without git worktree remove)
+    git worktree prune 2>/dev/null || true
+
     mkdir -p "$WORKTREES_DIR"
 
     # Create worktree from current HEAD (detached)
     # --detach avoids branch conflicts between parallel coders
     # Suppress stdout ("HEAD is now at...") to avoid polluting worktree_path
+    local wt_stderr
+    if wt_stderr=$(git worktree add --detach "$worktree_path" HEAD 2>&1 >/dev/null); then
+        echo "$worktree_path"
+        return 0
+    fi
+
+    # Retry once after brief delay (concurrent git lock contention)
+    log "WARN" "Worktree creation failed for slot $slot: $wt_stderr — retrying..."
+    sleep 1
+    git worktree prune 2>/dev/null || true
+
     if git worktree add --detach "$worktree_path" HEAD >/dev/null 2>&1; then
         echo "$worktree_path"
         return 0
     else
-        log "WARN" "Failed to create worktree for slot $slot, using main directory"
+        log "WARN" "Failed to create worktree for slot $slot after retry, using main directory"
         echo "$PROJECT_DIR"
         return 1
     fi
@@ -281,21 +296,13 @@ $retry_context}"
 
     log "INFO" "Coder completed for $task_id"
 
-    # Fallback: ensure labels are updated even if agent didn't do it
-    # Agent should call: bd update --remove-label=coder --add-label=needs-review
-    # But we ensure it as safety net (with retry for beads sync contention)
-    local attempt=0
-    while [ $attempt -lt 3 ]; do
-        if bd_safe update "$task_id" --remove-label=coder --add-label=needs-review >/dev/null 2>&1; then
-            break
-        fi
-        ((attempt++))
-        log "WARN" "Failed to set needs-review on $task_id (attempt $attempt/3), retrying..."
-        sleep 2
-    done
-    if [ $attempt -ge 3 ]; then
-        log "ERROR" "STUCK: $task_id completed but failed to set needs-review after 3 attempts"
-    fi
+    # Safety net: ensure labels updated (agent should do it, this is fallback)
+    # Split strategy: combined op first, fallback to critical-only (remove coder label)
+    # HEAL (hype.sh heal_stuck_tasks Part A) adds needs-review within ≤2 min if needed
+    bd_safe update "$task_id" --remove-label=coder --add-label=needs-review >/dev/null 2>&1 || {
+        log "WARN" "Combined label update failed for $task_id, trying remove-coder only"
+        bd_safe update "$task_id" --remove-label=coder >/dev/null 2>&1 || true
+    }
 }
 
 # === Run auditor for analysis tasks ===
@@ -436,19 +443,12 @@ Audit task $task_id failed after 3 attempts (timeout/error).
 
     log "INFO" "Auditor completed for $task_id"
 
-    # Ensure needs-review is set (with retry for beads sync contention)
-    local attempt=0
-    while [ $attempt -lt 3 ]; do
-        if bd_safe update "$task_id" --remove-label=coder --add-label=needs-review >/dev/null 2>&1; then
-            break
-        fi
-        ((attempt++))
-        log "WARN" "Failed to set needs-review on $task_id (attempt $attempt/3), retrying..."
-        sleep 2
-    done
-    if [ $attempt -ge 3 ]; then
-        log "ERROR" "STUCK: $task_id completed but failed to set needs-review after 3 attempts"
-    fi
+    # Safety net: ensure labels updated (agent should do it, this is fallback)
+    # Split strategy: combined op first, fallback to critical-only (remove coder label)
+    bd_safe update "$task_id" --remove-label=coder --add-label=needs-review >/dev/null 2>&1 || {
+        log "WARN" "Combined label update failed for $task_id, trying remove-coder only"
+        bd_safe update "$task_id" --remove-label=coder >/dev/null 2>&1 || true
+    }
 }
 
 # === Main ===

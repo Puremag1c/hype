@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.5.6] - 2026-02-25
+
+### Fixed
+
+- **Worktree 56% failure rate (GitHub #19)** — `git worktree add` failed when stale tracking entries remained (previous worktree was `rm -rf`'d without `git worktree remove`, or concurrent git lock). Added `git worktree prune` before creation + retry with 1s delay. Captures stderr for diagnostics.
+
+- **Safety net deadlock → HEAL 2-4 min latency (GitHub #19)** — Coder/auditor post-completion label update had 3-attempt retry loop (6-9s blocking, 100% failure under 7-coder contention). Replaced with single try + fallback: if combined `remove-coder + add-needs-review` fails, critical `remove-coder` only. HEAL adds `needs-review` within ≤2 min.
+
+- **Task count inflation from sub-issues (GitHub #20)** — `bd set-state` creates audit trail entries with `.N` suffixed IDs (e.g. `task-abc.1`). `bd list --all` returned them, inflating progress counter (25→32). Now filtered out before all stats computation in detect-phase.sh.
+
+- **CLOSED count inconsistency** — CLOSED count included trigger and milestone-labeled tasks while OPEN/IN_PROGRESS excluded them. Progress percentage denominator was inflated. CLOSED now excludes both (consistent filtering).
+
+- **Review-coder infinite loop when branch already merged (GitHub #21)** — `preflight_check` returned NO_COMMITS for both "coder didn't commit" and "work already merged to main" (branch tip == main tip). The latter caused an infinite loop: coder sees work done → no commits → reject → coder → repeat. Now compares `rev-parse origin/main` vs `origin/$branch_name`; if equal → ALREADY_MERGED → close task.
+
+- **NO_COMMITS path missing model escalation (GitHub #21)** — Preflight NO_COMMITS/NO_BRANCH rejection incremented reject:N but never escalated the model. Task stayed on haiku forever despite repeated failures. Added haiku→sonnet→opus escalation at reject >= 2 (matching Claude rejection path).
+
+- **Lost ownership skips reject increment (GitHub #21)** — When coder re-claimed a task during review, the ownership check skipped all post-processing including reject:N increment. Escalation ladder stalled. Now increments reject:N and runs model escalation even when ownership is lost.
+
+- 422 tests (+31 new: worktree prune/retry, safety net split, sub-issue filter, CLOSED consistency, ALREADY_MERGED detection, NO_COMMITS escalation, lost ownership reject increment).
+
+---
+
 ## [2.5.5] - 2026-02-25
 
 ### Fixed

@@ -200,6 +200,14 @@ preflight_check() {
     local commit_count
     commit_count=$(git rev-list --count "origin/main..origin/$branch_name" 2>/dev/null || echo "0")
     if [ "$commit_count" -eq 0 ]; then
+        # Distinguish "no work done" from "work already merged"
+        local main_sha branch_sha
+        main_sha=$(git rev-parse "origin/main" 2>/dev/null || echo "")
+        branch_sha=$(git rev-parse "origin/$branch_name" 2>/dev/null || echo "")
+        if [ -n "$main_sha" ] && [ "$main_sha" = "$branch_sha" ]; then
+            echo "ALREADY_MERGED"
+            return 0
+        fi
         echo "NO_COMMITS"
         return 0
     fi
@@ -257,6 +265,14 @@ run_reviewer() {
             task_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
             # Fall through to Claude review (no return)
             ;;
+        ALREADY_MERGED)
+            log "INFO" "Task $task_id branch identical to main — work already merged, closing"
+            bd_safe close "$task_id" --reason="Work already merged to main (branch tip = main tip)." 2>/dev/null || true
+            release_review_lock "$task_id" "$WORKTREES_DIR"
+            cleanup_senior_slot "$slot"
+            trap - EXIT INT TERM
+            return 0
+            ;;
         NO_BRANCH|NO_COMMITS)
             log "WARN" "Preflight failed for $task_id: $preflight"
             # Reject back to coder with circuit breaker check
@@ -293,6 +309,19 @@ run_reviewer() {
                     log "WARN" "TROUBLESHOOT: $task_id - $preflight (reject:$reject_count)"
                 fi
             else
+                # Model escalation at reject >= 2 (same as Claude rejection path)
+                if [ "$reject_count" -ge 2 ]; then
+                    local current_model
+                    current_model=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("model:")) | split(":")[1]' 2>/dev/null | head -1)
+                    current_model=${current_model:-sonnet}
+                    local next_model="$current_model"
+                    [ "$current_model" = "haiku" ] && next_model="sonnet"
+                    [ "$current_model" = "sonnet" ] && next_model="opus"
+                    if [ "$next_model" != "$current_model" ]; then
+                        clean_model_label "$task_id" "$next_model"
+                        log "WARN" "ESCALATE: $task_id $current_model → $next_model (reject:$reject_count, $preflight)"
+                    fi
+                fi
                 reject_from_review "$task_id"
             fi
 
@@ -355,7 +384,25 @@ $context
     local has_coder
     has_coder=$(echo "$updated_json" | jq -r '[.[0].labels[]? | select(. == "coder")] | length' 2>/dev/null || echo "0")
     if [ "$has_coder" != "0" ]; then
-        log "WARN" "Review lost ownership of $task_id (coder label present), skipping post-processing"
+        log "WARN" "Review lost ownership of $task_id (coder label present)"
+        # Still increment reject:N so escalation ladder doesn't stall
+        local reject_count
+        reject_count=$(get_counter_value "$updated_json" "reject")
+        ((reject_count++))
+        set_counter_label "$task_id" "reject" "$reject_count" "$updated_json"
+        # Model escalation (coder already running, but next cycle benefits)
+        if [ "$reject_count" -ge 2 ]; then
+            local current_model
+            current_model=$(echo "$updated_json" | jq -r '.[0].labels[]? | select(startswith("model:")) | split(":")[1]' 2>/dev/null | head -1)
+            current_model=${current_model:-sonnet}
+            local next_model="$current_model"
+            [ "$current_model" = "haiku" ] && next_model="sonnet"
+            [ "$current_model" = "sonnet" ] && next_model="opus"
+            if [ "$next_model" != "$current_model" ]; then
+                clean_model_label "$task_id" "$next_model"
+                log "WARN" "ESCALATE: $task_id $current_model → $next_model (reject:$reject_count, lost ownership)"
+            fi
+        fi
         release_review_lock "$task_id" "$WORKTREES_DIR"
         cleanup_senior_slot "$slot"
         trap - EXIT INT TERM

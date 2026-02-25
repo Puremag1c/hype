@@ -70,6 +70,10 @@ if [ $? -ne 0 ] || ! echo "$ALL_TASKS_JSON" | jq -e 'type == "array"' >/dev/null
     >&2 echo "bd list recovered on retry"
 fi
 
+# Filter out sub-issues created by bd set-state (audit trail entries with .N suffixed IDs)
+# e.g. task-abc.1, task-abc.2 — these inflate progress counters
+ALL_TASKS_JSON=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.id | test("\\.";"x") | not)]')
+
 # v2.3.9: Пишем tick-cache для всех скриптов (run-seniors, heal, merge queue)
 # Один bd call за цикл — остальные читают из файла
 echo "$ALL_TASKS_JSON" > "$PROJECT_ROOT/.hype/tick-cache.json" 2>/dev/null || true
@@ -77,7 +81,11 @@ echo "$ALL_TASKS_JSON" > "$PROJECT_ROOT/.hype/tick-cache.json" 2>/dev/null || tr
 # Статистика из кэшированных данных
 OPEN=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "open") | select((.labels // []) | index("trigger") | not)] | length' 2>/dev/null || echo "0")
 IN_PROGRESS=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "in_progress") | select((.labels // []) | index("trigger") | not)] | length' 2>/dev/null || echo "0")
-CLOSED=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "closed")] | length' 2>/dev/null || echo "0")
+# Exclude triggers and milestone-labeled tasks from CLOSED (consistent with OPEN/IN_PROGRESS)
+CLOSED=$(echo "$ALL_TASKS_JSON" | jq '[.[] | select(.status == "closed") |
+  select((.labels // []) | index("trigger") | not) |
+  select((.labels // []) | any(startswith("milestone:")) | not)
+] | length' 2>/dev/null || echo "0")
 
 # Milestones — v2.3.9: файлы в .hype/ (не beads задачи)
 # Backward compat: проверяем beads для проектов начатых на ≤v2.3.8

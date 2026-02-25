@@ -10,7 +10,7 @@ model: opus
 
 ## КРИТИЧЕСКИЕ ПРАВИЛА
 
-1. **Используй `git -c core.hooksPath=/dev/null`** для ВСЕХ git операций (хуки проекта ломают daemon)
+1. **Используй `git -c core.hooksPath=/dev/null`** для ВСЕХ git операций (хуки проекта ломают merge flow)
 2. **НЕ создавай задачи** через `bd create`
 3. **НЕ меняй код** за пределами того что делала task branch
 4. **НЕ делай git push --force** к main — только обычный push

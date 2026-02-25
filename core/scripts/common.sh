@@ -10,7 +10,7 @@ BD_TIMEOUT="${BD_TIMEOUT:-10s}"
 BD_LOCK_FILE="${BD_LOCK_FILE:-/tmp/hype-bd.lock}"
 
 # bd_safe - wrapper for bd commands with serialization and timeout
-# Prevents daemon explosion from parallel bd calls overwhelming the socket
+# Prevents parallel bd calls from overwhelming Dolt embedded backend
 # Uses mkdir-based locking (works on macOS and Linux, no external deps)
 bd_safe() {
     local lock_dir="/tmp/hype-bd.lock.d"

@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.5.1] - 2026-02-25
+
+### Fixed
+
+- **Stale daemon references** — `common.sh` comment referenced "daemon explosion / socket" (now "Dolt embedded backend"). `merger.md` referenced "хуки ломают daemon" (now "merge flow"). No logic changes, comments only.
+
+- 346 tests (no regressions).
+
+---
+
 ## [2.5.0] - 2026-02-24
 
 ### Changed (Beads Dolt migration)

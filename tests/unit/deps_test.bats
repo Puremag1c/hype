@@ -162,3 +162,26 @@ _version_compare() {
 @test "docs/troubleshooting.md: no bd daemon calls" {
     ! grep -q 'bd daemon' "$PROJECT_ROOT/docs/troubleshooting.md"
 }
+
+# =============================================================================
+# Manager tool restrictions (v2.5.3 — prevent code writing)
+# =============================================================================
+
+@test "run_interactive_agent uses --allowedTools" {
+    local func_block
+    func_block=$(sed -n '/^run_interactive_agent()/,/^}/p' "$SCRIPTS_DIR/hype.sh")
+    echo "$func_block" | grep -q '\-\-allowedTools'
+}
+
+@test "run_interactive_agent does NOT allow Edit tool" {
+    local func_block
+    func_block=$(sed -n '/^run_interactive_agent()/,/^}/p' "$SCRIPTS_DIR/hype.sh")
+    ! echo "$func_block" | grep -q 'Edit'
+}
+
+@test "run_interactive_agent allows Read and Grep" {
+    local func_block
+    func_block=$(sed -n '/^run_interactive_agent()/,/^}/p' "$SCRIPTS_DIR/hype.sh")
+    echo "$func_block" | grep -q 'Read'
+    echo "$func_block" | grep -q 'Grep'
+}

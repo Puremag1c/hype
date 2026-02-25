@@ -310,10 +310,15 @@ PROJECT_ROOT: $PROJECT_DIR
 EOF
 )
 
+    # Tool restrictions: read everything, write only SPEC files
+    local allowed_tools='Read,Glob,Grep,Write'
+    allowed_tools+=',Bash(cat:*),Bash(grep:*),Bash(find:*),Bash(ls:*),Bash(head:*),Bash(tail:*)'
+    allowed_tools+=',Bash(wc:*)'
+
     # Интерактивный режим: передаём содержимое промпта как системную инструкцию
     # Без --print, без timeout, без перенаправления в файл
     # "Начни" — trigger для первого сообщения (Claude Code ждёт user input)
-    if claude --model "$model" --system-prompt "$full_prompt" "Начни"; then
+    if claude --model "$model" --system-prompt "$full_prompt" --allowedTools "$allowed_tools" "Начни"; then
         log "INFO" "Interactive agent $agent_name completed"
         return 0
     else

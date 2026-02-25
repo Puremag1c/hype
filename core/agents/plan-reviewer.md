@@ -71,6 +71,15 @@ bd create --title="<часть 2>" --type=task --priority=... --label=model:haik
 bd close <original-id> --reason="Split: too large for single coder"
 ```
 
+**Verification/audit задачи** — проверка/тест/валидация без code changes:
+```bash
+bd create --title="Verify: API response format" --type=task --priority=2 \
+  --label=audit --label=model:sonnet \
+  --description="AUDIT SCOPE: ...
+done_when: findings recorded in notes"
+```
+**ОБЯЗАТЕЛЬНО:** `--label=audit` + "AUDIT SCOPE" в description. Без этого задача застрянет (senior ждёт git branch).
+
 ### 4. Удали дубликаты
 
 ```bash

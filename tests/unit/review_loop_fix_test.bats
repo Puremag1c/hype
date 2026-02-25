@@ -189,3 +189,15 @@ load '../helpers/setup'
     preflight_block=$(sed -n '/NO_BRANCH|NO_COMMITS)/,/;;/p' "$reviewers_sh")
     echo "$preflight_block" | grep -q 'reject_count.*-ge 2'
 }
+
+# =============================================================================
+# Fix #22: audit label in agent prompts
+# =============================================================================
+
+@test "architect prompt includes --label=audit for verification tasks" {
+    grep -q 'label=audit' "$SCRIPTS_DIR/../agents/architect.md"
+}
+
+@test "plan-reviewer prompt includes --label=audit for verification tasks" {
+    grep -q 'label=audit' "$SCRIPTS_DIR/../agents/plan-reviewer.md"
+}

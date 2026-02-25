@@ -53,6 +53,15 @@ bd create --title="Implement user model" --type=task --priority=1 \
 done_when: tests pass"
 ```
 
+**Verification/audit задачи** (проверить, протестировать, валидировать — НЕ требуют code changes):
+```bash
+bd create --title="Verify: progress bar updates during analysis" --type=task --priority=2 \
+  --label=audit --label=model:sonnet \
+  --description="AUDIT SCOPE: ...
+done_when: findings recorded in notes"
+```
+**Правило:** Если задача НЕ генерирует код → `--label=audit` + "AUDIT SCOPE" в description. Без этого задача застрянет в review (senior ждёт git branch).
+
 ### 5. Расставь dependencies
 
 **КРИТИЧНО:** Проверяй cycles ПОСЛЕ КАЖДОЙ зависимости!

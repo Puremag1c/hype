@@ -114,6 +114,24 @@ retry_command() {
 }
 export -f retry_command 2>/dev/null || true
 
+# parse_utc_epoch - parse ISO 8601 timestamp (UTC) to epoch seconds
+# Beads Dolt (v0.55+) returns UTC timestamps with Z suffix.
+# All parsing MUST use TZ=UTC to avoid local timezone offset inflation.
+# Usage: parse_utc_epoch "2026-02-25T09:37:12Z" → epoch seconds
+parse_utc_epoch() {
+    local ts="$1"
+    # Strip milliseconds, timezone offset, and Z suffix
+    local clean="${ts%%.*}"
+    clean="${clean%%+*}"
+    clean="${clean%%Z*}"
+    # macOS: date -j -f, Linux: date -d, fallback: python3
+    TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%S" "$clean" +%s 2>/dev/null || \
+    TZ=UTC date -d "$clean" +%s 2>/dev/null || \
+    python3 -c "import calendar,time; print(calendar.timegm(time.strptime('$clean','%Y-%m-%dT%H:%M:%S')))" 2>/dev/null || \
+    echo "0"
+}
+export -f parse_utc_epoch 2>/dev/null || true
+
 # create_minimal_project_context - fallback когда analyze-project.sh fails
 # Создаёт минимальный PROJECT_CONTEXT.md с directory listing
 create_minimal_project_context() {
@@ -243,15 +261,7 @@ reset_stale_tasks() {
 
         if [ -n "$updated_at" ]; then
             local task_epoch age
-            # Strip milliseconds and timezone for cross-platform parsing
-            local clean_date="${updated_at%%.*}"
-            clean_date="${clean_date%%+*}"
-            clean_date="${clean_date%%Z*}"
-            # macOS: date -j -f, Linux: date -d, WSL fallback: python3
-            task_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%S" "$clean_date" +%s 2>/dev/null || \
-                         date -d "$clean_date" +%s 2>/dev/null || \
-                         python3 -c "from datetime import datetime; print(int(datetime.fromisoformat('$clean_date').timestamp()))" 2>/dev/null || \
-                         echo "0")
+            task_epoch=$(parse_utc_epoch "$updated_at")
             age=$((now_epoch - task_epoch))
 
             if [ "$age" -gt "$stale_threshold" ]; then

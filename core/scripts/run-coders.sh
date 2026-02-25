@@ -147,7 +147,7 @@ get_ready_tasks() {
     #   - сортируем по приоритету (P0 первые)
     #   - sort -u для дедупликации (bd ready может вернуть дубликаты)
     bd_safe ready --json 2>/dev/null | \
-        jq -r '.[] | select(.issue_type == "task" or .issue_type == "bug" or .issue_type == "feature") | select(.title | test("^run-|^milestone:") | not) | select((.labels // []) | any(test("^milestone:")) | not) | select((.labels // []) | index("trigger") | not) | select((.labels // []) | index("regression") | not) | select((.labels // []) | index("smoke") | not) | select((.labels // []) | index("user-escalation") | not) | select((.labels // []) | any(startswith("blocked:")) | not) | "\(.priority):\(.id)"' 2>/dev/null | \
+        jq -r '.[] | select(.issue_type == "task" or .issue_type == "bug" or .issue_type == "feature") | select(.title | test("^run-|^milestone:") | not) | select((.labels // []) | any(test("^milestone:")) | not) | select((.labels // []) | index("trigger") | not) | select((.labels // []) | index("needs-review") | not) | select((.labels // []) | index("regression") | not) | select((.labels // []) | index("smoke") | not) | select((.labels // []) | index("user-escalation") | not) | select((.labels // []) | any(startswith("blocked:")) | not) | "\(.priority):\(.id)"' 2>/dev/null | \
         sort -n | \
         cut -d: -f2 | \
         head -n "$MAX_PARALLEL" || echo ""

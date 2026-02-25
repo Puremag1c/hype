@@ -647,8 +647,7 @@ heal_stuck_tasks() {
 
         # Parse ISO timestamp to epoch (cross-platform)
         local task_epoch
-        task_epoch=$(date -jf "%Y-%m-%dT%H:%M:%S" "$(echo "$updated_at" | cut -c1-19)" +%s 2>/dev/null || \
-                     date -d "$updated_at" +%s 2>/dev/null || echo "0")
+        task_epoch=$(parse_utc_epoch "$updated_at")
         task_age=$((now - task_epoch))
 
         if [ "$task_age" -gt "$threshold" ]; then
@@ -684,8 +683,7 @@ heal_stuck_tasks() {
         [ -z "$updated_at" ] && continue
 
         local task_epoch
-        task_epoch=$(date -jf "%Y-%m-%dT%H:%M:%S" "$(echo "$updated_at" | cut -c1-19)" +%s 2>/dev/null || \
-                     date -d "$updated_at" +%s 2>/dev/null || echo "0")
+        task_epoch=$(parse_utc_epoch "$updated_at")
         task_age=$((now - task_epoch))
 
         if [ "$task_age" -gt "$reviewing_threshold" ]; then
@@ -711,8 +709,7 @@ heal_stuck_tasks() {
         [ -z "$updated_at" ] && continue
 
         local task_epoch
-        task_epoch=$(date -jf "%Y-%m-%dT%H:%M:%S" "$(echo "$updated_at" | cut -c1-19)" +%s 2>/dev/null || \
-                     date -d "$updated_at" +%s 2>/dev/null || echo "0")
+        task_epoch=$(parse_utc_epoch "$updated_at")
         task_age=$((now - task_epoch))
 
         if [ "$task_age" -gt "$approved_recover_threshold" ]; then

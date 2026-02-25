@@ -385,10 +385,9 @@ bd dep cycles  # Проверка циклов
 - Закрывает orphaned triggers от предыдущих сессий (все non-closed задачи с label `trigger`)
 - Предотвращает: zombie trigger блокирует phase detection, stale PID file пропускает запуск тестеров
 
-### Backend health check (v2.5+, replaces daemon recovery)
+### Backend health check (v2.5+)
 - `check_beads()` использует `bd list --limit 1` probe — 3 попытки с 2s pause
-- Нет daemon → нет zombie daemon, нет explosion, нет PID tracking
-- `ensure_single_daemon()` — no-op stub (daemon removed в v0.50)
+- Dolt embedded — нет отдельного процесса, нет PID tracking
 - `compact_beads_if_large()` — если `.beads/*.db` > 10MB → `bd admin compact --purge-tombstones`
 
 ### Adaptive backoff

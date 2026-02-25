@@ -5,7 +5,7 @@
 # Disable terminal color queries from beads (causes garbage escape sequences)
 export NO_COLOR=1
 
-# BD_TIMEOUT - timeout for bd commands (prevents hanging on daemon issues)
+# BD_TIMEOUT - timeout for bd commands (prevents hanging on Dolt lock contention)
 BD_TIMEOUT="${BD_TIMEOUT:-10s}"
 BD_LOCK_FILE="${BD_LOCK_FILE:-/tmp/hype-bd.lock}"
 
@@ -560,9 +560,9 @@ EOF
 }
 export -f get_changelog_context 2>/dev/null || true
 
-# calculate_backoff_delay - adaptive delay based on daemon health
-# If daemon is slow (>2s), doubles current delay (max 60s)
-# If daemon is healthy, restores base delay
+# calculate_backoff_delay - adaptive delay based on backend health
+# If backend is slow (>2s), doubles current delay (max 60s)
+# If backend is healthy, restores base delay
 # Usage: calculate_backoff_delay current_delay health_elapsed base_delay
 calculate_backoff_delay() {
     local current_delay=$1
@@ -724,9 +724,8 @@ release_review_lock() {
 export -f release_review_lock 2>/dev/null || true
 
 # =============================================================================
-# Beads Daemon Health
+# Beads Backend Health
 # =============================================================================
-# Beads health check — Dolt embedded backend (v0.50+, no daemon)
 # Verifies bd CLI can read from Dolt. Used by hype.sh and doctor.sh.
 
 # check_beads - verify bd backend is accessible
@@ -753,13 +752,6 @@ check_beads() {
     return 1
 }
 export -f check_beads 2>/dev/null || true
-
-# ensure_single_daemon - legacy compat stub (daemon removed in beads v0.50)
-# Kept as no-op so callers don't break. Will be removed when all callers updated.
-ensure_single_daemon() {
-    return 0
-}
-export -f ensure_single_daemon 2>/dev/null || true
 
 # compact_beads_if_large - compact beads DB if it exceeds size threshold
 # Purges tombstones and cleans old closed issues to prevent DB bloat.
@@ -818,7 +810,7 @@ export -f cleanup_stale_trigger 2>/dev/null || true
 # Milestone Management Functions
 # =============================================================================
 # v2.3.9: Milestones are FILES in .hype/ directory (not beads tasks).
-# This eliminates: --all queries, tombstones, daemon dependency for phase detection.
+# This eliminates: --all queries, tombstones, backend dependency for phase detection.
 #
 # File format: .hype/milestone-{name}  (e.g. .hype/milestone-planning-done)
 # Backward compat: detect-phase.sh also checks beads tasks for projects started on ≤v2.3.8.
@@ -992,7 +984,7 @@ cleanup_iteration() {
     for task_id in $open_ids; do
         bd_safe close "$task_id" --reason="Closed by hype clear" 2>/dev/null || true
     done
-    # Run cleanup with retry loop — bd admin cleanup can miss tasks due to daemon flush timing
+    # Run cleanup with retry loop — bd admin cleanup can miss tasks due to Dolt flush timing
     # v2.4.5: use bd_safe everywhere (direct bd bypasses serialization lock → stale data)
     local cleanup_pass=0
     local remaining=0

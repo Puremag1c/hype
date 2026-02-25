@@ -6,7 +6,9 @@
 
 - **"hype не запускается" (GitHub #17)** — `bin/hype` cmd_init/cmd_start called `bd daemon start` which was removed in beads v0.50. With `set -euo pipefail`, the unknown command exit(1) killed the script silently after "Starting beads daemon...". Replaced with `bd list --limit 1` health probe (same as core/scripts). Also cleaned `bd daemon` from `run-testers.sh` and `docs/troubleshooting.md`.
 
-- 371 tests (+5 new: bin/hype no daemon calls, cmd_init/cmd_start health probe, run-testers.sh, troubleshooting.md).
+- **Full daemon reference audit** — Removed all remaining "daemon" references from active code and documentation: `common.sh` (comments + `ensure_single_daemon` stub removed), `hype.sh` (4 comments), `run-merge-queue.sh` (1 comment), `docs/architecture.md`, `docs/troubleshooting.md` (`bd sync --force` → `bd doctor --fix`), `AGENTS.md` (removed stale `bd sync` from session protocol). Only CHANGELOG history and test assertions remain.
+
+- 371 tests (3 test descriptions updated for v2.5.3 cleanup).
 
 ---
 

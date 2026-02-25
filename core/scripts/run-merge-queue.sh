@@ -50,7 +50,7 @@ log() {
 
 # Git without hooks — merge queue is infrastructure.
 # Target project's bd hooks (post-checkout, prepare-commit-msg, post-merge, pre-push)
-# call `bd` directly, bypassing bd_safe mutex. Under load this overwhelms the daemon,
+# call `bd` directly, bypassing bd_safe mutex. Under load this causes Dolt lock contention,
 # hooks fail, git commit aborts, and staged changes poison the working tree for all
 # subsequent merge attempts. (v2.3.4)
 git_nh() {

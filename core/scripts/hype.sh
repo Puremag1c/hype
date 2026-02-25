@@ -151,7 +151,7 @@ load_config() {
 }
 
 # === Beads health check ===
-# check_beads is defined in common.sh (Dolt backend, no daemon since v0.50)
+# check_beads is defined in common.sh (Dolt embedded backend)
 
 # === Symlinks health check ===
 
@@ -1036,7 +1036,7 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}"
             ;;
 
         CONSULTATION)
-            # Tasks escalated to user — generate non-technical report and stop daemon
+            # Tasks escalated to user — generate non-technical report and stop loop
             log "INFO" "CONSULTATION: Tasks require human decision, generating report..."
 
             local user_tasks
@@ -1065,8 +1065,8 @@ $user_tasks"
                 log "INFO" "User review report generated (see $output_file)"
             fi
 
-            # Stop daemon loop — user must act
-            log "WARN" "CONSULTATION: Daemon stopping. Resolve user-escalation tasks manually, then restart."
+            # Stop main loop — user must act
+            log "WARN" "CONSULTATION: Stopping. Resolve user-escalation tasks manually, then restart."
             log "WARN" "Tasks needing attention:"
             echo "$user_tasks" | while IFS= read -r line; do
                 [ -n "$line" ] && log "WARN" "  $line"
@@ -1483,7 +1483,7 @@ main() {
     # Clean up stale state from previous sessions (crash recovery)
     rm -f "$CLAUDEV_DIR/run-testers.pid"
 
-    # Startup hardening: DB compaction (daemon removed in beads v0.50)
+    # Startup hardening: DB compaction
     compact_beads_if_large 10
 
     # Close orphaned triggers from previous sessions

@@ -437,18 +437,15 @@ load '../helpers/mock_bd'
     ! echo "$bd_safe_body" | grep -q 'bd daemon'
 }
 
-@test "ensure_single_daemon is no-op stub (daemon removed v0.50)" {
-    grep -q '^ensure_single_daemon()' "$SCRIPTS_DIR/common.sh"
-    local body
-    body=$(sed -n '/^ensure_single_daemon()/,/^}/p' "$SCRIPTS_DIR/common.sh")
-    echo "$body" | grep -q 'return 0'
+@test "ensure_single_daemon removed from common.sh (v2.5.3)" {
+    ! grep -q '^ensure_single_daemon()' "$SCRIPTS_DIR/common.sh"
 }
 
 @test "compact_beads_if_large function exists in common.sh" {
     grep -q '^compact_beads_if_large()' "$SCRIPTS_DIR/common.sh"
 }
 
-@test "check_beads uses bd list probe not bd daemon status (Dolt v0.50+)" {
+@test "check_beads uses bd list probe (Dolt embedded)" {
     local body
     body=$(sed -n '/^check_beads()/,/^}/p' "$SCRIPTS_DIR/common.sh")
     # Should probe with bd list (works with Dolt embedded)
@@ -471,8 +468,9 @@ load '../helpers/mock_bd'
     ! echo "$body" | grep -q 'bd_safe'
 }
 
-@test "hype.sh does NOT call ensure_single_daemon (daemon removed v0.50)" {
-    ! grep -q '^[[:space:]]*ensure_single_daemon' "$SCRIPTS_DIR/hype.sh"
+@test "no daemon references in common.sh active code (v2.5.3)" {
+    # Comments are ok, but no daemon in function bodies
+    ! grep -q 'bd daemon' "$SCRIPTS_DIR/common.sh"
 }
 
 @test "hype.sh calls compact_beads_if_large at startup" {

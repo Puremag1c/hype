@@ -166,17 +166,17 @@ bd list --all --json | jq '.[] | select(.id == "<id>")'
 - `bd show` не показывает добавленный label
 
 **Причина:**
-Daemon cache не синхронизирован.
+Stale Dolt lock или конкурентный доступ к БД.
 
 **Диагностика:**
 ```bash
-bd sync --force
+bd doctor --fix
 bd show <id> --json | jq '.[0].labels'
 ```
 
 **Решение (runtime-fix):**
 ```bash
-bd sync --force
+bd doctor --fix
 ```
 
 ---

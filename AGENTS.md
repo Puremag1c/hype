@@ -30,7 +30,6 @@ bd create --title="..." --type=task --priority=2
 # 4. Синхронизировать и пушить
 git add <files>
 git commit -m "..."
-bd sync
 git push
 
 # 5. Проверить

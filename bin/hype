@@ -62,9 +62,93 @@ error()   { echo -e "${RED}✗${NC} $1" >&2; }
 
 # === Dependency check ===
 
-check_deps() {
-    local missing=()
+DEPS_CONF="$HYPE_HOME/deps.conf"
 
+# Extract semver from command output
+# Usage: get_dep_version "bd version"
+get_dep_version() {
+    local version_extract="$1"
+    eval "$version_extract" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1
+}
+
+# Compare two semver strings
+# Returns: -1 (v1 < v2), 0 (v1 == v2), 1 (v1 > v2)
+# Usage: version_compare "1.2.3" "1.3.0"
+version_compare() {
+    local v1="$1" v2="$2"
+    if [[ "$v1" == "$v2" ]]; then
+        echo 0
+        return
+    fi
+    local sorted
+    sorted=$(printf '%s\n%s\n' "$v1" "$v2" | sort -V | head -1)
+    if [[ "$sorted" == "$v1" ]]; then
+        echo -1
+    else
+        echo 1
+    fi
+}
+
+# Check dependency versions from deps.conf
+# Blocks on missing required deps, warns on version mismatch
+check_dep_versions() {
+    [[ -f "$DEPS_CONF" ]] || { check_deps_fallback; return; }
+
+    local missing=()
+    local has_warnings=false
+
+    while IFS='|' read -r name cmd version_extract min_version max_version brew_pkg required; do
+        # Skip comments and empty lines
+        [[ "$name" =~ ^#.*$ || -z "$name" ]] && continue
+
+        # Check if command exists
+        if ! command -v "$cmd" &>/dev/null; then
+            if [[ "$required" == "true" ]]; then
+                missing+=("$name ($cmd)")
+            fi
+            continue
+        fi
+
+        # Skip version check if no min/max specified
+        [[ -z "$min_version" && -z "$max_version" ]] && continue
+
+        local current_version
+        current_version=$(get_dep_version "$version_extract")
+        [[ -z "$current_version" ]] && continue
+
+        # Check minimum version
+        if [[ -n "$min_version" ]]; then
+            local cmp
+            cmp=$(version_compare "$current_version" "$min_version")
+            if [[ "$cmp" == "-1" ]]; then
+                warn "$name $current_version is outdated, need ≥$min_version. Run: hype update"
+                has_warnings=true
+            fi
+        fi
+
+        # Check maximum version
+        if [[ -n "$max_version" ]]; then
+            local cmp
+            cmp=$(version_compare "$current_version" "$max_version")
+            if [[ "$cmp" == "1" ]]; then
+                warn "$name $current_version is newer than HYPE $VERSION supports (max $max_version). Possible issues"
+                has_warnings=true
+            fi
+        fi
+    done < "$DEPS_CONF"
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        error "Missing dependencies: ${missing[*]}"
+        echo ""
+        echo "Install with:"
+        echo "  curl -fsSL https://raw.githubusercontent.com/Puremag1c/hype/main/install.sh | bash"
+        exit 1
+    fi
+}
+
+# Fallback if deps.conf missing (shouldn't happen after update)
+check_deps_fallback() {
+    local missing=()
     command -v bd &>/dev/null || missing+=("beads (bd)")
     command -v claude &>/dev/null || missing+=("claude-code")
     command -v gh &>/dev/null || missing+=("gh")
@@ -77,6 +161,11 @@ check_deps() {
         echo "  curl -fsSL https://raw.githubusercontent.com/Puremag1c/hype/main/install.sh | bash"
         exit 1
     fi
+}
+
+# Alias for backward compatibility (called from cmd_init and cmd_start)
+check_deps() {
+    check_dep_versions
 }
 
 # === GitHub Setup ===
@@ -302,13 +391,10 @@ cmd_init() {
 
     check_deps
 
-    # Beads daemon (auto-start if not running)
-    if ! bd daemon status &>/dev/null; then
-        info "Starting beads daemon..."
-        bd daemon start --log-level warn &>/dev/null
-        success "beads daemon started"
-    else
-        success "beads daemon running"
+    # Beads health check (Dolt embedded, no daemon since v0.50)
+    if ! bd list --limit 1 &>/dev/null; then
+        error "Beads backend not responding. Run 'bd doctor --fix'"
+        exit 1
     fi
 
     # Detect project type BEFORE init
@@ -521,11 +607,10 @@ cmd_start() {
     print_hype_logo
     check_deps
 
-    # Beads daemon (auto-start if not running)
-    if ! bd daemon status &>/dev/null; then
-        info "Starting beads daemon..."
-        bd daemon start --log-level warn &>/dev/null
-        success "beads daemon started"
+    # Beads health check (Dolt embedded, no daemon since v0.50)
+    if ! bd list --limit 1 &>/dev/null; then
+        error "Beads backend not responding. Run 'bd doctor --fix'"
+        exit 1
     fi
 
     # Ensure flush-debounce is tuned (safe for existing projects)
@@ -660,7 +745,86 @@ cmd_status() {
 
 # === Update ===
 
+# Update/check dependencies from deps.conf
+update_dependencies() {
+    [[ -f "$DEPS_CONF" ]] || return 0
+
+    info "Checking dependencies..."
+
+    while IFS='|' read -r name cmd version_extract min_version max_version brew_pkg required; do
+        # Skip comments and empty lines
+        [[ "$name" =~ ^#.*$ || -z "$name" ]] && continue
+
+        # Not installed — skip (install is install.sh's job)
+        if ! command -v "$cmd" &>/dev/null; then
+            [[ "$required" == "true" ]] && warn "$name not installed"
+            continue
+        fi
+
+        # Special case: claude update
+        if [[ "$cmd" == "claude" ]]; then
+            claude update 2>/dev/null || true
+            continue
+        fi
+
+        # No version range — presence is enough
+        [[ -z "$min_version" && -z "$max_version" ]] && continue
+
+        local current_version
+        current_version=$(get_dep_version "$version_extract")
+        [[ -z "$current_version" ]] && continue
+
+        # Check if below minimum
+        if [[ -n "$min_version" ]]; then
+            local cmp
+            cmp=$(version_compare "$current_version" "$min_version")
+            if [[ "$cmp" == "-1" ]]; then
+                if command -v brew &>/dev/null && [[ -n "$brew_pkg" ]]; then
+                    info "Upgrading $name $current_version → ≥$min_version..."
+                    brew upgrade "$brew_pkg" 2>/dev/null || true
+                    # Re-check after upgrade
+                    local new_version
+                    new_version=$(get_dep_version "$version_extract")
+                    if [[ -n "$new_version" ]]; then
+                        local new_cmp
+                        new_cmp=$(version_compare "$new_version" "$min_version")
+                        if [[ "$new_cmp" != "-1" ]]; then
+                            success "$name $new_version"
+                        else
+                            warn "$name $new_version still below minimum $min_version"
+                        fi
+                    fi
+                else
+                    warn "$name $current_version is below minimum $min_version"
+                fi
+                continue
+            fi
+        fi
+
+        # Check if above maximum
+        if [[ -n "$max_version" ]]; then
+            local cmp
+            cmp=$(version_compare "$current_version" "$max_version")
+            if [[ "$cmp" == "1" ]]; then
+                warn "$name $current_version is newer than supported (max $max_version)"
+                continue
+            fi
+        fi
+
+        success "$name $current_version"
+    done < "$DEPS_CONF"
+}
+
 cmd_update() {
+    local no_deps=false
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --no-deps) no_deps=true; shift ;;
+            *) shift ;;
+        esac
+    done
+
     info "Updating hype..."
 
     if [[ -d "$HYPE_HOME/.git" ]]; then
@@ -671,9 +835,14 @@ cmd_update() {
             warn "History diverged, resetting to origin/main..."
             git reset --hard origin/main
         fi
-        success "Updated to $(cat VERSION)"
+        VERSION=$(cat VERSION)
+        success "Updated to $VERSION"
     else
         warn "Not a git installation, re-run install.sh"
+    fi
+
+    if [[ "$no_deps" == false ]]; then
+        update_dependencies
     fi
 }
 
@@ -1473,7 +1642,8 @@ cmd_help() {
     echo "  doctor       Diagnose HYPE problems (creates doctor-log)"
     echo "               --report   Non-interactive mode"
     echo "  clear        Clean up after iteration (logs, tasks, SPEC → SPEC.prev)"
-    echo "  update       Update hype to latest version"
+    echo "  update       Update hype and check/upgrade dependencies"
+    echo "               --no-deps  Skip dependency updates"
     echo "  upgrade      Upgrade current project to latest hype version"
     echo "               --all    Upgrade all discovered projects"
     echo "               --force  Force upgrade even if versions match"
@@ -1493,7 +1663,7 @@ case "${1:-}" in
     status) cmd_status ;;
     clear)  cmd_clear ;;
     doctor) shift; exec "$HYPE_HOME/core/scripts/doctor.sh" "$@" ;;
-    update) cmd_update ;;
+    update) shift; cmd_update "$@" ;;
     upgrade) shift; cmd_upgrade "$@" ;;
     delete) cmd_delete ;;
     wipe)   cmd_wipe ;;

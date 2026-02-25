@@ -48,6 +48,13 @@ model: opus
 
 **Дополнительные команды (по необходимости):**
 ```bash
+# 0. Версии зависимостей (deps.conf manifest)
+cat deps.conf 2>/dev/null               # Supported version ranges
+bd version 2>/dev/null                   # Actual beads version
+gh --version 2>/dev/null                 # Actual gh version
+jq --version 2>/dev/null                 # Actual jq version
+# If version mismatch suspected → recommend: hype update
+
 # 1. Состояние beads
 bd doctor                      # Встроенная диагностика (v0.55+)
 bd stats

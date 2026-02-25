@@ -163,6 +163,29 @@ gather_context() {
     fi
     context+="\`\`\`\n\n"
 
+    # Dependency versions
+    local deps_conf="$HYPE_HOME/deps.conf"
+    if [[ -f "$deps_conf" ]]; then
+        context+="## Dependency Versions\n"
+        context+="\`\`\`\n"
+        while IFS='|' read -r name cmd version_extract min_version max_version brew_pkg required; do
+            [[ "$name" =~ ^#.*$ || -z "$name" ]] && continue
+            if command -v "$cmd" &>/dev/null; then
+                local ver
+                ver=$(eval "$version_extract" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)
+                local range=""
+                [[ -n "$min_version" ]] && range+="min=$min_version "
+                [[ -n "$max_version" ]] && range+="max=$max_version"
+                context+="$name: ${ver:-unknown} (${range:-no range})\n"
+            else
+                local tag="MISSING"
+                [[ "$required" == "false" ]] && tag="optional, not installed"
+                context+="$name: $tag\n"
+            fi
+        done < "$deps_conf"
+        context+="\`\`\`\n\n"
+    fi
+
     # Beads status
     context+="## Beads Status\n"
     context+="\`\`\`\n"

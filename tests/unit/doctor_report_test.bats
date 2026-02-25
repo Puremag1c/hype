@@ -209,13 +209,28 @@ EOF
     grep -q 'Bash(bd doctor:\*)' "$doctor"
 }
 
-@test "doctor.sh: allowedTools does NOT include unsafe bd commands" {
+@test "doctor.sh: allowedTools includes Write for doctor-log" {
     local doctor="$SCRIPTS_DIR/doctor.sh"
-    # allowed_tools must not contain bd update, bd close, bd daemon restart
     local allowed_block
     allowed_block=$(sed -n "/local allowed_tools=/,/^$/p" "$doctor")
-    ! echo "$allowed_block" | grep -q 'bd update'
-    ! echo "$allowed_block" | grep -q 'bd close'
-    ! echo "$allowed_block" | grep -q 'bd daemon restart'
+    echo "$allowed_block" | grep -q 'Write'
+}
+
+@test "doctor.sh: allowedTools includes bd runtime-fix commands" {
+    local doctor="$SCRIPTS_DIR/doctor.sh"
+    local allowed_block
+    allowed_block=$(sed -n "/local allowed_tools=/,/^$/p" "$doctor")
+    echo "$allowed_block" | grep -q 'bd update'
+    echo "$allowed_block" | grep -q 'bd close'
+    echo "$allowed_block" | grep -q 'bd admin'
+}
+
+@test "doctor.sh: allowedTools does NOT include destructive commands" {
+    local doctor="$SCRIPTS_DIR/doctor.sh"
+    local allowed_block
+    allowed_block=$(sed -n "/local allowed_tools=/,/^$/p" "$doctor")
     ! echo "$allowed_block" | grep -q 'pkill'
+    ! echo "$allowed_block" | grep -q 'rm '
+    ! echo "$allowed_block" | grep -q 'git reset'
+    ! echo "$allowed_block" | grep -q 'git push'
 }

@@ -355,16 +355,15 @@ run_doctor() {
     local doctor_model
     doctor_model=$(map_model "${MODEL_DOCTOR:-opus}")
 
-    # Pre-approve safe read-only tools (matches SAFE list in doctor.md)
-    # Modifications (bd update, bd close, rm, pkill) still require user confirmation
-    local allowed_tools='Read,Glob,Grep'
-    allowed_tools+=',Bash(bd list:*),Bash(bd show:*),Bash(bd stats:*)'
-    allowed_tools+=',Bash(bd blocked:*),Bash(bd info:*)'
-    allowed_tools+=',Bash(bd dep cycles:*),Bash(bd doctor:*)'
+    # Pre-approve: read everything, write only doctor-log, bd runtime-fixes need confirmation in prompt
+    local allowed_tools='Read,Glob,Grep,Write'
+    allowed_tools+=',Bash(bd list:*),Bash(bd show:*),Bash(bd stats:*),Bash(bd blocked:*),Bash(bd info:*)'
+    allowed_tools+=',Bash(bd dep cycles:*),Bash(bd doctor:*),Bash(bd admin:*)'
+    allowed_tools+=',Bash(bd update:*),Bash(bd close:*),Bash(bd dep remove:*)'
     allowed_tools+=',Bash(pgrep:*),Bash(ps:*),Bash(kill -0:*)'
-    allowed_tools+=',Bash(git status:*),Bash(git worktree list:*),Bash(git branch:*)'
-    allowed_tools+=',Bash(ls:*),Bash(cat:*),Bash(tail:*),Bash(head:*)'
-    allowed_tools+=',Bash(./scripts/detect-phase.sh:*),Bash(mkdir -p .hype:*)'
+    allowed_tools+=',Bash(git status:*),Bash(git worktree list:*),Bash(git branch:*),Bash(git log:*),Bash(git diff:*)'
+    allowed_tools+=',Bash(ls:*),Bash(cat:*),Bash(tail:*),Bash(head:*),Bash(grep:*),Bash(find:*),Bash(wc:*)'
+    allowed_tools+=',Bash(./scripts/detect-phase.sh:*),Bash(mkdir:*)'
 
     if [ "$REPORT_ONLY" = true ]; then
         log "INFO" "Report-only mode — non-interactive"

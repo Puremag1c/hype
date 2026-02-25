@@ -18,7 +18,9 @@
 
 - **Lost ownership skips reject increment (GitHub #21)** — When coder re-claimed a task during review, the ownership check skipped all post-processing including reject:N increment. Escalation ladder stalled. Now increments reject:N and runs model escalation even when ownership is lost.
 
-- 422 tests (+31 new: worktree prune/retry, safety net split, sub-issue filter, CLOSED consistency, ALREADY_MERGED detection, NO_COMMITS escalation, lost ownership reject increment).
+- **Verification tasks stuck in NO_BRANCH loop (GitHub #22)** — Architect created verification tasks (no code changes, result in notes) without `audit` label. Pipeline treated them as code tasks → senior preflight required remote branch → NO_BRANCH → reject → infinite loop. Added `--label=audit` + "AUDIT SCOPE" instructions to architect.md and plan-reviewer.md prompts.
+
+- 424 tests (+2 new: audit label presence in architect/plan-reviewer prompts).
 
 ---
 

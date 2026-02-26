@@ -27,7 +27,25 @@ load '../helpers/setup'
     echo "$fn_block" | grep -q 'BASE_BRANCH'
 }
 
-@test "get_base_branch: uses symbolic-ref as second priority" {
+@test "get_base_branch: detects current branch (git branch --show-current)" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    local fn_block
+    fn_block=$(sed -n '/^get_base_branch()/,/^}/p' "$common_sh")
+
+    echo "$fn_block" | grep -q 'git branch --show-current'
+}
+
+@test "get_base_branch: skips task branches (task/*)" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    local fn_block
+    fn_block=$(sed -n '/^get_base_branch()/,/^}/p' "$common_sh")
+
+    echo "$fn_block" | grep -q 'task/\*'
+}
+
+@test "get_base_branch: uses symbolic-ref after current branch" {
     local common_sh="$SCRIPTS_DIR/common.sh"
 
     local fn_block

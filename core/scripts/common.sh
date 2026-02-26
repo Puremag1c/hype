@@ -774,7 +774,16 @@ get_base_branch() {
         return 0
     fi
 
-    # 2. git symbolic-ref (respects `git remote set-head origin`)
+    # 2. Current branch (user checked out before starting HYPE)
+    # Skip: detached HEAD (empty), task branches (task/beads-*)
+    local current
+    current=$(git branch --show-current 2>/dev/null || true)
+    if [ -n "$current" ] && [[ "$current" != task/* ]]; then
+        echo "$current"
+        return 0
+    fi
+
+    # 3. git symbolic-ref (respects `git remote set-head origin`)
     local ref
     ref=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
     if [ -n "$ref" ] && git rev-parse --verify "origin/$ref" >/dev/null 2>&1; then
@@ -782,7 +791,7 @@ get_base_branch() {
         return 0
     fi
 
-    # 3. Probe common branch names
+    # 4. Probe common branch names
     local candidate
     for candidate in main master develop; do
         if git rev-parse --verify "origin/$candidate" >/dev/null 2>&1; then
@@ -791,7 +800,7 @@ get_base_branch() {
         fi
     done
 
-    # 4. Fallback
+    # 5. Fallback
     echo "main"
 }
 export -f get_base_branch 2>/dev/null || true

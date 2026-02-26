@@ -8,12 +8,14 @@
 
 - **Stale labels from closed tasks pollute tick-cache filters (GitHub #24)** — 7 jq filters in `hype.sh` read from tick-cache without `status != "closed"` guard. Closed tasks retaining `blocked:*` or `retry:*` labels inflated problem counts (48+ phantom skip-logs per session). Added `select(.status != "closed")` to all 7 filters: `check_and_route_troubleshoot`, `check_problems_and_consult_manager` (2x), `call_manager_for_problems` (2x), `generate_iteration_stats` (2x).
 
+- **Recursive audit escalation fork bomb (GitHub #25)** — `run-coders.sh` escalation embeds original task description verbatim. When that description contains "AUDIT SCOPE", `is_audit_task()` matches → routes to auditor → timeout → creates another escalation → fork bomb. ChatFilter hit 15 zombie tasks in 35 minutes. Defense in depth (3 layers): (1) `is_audit_task()` returns false for `escalation` label, (2) escalation sanitizes "AUDIT SCOPE" from embedded description, (3) guard prevents re-escalation of tasks already labeled `escalation`.
+
 ### Added
 
 - `get_base_branch()` in `common.sh` — detects project base branch with 5-level priority: `BASE_BRANCH` config → current branch (`git branch --show-current`, skips `task/*`) → `origin/HEAD` symbolic-ref → probe (main/master/develop) → fallback "main". Supports `git checkout -b feature && hype start` workflow — HYPE auto-detects and works relative to `feature`.
 - `BASE_BRANCH=""` config option in `templates/config.template.sh`.
 - `hype doctor` now shows Base Branch section: detected branch, config value, current branch, origin/HEAD.
-- 460 tests (+26 new: get_base_branch detection incl. current branch + task/* skip, no hardcoded origin/main in scripts, base branch in agents/prompts, all 7 jq filters have status guard).
+- 471 tests (+36 new: get_base_branch detection incl. current branch + task/* skip, no hardcoded origin/main in scripts, base branch in agents/prompts, all 7 jq filters have status guard, audit escalation fork bomb prevention).
 
 ---
 

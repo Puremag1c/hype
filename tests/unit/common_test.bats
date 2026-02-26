@@ -371,6 +371,19 @@ load '../helpers/mock_bd'
     [[ "$status" -eq 0 ]]
 }
 
+# GH#25: escalation label prevents recursive fork bomb
+@test "is_audit_task returns false for escalation label even with AUDIT SCOPE" {
+    local task_json='[{"labels": ["escalation", "model:opus"], "description": "## Original Task\nAUDIT SCOPE: Review API"}]'
+    run is_audit_task "$task_json"
+    [[ "$status" -eq 1 ]]
+}
+
+@test "is_audit_task returns false for escalation label even with audit label" {
+    local task_json='[{"labels": ["escalation", "audit"], "description": "Check code"}]'
+    run is_audit_task "$task_json"
+    [[ "$status" -eq 1 ]]
+}
+
 # =============================================================================
 # calculate_backoff_delay tests
 # =============================================================================

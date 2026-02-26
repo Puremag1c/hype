@@ -606,6 +606,11 @@ is_audit_task() {
     description=$(echo "$task_json" | jq -r '.[0].description // ""' 2>/dev/null)
     labels=$(echo "$task_json" | jq -r '.[0].labels[]?' 2>/dev/null || true)
 
+    # Guard: escalation tasks are NOT audit tasks (prevents recursive fork bomb GH#25)
+    if echo "$labels" | grep -q "^escalation$"; then
+        return 1  # false - route to coder, not auditor
+    fi
+
     # Check 1: Explicit label "audit"
     if echo "$labels" | grep -q "^audit$"; then
         return 0  # true - is audit task

@@ -386,9 +386,20 @@ PROJECT_ROOT: $PROJECT_DIR"
         audit_retry=${audit_retry:-0}
 
         if [ "$audit_retry" -ge 2 ]; then
+            # Guard: don't escalate if already an escalation task (prevents fork bomb GH#25)
+            local existing_labels
+            existing_labels=$(echo "$task_json" | jq -r '.[0].labels[]?' 2>/dev/null || true)
+            if echo "$existing_labels" | grep -q "^escalation$"; then
+                log "WARN" "SKIP escalation for $task_id - already an escalation task"
+                bd_safe update "$task_id" --status=open --remove-label=coder \
+                    --add-label=blocked:escalation-loop \
+                    --notes="Blocked: recursive escalation detected (GH#25)." >/dev/null 2>&1 || true
+            else
             # 3rd failure - escalate to Architect
             local task_desc
             task_desc=$(echo "$task_json" | jq -r '.[0].description // ""' 2>/dev/null)
+            # Sanitize: strip AUDIT SCOPE marker to prevent is_audit_task false positive (GH#25)
+            task_desc=$(echo "$task_desc" | sed 's/AUDIT SCOPE/[audit scope]/gI')
 
             log "WARN" "ESCALATE: $task_id - auditor failed 3 times, creating architect task"
             bd_safe create --title="Review failed audit: $task_title" --type=task --priority=1 \
@@ -412,6 +423,7 @@ Audit task $task_id failed after 3 attempts (timeout/error).
             bd_safe update "$task_id" --status=open --remove-label=coder \
                 --add-label=blocked:escalated \
                 --notes="Escalated to Architect: auditor failed 3 times (timeout/error)." >/dev/null 2>&1 || true
+            fi
         else
             # Determine current model and escalate one level up
             local current_model

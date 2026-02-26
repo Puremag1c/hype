@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.5.9] - 2026-02-26
+
+### Changed
+
+- **Audit findings routed to plan-reviewer instead of auto-approve** — Senior previously auto-approved audit tasks (no code to review), so findings written in notes were never read. Now AUDIT_REVIEW case calls `plan-reviewer.md` with `MODE=audit_review`. Plan-reviewer reads findings, creates fix tasks for issues found, or closes audit task if clean. On failure, task returns to review queue (needs-review label).
+
+### Added
+
+- 476 tests (+5 new: AUDIT_REVIEW routes to plan-reviewer, passes MODE/Findings, calls run_claude_with_progress, handles failure).
+
+---
+
 ## [2.5.8] - 2026-02-26
 
 ### Fixed

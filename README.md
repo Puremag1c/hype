@@ -7,7 +7,7 @@
 ╚═╝  ╚═╝    ╚═╝    ╚═╝      ╚══════╝
 ```
 
-> v2.5.8
+> v2.5.9
 
 Your personal AI dev team. Describe what you want — get working code.
 

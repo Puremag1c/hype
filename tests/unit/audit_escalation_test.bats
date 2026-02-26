@@ -123,3 +123,59 @@ load '../helpers/setup'
     [ -n "$create_line" ]
     [ "$sanitize_line" -lt "$create_line" ]
 }
+
+# =============================================================================
+# Layer 4: Audit findings routed to plan-reviewer (run-seniors.sh)
+# =============================================================================
+
+@test "run-seniors.sh: AUDIT_REVIEW routes to plan-reviewer (not auto-approve)" {
+    local seniors_sh="$SCRIPTS_DIR/run-seniors.sh"
+
+    # Extract AUDIT_REVIEW case block
+    local case_block
+    case_block=$(sed -n '/AUDIT_REVIEW)/,/;;/p' "$seniors_sh")
+
+    # Should reference plan-reviewer.md
+    echo "$case_block" | grep -q 'plan-reviewer.md'
+    # Should NOT call approve_task
+    ! echo "$case_block" | grep -q 'approve_task'
+}
+
+@test "run-seniors.sh: AUDIT_REVIEW passes MODE audit_review" {
+    local seniors_sh="$SCRIPTS_DIR/run-seniors.sh"
+
+    local case_block
+    case_block=$(sed -n '/AUDIT_REVIEW)/,/;;/p' "$seniors_sh")
+
+    echo "$case_block" | grep -q 'MODE: audit_review'
+}
+
+@test "run-seniors.sh: AUDIT_REVIEW passes task notes as Findings" {
+    local seniors_sh="$SCRIPTS_DIR/run-seniors.sh"
+
+    local case_block
+    case_block=$(sed -n '/AUDIT_REVIEW)/,/;;/p' "$seniors_sh")
+
+    echo "$case_block" | grep -q 'Findings:'
+    echo "$case_block" | grep -q 'task_notes'
+}
+
+@test "run-seniors.sh: AUDIT_REVIEW calls run_claude_with_progress" {
+    local seniors_sh="$SCRIPTS_DIR/run-seniors.sh"
+
+    local case_block
+    case_block=$(sed -n '/AUDIT_REVIEW)/,/;;/p' "$seniors_sh")
+
+    echo "$case_block" | grep -q 'run_claude_with_progress'
+}
+
+@test "run-seniors.sh: AUDIT_REVIEW handles failure (returns to queue)" {
+    local seniors_sh="$SCRIPTS_DIR/run-seniors.sh"
+
+    local case_block
+    case_block=$(sed -n '/AUDIT_REVIEW)/,/;;/p' "$seniors_sh")
+
+    # On failure, should add needs-review label to return to queue
+    echo "$case_block" | grep -q 'needs-review'
+    echo "$case_block" | grep -q 'audit_exit'
+}

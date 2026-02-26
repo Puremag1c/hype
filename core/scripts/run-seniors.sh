@@ -253,9 +253,31 @@ run_reviewer() {
 
     case "$preflight" in
         AUDIT_REVIEW)
-            # Audit tasks: approve directly (no code to review)
-            log "INFO" "Audit task $task_id — approving"
-            approve_task "$task_id"
+            # Audit tasks: route to plan-reviewer for findings review
+            log "INFO" "Audit task $task_id — routing to plan-reviewer (audit_review)"
+            local pr_prompt task_notes
+            pr_prompt=$(cat "$PROJECT_DIR/.claude/agents/plan-reviewer.md" 2>/dev/null || cat "$SCRIPT_DIR/../agents/plan-reviewer.md" 2>/dev/null)
+            task_notes=$(echo "$task_json" | jq -r '.[0].notes // ""' 2>/dev/null)
+
+            local audit_prompt="$pr_prompt
+
+---
+MODE: audit_review
+TASK_ID: $task_id
+Title: $task_title
+Description: $(echo "$task_json" | jq -r '.[0].description // ""' 2>/dev/null)
+Findings: $task_notes"
+
+            local audit_output="$LOGS_DIR/audit-review-$task_id.log"
+            local audit_exit=0
+            run_claude_with_progress "$audit_prompt" "sonnet" "${REVIEW_TIMEOUT:-5m}" "$audit_output" "AUDIT_REVIEW $slot" "$LOGS_DIR" || audit_exit=$?
+
+            if [ "$audit_exit" -ne 0 ]; then
+                log "WARN" "Audit review failed for $task_id (exit: $audit_exit) — returning to queue"
+                bd_safe update "$task_id" --add-label=needs-review --remove-label=reviewing >/dev/null 2>&1 || true
+            fi
+            # Plan-reviewer closes audit task and creates fix tasks if needed
+
             release_review_lock "$task_id" "$WORKTREES_DIR"
             cleanup_senior_slot "$slot"
             trap - EXIT INT TERM

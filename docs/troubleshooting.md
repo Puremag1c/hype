@@ -1250,6 +1250,43 @@ bd close <id>  # Просто закрыть trigger
 
 ---
 
+### PROBLEM: Audit findings not reviewed (task auto-closed)
+
+**Since:** 2.5.9
+
+**Симптомы:**
+- Audit задача закрыта, но findings в notes не привели к fix-задачам
+- В логах: "Audit review failed for <id>" с exit code
+- Audit задача вернулась в `needs-review` (retry loop)
+
+**Причина:**
+1. Plan-reviewer timeout (audit_review mode, 5 min default)
+2. Plan-reviewer не смог прочитать findings из notes (пустые notes)
+3. До v2.5.9: Senior авто-одобрял audit задачи → findings никем не читались
+
+**Диагностика:**
+```bash
+# Проверить audit задачи
+bd list --json --limit 0 | jq '.[] | select((.labels // []) | index("audit")) | {id, title, status, labels}'
+
+# Проверить лог audit review
+cat logs/audit-review-<id>.log 2>/dev/null
+
+# Проверить findings (notes)
+bd show <id> --json | jq '.[0].notes'
+```
+
+**Решение (runtime-fix):**
+```bash
+# Если findings есть но plan-reviewer таймаутнул — пересбросить на ревью
+bd update <id> --add-label=needs-review --remove-label=reviewing
+```
+
+**Auto-recovery (v2.5.9+):**
+При timeout plan-reviewer задача автоматически возвращается в `needs-review`. Senior подберёт на следующем тике.
+
+---
+
 ### PROBLEM: Orphaned senior slot (senior-N.lock stuck)
 
 **Симптомы:**

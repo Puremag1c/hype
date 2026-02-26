@@ -72,7 +72,7 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
 | Агент | Model | Задача |
 |-------|-------|--------|
 | architect | opus | Создание плана из SPEC.md, разбивка на задачи, deps |
-| plan-reviewer | opus | Ревью добавлений от Analysts |
+| plan-reviewer | opus | Ревью добавлений от Analysts + audit findings (audit_review mode) |
 | qa | opus | Final review, обработка regression bugs |
 | ops | sonnet | Разрешение git conflicts, dependency cycles |
 
@@ -107,6 +107,7 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
   3. Build context: diff, commits, coder log, secrets warning
   4. Claude review с `senior.md` промптом
   5. Результат: approve (label) / reject (status=open) / no-merge (close)
+- **Audit review (v2.5.9):** AUDIT_REVIEW preflight → вызывает plan-reviewer с `MODE=audit_review` (sonnet). Plan-reviewer читает findings из notes, решает: `bd close` если ок, `bd create` fix-задачи если проблемы. При timeout — задача возвращается в `needs-review`
 - **Preflight checks (v2.2.1):**
   - Проверка что ветка существует (`NO_BRANCH` → reject)
   - Проверка что есть коммиты (`NO_COMMITS` → reject)
@@ -133,6 +134,7 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
 - **Роль:** Аудит задач с label `audit`
 - **Когда:** Задачи с "AUDIT SCOPE" в description или label `audit`
 - **Выход:** Findings в notes задачи, не код
+- **Review (v2.5.9):** После завершения Senior маршрутизирует на plan-reviewer (`MODE=audit_review`), который читает findings и создаёт fix-задачи при необходимости. До v2.5.9 findings авто-одобрялись и никем не читались
 - **Эскалация:** sonnet → opus при timeout/failure
 
 ### Versioner (Haiku)

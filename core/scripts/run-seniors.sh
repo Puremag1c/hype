@@ -109,6 +109,8 @@ build_review_context() {
     local task_id=$1
     local task_json=$2
     local branch_name="task/beads-$task_id"
+    local base_branch
+    base_branch=$(get_base_branch)
 
     local task_title task_description task_notes done_when
     task_title=$(echo "$task_json" | jq -r '.[0].title // "Unknown"' 2>/dev/null)
@@ -117,9 +119,9 @@ build_review_context() {
     done_when=$(echo "$task_description" | grep -oE 'done_when:\s*[^\n]+' | sed 's/done_when:\s*//' || true)
 
     local commits diff diff_stat
-    commits=$(git log --oneline "origin/main..origin/$branch_name" 2>/dev/null || echo "No commits")
-    diff_stat=$(git diff --stat "origin/main..origin/$branch_name" 2>/dev/null | tail -5 || echo "No changes")
-    diff=$(git diff "origin/main..origin/$branch_name" 2>/dev/null | head -500 || echo "No diff")
+    commits=$(git log --oneline "origin/$base_branch..origin/$branch_name" 2>/dev/null || echo "No commits")
+    diff_stat=$(git diff --stat "origin/$base_branch..origin/$branch_name" 2>/dev/null | tail -5 || echo "No changes")
+    diff=$(git diff "origin/$base_branch..origin/$branch_name" 2>/dev/null | head -500 || echo "No diff")
 
     local coder_log=""
     local coder_log_file="$LOGS_DIR/coder-$task_id.log"
@@ -183,6 +185,8 @@ preflight_check() {
     local task_id=$1
     local task_json=$2
     local branch_name="task/beads-$task_id"
+    local base_branch
+    base_branch=$(get_base_branch)
 
     # Audit tasks don't need branch checks
     if is_audit_task "$task_json"; then
@@ -198,11 +202,11 @@ preflight_check() {
 
     # Check has commits
     local commit_count
-    commit_count=$(git rev-list --count "origin/main..origin/$branch_name" 2>/dev/null || echo "0")
+    commit_count=$(git rev-list --count "origin/$base_branch..origin/$branch_name" 2>/dev/null || echo "0")
     if [ "$commit_count" -eq 0 ]; then
         # Distinguish "no work done" from "work already merged"
         local main_sha branch_sha
-        main_sha=$(git rev-parse "origin/main" 2>/dev/null || echo "")
+        main_sha=$(git rev-parse "origin/$base_branch" 2>/dev/null || echo "")
         branch_sha=$(git rev-parse "origin/$branch_name" 2>/dev/null || echo "")
         if [ -n "$main_sha" ] && [ "$main_sha" = "$branch_sha" ]; then
             echo "ALREADY_MERGED"
@@ -213,7 +217,7 @@ preflight_check() {
     fi
 
     # Check for potential secrets in diff (soft warning — reviewer decides)
-    if git diff "origin/main..origin/$branch_name" 2>/dev/null | grep -qiE "(sk-[a-zA-Z0-9]{20,}|api_key\s*=|password\s*=|secret\s*=|\.env)"; then
+    if git diff "origin/$base_branch..origin/$branch_name" 2>/dev/null | grep -qiE "(sk-[a-zA-Z0-9]{20,}|api_key\s*=|password\s*=|secret\s*=|\.env)"; then
         echo "SECRETS_WARNING"
         return 0
     fi

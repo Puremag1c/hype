@@ -20,7 +20,7 @@ load '../helpers/setup'
     fn_block=$(sed -n '/^preflight_check()/,/^}/p' "$reviewers_sh")
 
     echo "$fn_block" | grep -q 'ALREADY_MERGED'
-    echo "$fn_block" | grep -q 'rev-parse.*origin/main'
+    echo "$fn_block" | grep -q 'rev-parse.*origin/\$base_branch'
     echo "$fn_block" | grep -q 'rev-parse.*origin/\$branch_name'
 }
 

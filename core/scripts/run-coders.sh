@@ -236,6 +236,9 @@ run_coder() {
     local retry_context
     retry_context=$(build_retry_context "$task_id")
 
+    local base_branch
+    base_branch=$(get_base_branch)
+
     local full_prompt="$coder_prompt
 
 ---
@@ -243,6 +246,7 @@ TASK_ID: $task_id
 TASK: $task_json
 PROJECT_ROOT: $PROJECT_DIR
 WORKTREE_PATH: $worktree_path
+BASE_BRANCH: $base_branch
 ${retry_context:+
 $retry_context}"
 

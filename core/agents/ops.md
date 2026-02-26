@@ -29,16 +29,16 @@ model: sonnet
 
 ```bash
 bd show $TASK_ID
-git diff --name-only origin/main...HEAD
-git log --oneline origin/main...HEAD
+git diff --name-only origin/${BASE_BRANCH}...HEAD
+git log --oneline origin/${BASE_BRANCH}...HEAD
 ```
 
 ### 2. Реши конфликт
 
 ```bash
 git checkout task/beads-$TASK_ID
-git fetch origin main
-git rebase origin/main
+git fetch origin ${BASE_BRANCH}
+git rebase origin/${BASE_BRANCH}
 # Разреши конфликты вручную
 git add .
 git rebase --continue

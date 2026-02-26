@@ -763,6 +763,39 @@ check_beads() {
 }
 export -f check_beads 2>/dev/null || true
 
+# get_base_branch - detect the base branch for the current project
+# Priority: 1) BASE_BRANCH config override, 2) origin/HEAD symbolic-ref,
+# 3) probe main→master→develop, 4) fallback "main"
+# Usage: get_base_branch → prints branch name (e.g. "main", "master", "schema_update")
+get_base_branch() {
+    # 1. Config override (set in .hype/config.sh)
+    if [ -n "${BASE_BRANCH:-}" ]; then
+        echo "$BASE_BRANCH"
+        return 0
+    fi
+
+    # 2. git symbolic-ref (respects `git remote set-head origin`)
+    local ref
+    ref=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
+    if [ -n "$ref" ] && git rev-parse --verify "origin/$ref" >/dev/null 2>&1; then
+        echo "$ref"
+        return 0
+    fi
+
+    # 3. Probe common branch names
+    local candidate
+    for candidate in main master develop; do
+        if git rev-parse --verify "origin/$candidate" >/dev/null 2>&1; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    # 4. Fallback
+    echo "main"
+}
+export -f get_base_branch 2>/dev/null || true
+
 # compact_beads_if_large - compact beads DB if it exceeds size threshold
 # Purges tombstones and cleans old closed issues to prevent DB bloat.
 # ChatFilter incident: 1416 tombstones from bd delete grew DB to 60MB.

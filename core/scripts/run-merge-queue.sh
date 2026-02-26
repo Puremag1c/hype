@@ -240,7 +240,7 @@ merge_task() {
 
     local branch="task/beads-$task_id"
     local main_ref
-    main_ref=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo "main")
+    main_ref=$(get_base_branch)
 
     # Pre-flight: ensure clean working tree (v2.3.4)
     if [ -n "$(git status --porcelain 2>/dev/null)" ]; then

@@ -27,6 +27,7 @@ model: по задаче (label model:*)
 - `TASK` — JSON задачи из run-coders.sh
 - `PROJECT_ROOT` — корень проекта
 - `WORKTREE_PATH` — путь к изолированному worktree (если задан)
+- `BASE_BRANCH` — базовая ветка проекта (main, master, develop и т.д.)
 - `Retry Context` — если есть, содержит информацию о предыдущих попытках
 
 ## ДОСТУПНЫЕ ИНСТРУМЕНТЫ (без разрешения)
@@ -134,7 +135,7 @@ else
     else
         # Новая задача — создаём ветку от main
         git branch -D "task/beads-$TASK_ID" 2>/dev/null || true
-        git checkout -b "task/beads-$TASK_ID" origin/main
+        git checkout -b "task/beads-$TASK_ID" origin/${BASE_BRANCH}
     fi
 fi
 ```
@@ -147,7 +148,7 @@ fi
 
 **Если есть feedback от senior (в notes):**
 - Внимательно прочитай ПРИЧИНУ возврата
-- Посмотри текущий код в ветке (git diff origin/main)
+- Посмотри текущий код в ветке (git diff origin/${BASE_BRANCH})
 - ИСПРАВЬ конкретную проблему, не переделывай всё заново
 - Senior вернул задачу потому что done_when НЕ выполнен — убедись что исправление это решает
 
@@ -171,8 +172,8 @@ git commit -m "WIP: task-$TASK_ID (pre-rebase)"
 > Senior разрешит конфликты при merge.
 
 ```bash
-git fetch origin main
-if ! git rebase origin/main; then
+git fetch origin ${BASE_BRANCH}
+if ! git rebase origin/${BASE_BRANCH}; then
     # Конфликт — abort и эскалируй
     git rebase --abort
 

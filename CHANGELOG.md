@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.5.8] - 2026-02-26
+
+### Fixed
+
+- **Detached HEAD on non-main base branches (GitHub #24)** — `origin/main` was hardcoded in 6 places across `run-seniors.sh`, `run-merge-queue.sh`, `coder.md`, and `ops.md`. Projects using non-main branches (e.g. `schema_update`) got NO_COMMITS from senior → reject cascade → all 5 coder slots blocked at 41%. Added `get_base_branch()` utility (config override → symbolic-ref → probe main/master/develop → fallback). All hardcoded references replaced. `BASE_BRANCH` injected into coder prompt context.
+
+- **Stale labels from closed tasks pollute tick-cache filters (GitHub #24)** — 7 jq filters in `hype.sh` read from tick-cache without `status != "closed"` guard. Closed tasks retaining `blocked:*` or `retry:*` labels inflated problem counts (48+ phantom skip-logs per session). Added `select(.status != "closed")` to all 7 filters: `check_and_route_troubleshoot`, `check_problems_and_consult_manager` (2x), `call_manager_for_problems` (2x), `generate_iteration_stats` (2x).
+
+### Added
+
+- `get_base_branch()` in `common.sh` — detects project base branch with 4-level priority: `BASE_BRANCH` config → `origin/HEAD` symbolic-ref → probe (main/master/develop) → fallback "main".
+- `BASE_BRANCH=""` config option in `templates/config.template.sh`.
+- 458 tests (+24 new: get_base_branch detection, no hardcoded origin/main in scripts, base branch in agents/prompts, all 7 jq filters have status guard).
+
+---
+
 ## [2.5.7] - 2026-02-25
 
 ### Fixed

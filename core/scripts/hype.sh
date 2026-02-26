@@ -435,7 +435,7 @@ check_and_route_troubleshoot() {
 
     # Find tasks with blocked:troubleshoot label
     local troubleshoot_ids
-    troubleshoot_ids=$(echo "$bd_cache" | jq -r '.[] | select(.labels[]? == "blocked:troubleshoot") | .id' 2>/dev/null || true)
+    troubleshoot_ids=$(echo "$bd_cache" | jq -r '.[] | select(.status != "closed") | select(.labels[]? == "blocked:troubleshoot") | .id' 2>/dev/null || true)
 
     if [ -z "$troubleshoot_ids" ]; then
         return 0
@@ -512,11 +512,11 @@ check_problems_and_consult_manager() {
 
     # Count blocked tasks EXCLUDING troubleshoot (handled above)
     local blocked_count
-    blocked_count=$(echo "$bd_cache" | jq '[.[] | select(.labels[]? | startswith("blocked:")) | select(.labels[]? == "blocked:troubleshoot" | not)] | length' 2>/dev/null || echo "0")
+    blocked_count=$(echo "$bd_cache" | jq '[.[] | select(.status != "closed") | select(.labels[]? | startswith("blocked:")) | select(.labels[]? == "blocked:troubleshoot" | not)] | length' 2>/dev/null || echo "0")
 
     # Count tasks at retry limit (from cache)
     local retry_limit_count
-    retry_limit_count=$(echo "$bd_cache" | jq "[.[] | select(.labels[]? | test(\"^retry:[$RETRY_LIMIT-9]\"))] | length" 2>/dev/null || echo "0")
+    retry_limit_count=$(echo "$bd_cache" | jq "[.[] | select(.status != \"closed\") | select(.labels[]? | test(\"^retry:[$RETRY_LIMIT-9]\"))] | length" 2>/dev/null || echo "0")
 
     # If problems exist, consult Manager (pass cache)
     if [ "$blocked_count" -gt 0 ] || [ "$retry_limit_count" -gt 0 ]; then
@@ -538,7 +538,7 @@ call_manager_for_problems() {
 
     # --- Handle blocked tasks ---
     local blocked_ids
-    blocked_ids=$(echo "$bd_cache" | jq -r '.[] | select(.labels[]? | startswith("blocked:")) | .id' 2>/dev/null || echo "")
+    blocked_ids=$(echo "$bd_cache" | jq -r '.[] | select(.status != "closed") | select(.labels[]? | startswith("blocked:")) | .id' 2>/dev/null || echo "")
 
     for task_id in $blocked_ids; do
         local labels
@@ -576,7 +576,7 @@ call_manager_for_problems() {
 
     # --- Handle retry limit tasks ---
     local retry_ids
-    retry_ids=$(echo "$bd_cache" | jq -r ".[] | select(.labels[]? | test(\"^retry:[$RETRY_LIMIT-9]\")) | .id" 2>/dev/null || echo "")
+    retry_ids=$(echo "$bd_cache" | jq -r ".[] | select(.status != \"closed\") | select(.labels[]? | test(\"^retry:[$RETRY_LIMIT-9]\")) | .id" 2>/dev/null || echo "")
 
     for task_id in $retry_ids; do
         local task_labels
@@ -837,7 +837,7 @@ generate_iteration_stats() {
     local total closed blocked
     total=$(jq 'length' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "0")
     closed=$(jq '[.[] | select(.status == "closed")] | length' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "0")
-    blocked=$(jq '[.[] | select(.labels[]? | startswith("blocked:"))] | length' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "0")
+    blocked=$(jq '[.[] | select(.status != "closed") | select(.labels[]? | startswith("blocked:"))] | length' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "0")
 
     # Count agent runs from logs
     local manager_runs architect_runs coder_runs analyst_runs senior_runs
@@ -855,7 +855,7 @@ generate_iteration_stats() {
     # Get blocked tasks details
     local blocked_details
     # v2.3.9: read from tick-cache
-    blocked_details=$(jq -r '.[] | select(.labels[]? | startswith("blocked:")) | "- `\(.id)`: \(.title)"' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "- none")
+    blocked_details=$(jq -r '.[] | select(.status != "closed") | select(.labels[]? | startswith("blocked:")) | "- `\(.id)`: \(.title)"' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "- none")
 
     # Generate report
     cat > "$stats_file" << EOF
@@ -1323,11 +1323,14 @@ Then: bd dep remove <task> <dep> for one edge in each cycle" \
             fi
 
             # Run Architect to fix cycles
-            local cycles_output
+            local cycles_output base_branch_val cycles_context
             cycles_output=$(bd_safe dep cycles 2>&1 || true)
+            base_branch_val=$(get_base_branch)
+            cycles_context="BASE_BRANCH: $base_branch_val
+CYCLES:
+$cycles_output"
             log "INFO" "Running Architect to fix cycles..."
-            run_agent_with_mode "architect" ".claude/agents/ops.md" "sonnet" "fix_cycles" "CYCLES:
-$cycles_output" || log "WARN" "Ops failed in BLOCKED_CYCLES (will retry next cycle)"
+            run_agent_with_mode "architect" ".claude/agents/ops.md" "sonnet" "fix_cycles" "$cycles_context" || log "WARN" "Ops failed in BLOCKED_CYCLES (will retry next cycle)"
             ;;
 
         *)

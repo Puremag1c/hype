@@ -184,6 +184,19 @@ EOF
     grep -q '^send_doctor_report()' "$doctor"
 }
 
+@test "doctor.sh: gather_context includes Base Branch section" {
+    local doctor="$SCRIPTS_DIR/doctor.sh"
+
+    local fn_block
+    fn_block=$(sed -n '/^gather_context()/,/^}/p' "$doctor")
+
+    echo "$fn_block" | grep -q 'Base Branch'
+    echo "$fn_block" | grep -q 'get_base_branch'
+    echo "$fn_block" | grep -q 'BASE_BRANCH'
+    echo "$fn_block" | grep -q 'git branch --show-current'
+    echo "$fn_block" | grep -q 'symbolic-ref'
+}
+
 @test "doctor.sh: hardcoded repo is Puremag1c/hype" {
     local doctor="$SCRIPTS_DIR/doctor.sh"
     grep -q 'Puremag1c/hype' "$doctor"

@@ -10,9 +10,10 @@
 
 ### Added
 
-- `get_base_branch()` in `common.sh` — detects project base branch with 4-level priority: `BASE_BRANCH` config → `origin/HEAD` symbolic-ref → probe (main/master/develop) → fallback "main".
+- `get_base_branch()` in `common.sh` — detects project base branch with 5-level priority: `BASE_BRANCH` config → current branch (`git branch --show-current`, skips `task/*`) → `origin/HEAD` symbolic-ref → probe (main/master/develop) → fallback "main". Supports `git checkout -b feature && hype start` workflow — HYPE auto-detects and works relative to `feature`.
 - `BASE_BRANCH=""` config option in `templates/config.template.sh`.
-- 458 tests (+24 new: get_base_branch detection, no hardcoded origin/main in scripts, base branch in agents/prompts, all 7 jq filters have status guard).
+- `hype doctor` now shows Base Branch section: detected branch, config value, current branch, origin/HEAD.
+- 460 tests (+26 new: get_base_branch detection incl. current branch + task/* skip, no hardcoded origin/main in scripts, base branch in agents/prompts, all 7 jq filters have status guard).
 
 ---
 

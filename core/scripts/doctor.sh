@@ -186,6 +186,15 @@ gather_context() {
         context+="\`\`\`\n\n"
     fi
 
+    # Base branch detection (v2.5.8)
+    context+="## Base Branch\n"
+    context+="\`\`\`\n"
+    context+="Detected: $(get_base_branch)\n"
+    context+="Config (BASE_BRANCH): ${BASE_BRANCH:-<not set>}\n"
+    context+="Current branch: $(git branch --show-current 2>/dev/null || echo 'detached HEAD')\n"
+    context+="origin/HEAD: $(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo 'not set')\n"
+    context+="\`\`\`\n\n"
+
     # Beads status
     context+="## Beads Status\n"
     context+="\`\`\`\n"

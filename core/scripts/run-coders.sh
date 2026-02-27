@@ -32,6 +32,21 @@ mkdir -p "$LOGS_DIR"
 # === Worktree management ===
 # Изоляция coders через git worktrees (избегает HEAD conflicts и beads import storms)
 
+# Symlink build artifact directories from project into worktree
+# so coders can compile/test without re-downloading dependencies
+setup_worktree_links() {
+    local worktree_path="$1"
+    local project_dir="$2"
+
+    # Common build artifact dirs (gitignored, not in worktree)
+    local dirs="deps _build node_modules .venv venv vendor target"
+    for dir in $dirs; do
+        if [ -d "$project_dir/$dir" ] && [ ! -e "$worktree_path/$dir" ]; then
+            ln -sf "$project_dir/$dir" "$worktree_path/$dir"
+        fi
+    done
+}
+
 # find_free_slot - allocates a slot with lock-based protection
 # Uses mkdir for atomic lock acquisition (prevents race conditions between HYPE cycles)
 # Lock is released only after cleanup_worktree completes
@@ -87,6 +102,7 @@ create_worktree() {
     # Suppress stdout ("HEAD is now at...") to avoid polluting worktree_path
     local wt_stderr
     if wt_stderr=$(git worktree add --detach "$worktree_path" HEAD 2>&1 >/dev/null); then
+        setup_worktree_links "$worktree_path" "$PROJECT_DIR"
         echo "$worktree_path"
         return 0
     fi
@@ -97,6 +113,7 @@ create_worktree() {
     git worktree prune 2>/dev/null || true
 
     if git worktree add --detach "$worktree_path" HEAD >/dev/null 2>&1; then
+        setup_worktree_links "$worktree_path" "$PROJECT_DIR"
         echo "$worktree_path"
         return 0
     else

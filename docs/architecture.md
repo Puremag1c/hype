@@ -272,6 +272,9 @@ main-repo/.beads/*.db     ← единственная база
 worktree/                 ← bd auto-discovers из parent
 ```
 
+**Worktree build artifacts (v2.5.11):**
+`create_worktree()` calls `setup_worktree_links()` after `git worktree add`. Symlinks build artifact directories (`deps`, `_build`, `node_modules`, `.venv`, `venv`, `vendor`, `target`) from project root into worktree if they exist. This allows coders to compile/test without re-downloading dependencies. Cleanup via `git worktree remove --force` or `rm -rf` handles symlinks correctly — no special unlink needed.
+
 **3. bd_safe сериализация (HYPE-specific)**
 - Все bd вызовы через `bd_safe()` обёртку в common.sh
 - Global lock через `mkdir /tmp/hype-bd.lock.d` (atomic)

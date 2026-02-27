@@ -181,6 +181,35 @@ bd doctor --fix
 
 ---
 
+### PROBLEM: Build fails in worktree (missing deps)
+
+**Fixed in:** 2.5.11
+
+**Симптомы:**
+- Coder in worktree runs `mix test` / `npm test` → "deps not found" / "module not found"
+- Reject cascade (10+ rejects) for tasks that should be trivial
+- Only happens when project has build artifacts (`deps/`, `node_modules/`, etc.)
+
+**Причина:**
+`git worktree add` creates a clean checkout without gitignored build artifact directories. Coders need `deps/`, `_build/`, `node_modules/`, `.venv/`, `vendor/`, `target/` to compile and test.
+
+**Диагностика:**
+```bash
+ls -la .hype-worktrees/coder-0/deps     # Should be symlink or exist
+ls -la .hype-worktrees/coder-0/node_modules
+```
+
+**Решение:**
+Обновиться до 2.5.11+. `create_worktree()` now calls `setup_worktree_links()` which auto-symlinks build artifact dirs from project root into worktree.
+
+**Manual fix (для старых версий):**
+```bash
+ln -sf "$PROJECT_DIR/deps" .hype-worktrees/coder-0/deps
+ln -sf "$PROJECT_DIR/node_modules" .hype-worktrees/coder-0/node_modules
+```
+
+---
+
 ## Git проблемы
 
 ### PROBLEM: Orphaned worktree

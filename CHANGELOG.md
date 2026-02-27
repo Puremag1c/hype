@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.5.11] - 2026-02-27
+
+### Fixed
+
+- **Build fails in coder worktrees — missing dependencies (GitHub #26)** — `create_worktree()` did bare `git worktree add` without symlinking build artifact directories (`deps/`, `_build/`, `node_modules/`, `.venv/`, `venv/`, `vendor/`, `target/`). Coders running `mix test` / `npm test` got "deps not found" → reject cascade. Real case: vpnbot (Elixir) — 14 rejects. Added `setup_worktree_links()` that auto-detects and symlinks existing build dirs from project root into worktree. Called on both primary and retry paths.
+
+### Added
+
+- `setup_worktree_links()` in `run-coders.sh` — symlinks build artifact directories from project root into worktree (deps, _build, node_modules, .venv, venv, vendor, target). Auto-detect: only links dirs that exist in project and don't already exist in worktree.
+- 6 new tests for worktree symlinks (setup_worktree_links structure, dir list, guards, retry path, cleanup independence).
+
+---
+
 ## [2.5.10] - 2026-02-26
 
 ### Fixed

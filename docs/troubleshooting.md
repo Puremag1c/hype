@@ -930,35 +930,35 @@ bd close <id> --reason="Manual: removed from scope"
 
 ---
 
-### PROBLEM: CONSULTATION phase — hype stopped
+### PROBLEM: CONSULTATION phase — interactive Manager doesn't start
 
 **Симптомы:**
-- Фаза `CONSULTATION`
-- HYPE останавливается с сообщением о user escalation
-- Задачи с `user-escalation` label
+- Фаза `CONSULTATION` в логах
+- Интерактивное окно не открывается
+- HYPE крутится в цикле без диалога
 
 **Причина:**
-Troubleshooter решил что задача требует решения пользователя (label `user-escalation`). Это штатное поведение — HYPE останавливается чтобы пользователь принял решение.
+1. `manager-review.md` отсутствует или повреждён
+2. Claude CLI не установлен или не авторизован
+3. Модель недоступна
 
 **Диагностика:**
 ```bash
-bd list --status=open --json | jq '.[] | select((.labels // []) | index("user-escalation"))'
-cat .hype/evidence/user-review-report.md 2>/dev/null
+ls -la .claude/agents/manager-review.md
+claude --version
+bd list --status=open --json --limit 0 | jq '.[] | select((.labels // []) | index("user-escalation")) | {id, title}'
 ```
 
 **Решение (runtime-fix):**
 ```bash
-# Прочитать отчёт
-cat .hype/evidence/user-review-report.md
+# Обновить HYPE (переустановит агентов)
+hype upgrade --force
 
-# Для каждой задачи выбрать действие:
-bd close <id> --reason="User decision: skip this feature"
-# или
-bd update <id> --status=open --remove-label=user-escalation --description="<уточнённое описание>"
-
-# Перезапустить HYPE
-hype
+# Или вручную снять эскалацию если решение известно:
+bd update <id> --status=open --remove-label=user-escalation --remove-label=blocked:troubleshoot --notes="Manual: <решение>"
 ```
+
+**Note (v2.5.11+):** CONSULTATION использует интерактивный Manager (как PREPARING). Manager объясняет проблему, собирает решение пользователя, записывает в notes задачи. Troubleshooter подхватывает на следующем цикле. Если Manager упал — labels остались, HYPE повторит CONSULTATION на следующем цикле.
 
 ---
 

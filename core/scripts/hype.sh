@@ -288,6 +288,7 @@ run_interactive_agent() {
     local agent_name=$1
     local agent_file=$2
     local model=${3:-"opus"}
+    local extra_context=${4:-""}
 
     log "INFO" "Starting INTERACTIVE agent: $agent_name (user dialogue required)"
 
@@ -307,13 +308,23 @@ $agent_prompt
 
 ---
 PROJECT_ROOT: $PROJECT_DIR
+${extra_context}
 EOF
 )
 
-    # Tool restrictions: read everything, write only SPEC files
-    local allowed_tools='Read,Glob,Grep,Write'
-    allowed_tools+=',Bash(cat:*),Bash(grep:*),Bash(find:*),Bash(ls:*),Bash(head:*),Bash(tail:*)'
-    allowed_tools+=',Bash(wc:*)'
+    # Tool restrictions depend on agent type
+    local allowed_tools
+    if [ "$agent_name" = "manager-review" ]; then
+        # Consultation: read project + bd for task management
+        allowed_tools='Read,Glob,Grep'
+        allowed_tools+=',Bash(cat:*),Bash(grep:*),Bash(find:*),Bash(ls:*),Bash(head:*),Bash(tail:*)'
+        allowed_tools+=',Bash(bd show:*),Bash(bd close:*),Bash(bd update:*),Bash(bd list:*)'
+    else
+        # Default (manager/PREPARING): read everything, write only SPEC files
+        allowed_tools='Read,Glob,Grep,Write'
+        allowed_tools+=',Bash(cat:*),Bash(grep:*),Bash(find:*),Bash(ls:*),Bash(head:*),Bash(tail:*)'
+        allowed_tools+=',Bash(wc:*)'
+    fi
 
     # Интерактивный режим: передаём содержимое промпта как системную инструкцию
     # Без --print, без timeout, без перенаправления в файл
@@ -1038,42 +1049,27 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}" || log "WARN" "Architect failed in PLA
             ;;
 
         CONSULTATION)
-            # Tasks escalated to user — generate non-technical report and stop loop
-            log "INFO" "CONSULTATION: Tasks require human decision, generating report..."
+            # Tasks escalated to user — interactive Manager session
+            log "INFO" "CONSULTATION: Tasks require human decision, starting interactive Manager..."
 
-            local user_tasks
+            local user_task_ids
             # v2.3.9: read from tick-cache (written by detect-phase.sh this cycle)
-            user_tasks=$(jq -r '.[] | select(.status == "open") | select((.labels // []) | index("user-escalation")) | "\(.id): \(.title)\n  Notes: \(.notes // "none")"' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "")
+            user_task_ids=$(jq -r '.[] | select(.status == "open") | select((.labels // []) | index("user-escalation")) | .id' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "")
 
-            # Run manager-review agent if available
-            local tw_review_file=".claude/agents/manager-review.md"
-            if [ -f "$tw_review_file" ]; then
-                local tw_prompt
-                tw_prompt=$(cat "$tw_review_file")
-                local output_file="$LOGS_DIR/user-review-$(date +%s).log"
+            if [ -z "$user_task_ids" ]; then
+                log "INFO" "CONSULTATION: No user-escalation tasks found (resolved externally?)"
+            else
+                # Interactive Manager session (like PREPARING)
                 local tw_model
-                tw_model=$(map_model "${MODEL_MANAGER:-sonnet}")
+                tw_model=$(map_model "${MODEL_MANAGER:-opus}")
 
-                local full_prompt="$tw_prompt
-
----
-MODE: user_review
-PROJECT_ROOT: $PROJECT_DIR
-
-TASKS REQUIRING USER DECISION:
-$user_tasks"
-
-                printf '%s' "$full_prompt" | timeout_cmd "${REVIEW_TIMEOUT:-5m}" claude --print --model "$tw_model" > "$output_file" 2>&1 || true
-                log "INFO" "User review report generated (see $output_file)"
+                # Pass escalated task IDs as extra context in system prompt
+                local escalated_context
+                escalated_context="ESCALATED_TASKS: $user_task_ids"
+                if ! run_interactive_agent "manager-review" ".claude/agents/manager-review.md" "$tw_model" "$escalated_context"; then
+                    log "WARN" "CONSULTATION: Manager exited with error. Escalated tasks still pending — will retry next cycle."
+                fi
             fi
-
-            # Stop main loop — user must act
-            log "WARN" "CONSULTATION: Stopping. Resolve user-escalation tasks manually, then restart."
-            log "WARN" "Tasks needing attention:"
-            echo "$user_tasks" | while IFS= read -r line; do
-                [ -n "$line" ] && log "WARN" "  $line"
-            done
-            return 0
             ;;
 
         REFLEXING)

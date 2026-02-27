@@ -17,7 +17,7 @@ hype.sh (bash loop с lock file)
     │   ├─► CODING: run-coders.sh + run-seniors.sh + run-merge-queue.sh
     │   ├─► TESTING: run-testers.sh (background) → Testers × 6
     │   ├─► REFLEXING: QA (Opus)
-    │   ├─► CONSULTATION: Manager-Review (Sonnet) → hype stops
+    │   ├─► CONSULTATION: Manager-Review (Opus, interactive)
     │   ├─► VALIDATING: QA (Opus)
     │   ├─► REPORTING: Completion (Opus)
     │   └─► BLOCKED_CYCLES: Ops (Sonnet)
@@ -35,7 +35,7 @@ hype.sh (bash loop с lock file)
 PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALIDATING → REPORTING → DONE
                                               ↑                  ↓
                                               └── REFLEXING ←─┘ (smoke/regression tasks)
-                                         CONSULTATION ← (user-escalation label → hype stops)
+                                         CONSULTATION ← (user-escalation label → interactive dialogue)
 ```
 
 | Фаза | Условие перехода | Агент | Действие |
@@ -47,7 +47,7 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
 | CODING | milestone:plan-reviewed | Coders + Auditor | Реализуют задачи + аудит |
 | TESTING | все задачи closed | Testers ×6 | Параллельная проверка работоспособности |
 | REFLEXING | smoke/regression tasks найдены | QA | Триаж всех smoke test находок |
-| CONSULTATION | user-escalation label | Manager-Review | Генерирует отчёт, hype stops |
+| CONSULTATION | user-escalation label | Manager-Review (interactive) | Диалог с пользователем, результат в notes → Troubleshooter |
 | VALIDATING | milestone:testing-done | QA | Проверяет целостность |
 | REPORTING | milestone:validating-done | Completion (Opus) | Version bump + CHANGELOG + SPEC_REPORT + commit + push |
 | DONE | milestone:project-done | — | Проект завершён |
@@ -154,10 +154,18 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
   - REMOVE FROM SCOPE — закрыть как нерешаемую
   - ESCALATE TO USER — label `user-escalation`, hype stops
 
-### Manager Review (Sonnet)
-- **Роль:** Генерация non-technical отчёта для пользователя
+### Manager Review (Opus, interactive)
+- **Роль:** Интерактивный диалог с пользователем об эскалированных задачах
 - **Когда:** Фаза CONSULTATION (задачи с `user-escalation` label)
-- **Выход:** `.hype/evidence/user-review-report.md`
+- **Workflow (v2.5.11):**
+  1. Читает задачи с `user-escalation` (IDs из tick-cache)
+  2. Объясняет пользователю простым языком: что система пыталась, что не получилось
+  3. Собирает решение пользователя через диалог
+  4. Записывает результат в notes задачи (`CONSULTATION RESULT: ...`)
+  5. Снимает `user-escalation` + `blocked:troubleshoot`, возвращает status=open
+  6. Troubleshooter/Architect подхватывает задачу на следующем цикле с новым контекстом
+- **Не делает:** Не создаёт задачи, не планирует архитектуру, не показывает пользователю bd команды
+- **Recovery:** Если Manager упал — labels остались → следующий цикл снова CONSULTATION
 
 ### Testers (TESTING фаза)
 - **Роль:** Проверка работоспособности после CODING

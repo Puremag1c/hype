@@ -6,10 +6,17 @@
 
 - **Build fails in coder worktrees — missing dependencies (GitHub #26)** — `create_worktree()` did bare `git worktree add` without symlinking build artifact directories (`deps/`, `_build/`, `node_modules/`, `.venv/`, `venv/`, `vendor/`, `target/`). Coders running `mix test` / `npm test` got "deps not found" → reject cascade. Real case: vpnbot (Elixir) — 14 rejects. Added `setup_worktree_links()` that auto-detects and symlinks existing build dirs from project root into worktree. Called on both primary and retry paths.
 
+- **CONSULTATION loops without user interaction (GitHub #27)** — CONSULTATION phase used `claude --print` (batch mode) to generate a file report, then "stopped" the loop — but `return 0` only exited `dispatch_phase()`, the main `while` loop continued every 30s. User never saw reports, never got asked. Real case: vpnbot — 15 cycles of CONSULTATION in 33 minutes with zero user interaction. Replaced with interactive Manager session via `run_interactive_agent` (like PREPARING). Manager explains escalated tasks in plain language, collects user decisions through dialogue, writes results to task notes, removes `user-escalation` label. Troubleshooter picks up on next cycle.
+
+### Changed
+
+- **Manager-Review agent redesigned** — from batch report generator (sonnet, `claude --print` → file) to interactive consultation agent (opus, `run_interactive_agent` → dialogue). Manager reads escalated tasks, explains problems in plain language, asks user for direction, writes `CONSULTATION RESULT` to task notes, removes `user-escalation` + `blocked:troubleshoot` labels. Troubleshooter/Architect handles the rest.
+- **`run_interactive_agent` supports extra context** — optional 4th parameter for injecting additional context (e.g. escalated task IDs) into system prompt. Agent-specific tool restrictions: `manager-review` gets `bd` access, default agents get file read/write.
+
 ### Added
 
 - `setup_worktree_links()` in `run-coders.sh` — symlinks build artifact directories from project root into worktree (deps, _build, node_modules, .venv, venv, vendor, target). Auto-detect: only links dirs that exist in project and don't already exist in worktree.
-- 6 new tests for worktree symlinks (setup_worktree_links structure, dir list, guards, retry path, cleanup independence).
+- Worktree symlink tests + CONSULTATION redesign tests.
 
 ---
 

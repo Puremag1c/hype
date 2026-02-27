@@ -1111,7 +1111,7 @@ For each task:
 
             run_agent_with_mode "architect" ".claude/agents/qa.md" "$arch_model" "reflexing" "$triage_prompt" "${REFLEXING_TIMEOUT:-10m}" || log "WARN" "Architect failed in REFLEXING (will retry next cycle)"
 
-            # v2.3.14: Safety net — force-remove smoke/regression labels architect missed
+            # Safety net — force-remove smoke/regression labels architect missed
             # Without this, leftover labels trigger another REFLEXING (2x Opus waste)
             local remaining_smoke_ids
             remaining_smoke_ids=$(jq -r '.[] | select(.status == "open") | select((.labels // []) | any(. == "smoke" or . == "regression")) | .id' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "")
@@ -1120,6 +1120,15 @@ For each task:
                 for sid in $remaining_smoke_ids; do
                     bd_safe update "$sid" --remove-label=smoke --remove-label=regression >/dev/null 2>&1 || true
                 done
+            fi
+
+            # If QA closed all findings as false positive (no fix tasks created),
+            # set testing-done milestone to prevent infinite TESTING→REFLEXING loop
+            local post_reflexing_open
+            post_reflexing_open=$(bd_safe query "status=open AND NOT label=trigger" --json --limit 0 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+            if [ "$post_reflexing_open" -eq 0 ]; then
+                log "INFO" "REFLEXING: All findings resolved, no fix tasks — marking testing done"
+                ensure_milestone "milestone:testing-done" "All smoke findings triaged, no fixes needed"
             fi
             ;;
 

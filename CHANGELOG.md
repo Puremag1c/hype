@@ -8,6 +8,8 @@
 
 - **CONSULTATION loops without user interaction (GitHub #27)** — CONSULTATION phase used `claude --print` (batch mode) to generate a file report, then "stopped" the loop — but `return 0` only exited `dispatch_phase()`, the main `while` loop continued every 30s. User never saw reports, never got asked. Real case: vpnbot — 15 cycles of CONSULTATION in 33 minutes with zero user interaction. Replaced with interactive Manager session via `run_interactive_agent` (like PREPARING). Manager explains escalated tasks in plain language, collects user decisions through dialogue, writes results to task notes, removes `user-escalation` label. Troubleshooter picks up on next cycle.
 
+- **REFLEXING→TESTING infinite loop when QA closes all findings** — after QA triages smoke findings as false positive in REFLEXING (no fix tasks created), `milestone:testing-done` was never set → `detect-phase` sends back to TESTING → same findings → infinite loop. Added post-triage check: if 0 open non-trigger tasks remain after REFLEXING, set `milestone:testing-done` automatically.
+
 ### Changed
 
 - **Manager-Review agent redesigned** — from batch report generator (sonnet, `claude --print` → file) to interactive consultation agent (opus, `run_interactive_agent` → dialogue). Manager reads escalated tasks, explains problems in plain language, asks user for direction, writes `CONSULTATION RESULT` to task notes, removes `user-escalation` + `blocked:troubleshoot` labels. Troubleshooter/Architect handles the rest.

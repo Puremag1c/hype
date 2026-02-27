@@ -1021,7 +1021,7 @@ cleanup_iteration() {
 
     # SPEC.md
     [ -f "$project_dir/SPEC.md" ] && echo "  • SPEC.md → SPEC.prev.md (archived)"
-    [ -f "$project_dir/SPEC_REPORT.prev.md" ] && echo "  • SPEC_REPORT.prev.md will be deleted"
+    [ -f "$project_dir/SPEC_REPORT.prev.md" ] && echo "  • SPEC_REPORT.prev.md preserved (Manager reads it next iteration)"
 
     echo ""
     echo "Starting cleanup..."
@@ -1103,11 +1103,8 @@ cleanup_iteration() {
         mv "$project_dir/SPEC.md" "$project_dir/SPEC.prev.md"
     fi
 
-    # 6b. Delete stale SPEC_REPORT.prev.md (completion writes directly to .prev.md)
-    if [ -f "$project_dir/SPEC_REPORT.prev.md" ]; then
-        echo "  → Deleting SPEC_REPORT.prev.md..."
-        rm -f "$project_dir/SPEC_REPORT.prev.md"
-    fi
+    # 6b. SPEC_REPORT.prev.md preserved — Manager reads it for next iteration context
+    # Completion agent overwrites it with fresh report each iteration
 
     # 7. Create needs-spec marker for next iteration
     touch "$project_dir/.hype/needs-spec" 2>/dev/null || true

@@ -930,12 +930,14 @@ load '../helpers/setup'
     grep -q 'SPEC_REPORT.prev.md' "$agent"
 }
 
-@test "v2.4.0: common.sh cleanup deletes SPEC_REPORT.prev.md" {
+@test "v2.5.9: common.sh cleanup preserves SPEC_REPORT.prev.md" {
     local common_sh="$SCRIPTS_DIR/common.sh"
 
     local func_body
     func_body=$(sed -n '/^cleanup_iteration()/,/^}/p' "$common_sh")
 
-    # Cleanup should handle SPEC_REPORT.prev.md (delete, not archive)
+    # Cleanup should preserve SPEC_REPORT.prev.md (Manager reads it next iteration)
     echo "$func_body" | grep -q 'SPEC_REPORT.prev.md'
+    # Must NOT delete it
+    ! echo "$func_body" | grep -q 'rm.*SPEC_REPORT.prev.md'
 }

@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.5.10] - 2026-02-26
+
+### Fixed
+
+- **SPEC_REPORT.prev.md deleted on `hype clear`** — `cleanup_iteration()` deleted the iteration report, but Manager reads it at next iteration startup for continuity context ("Вижу отчёт о прошлой итерации..."). Completion agent overwrites it each iteration anyway — no stale data risk.
+
+---
+
 ## [2.5.9] - 2026-02-26
 
 ### Changed

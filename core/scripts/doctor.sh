@@ -254,7 +254,7 @@ gather_context() {
     context+="\n\`\`\`\n\n"
 
     # v2.2: Reviewer slots and review pipeline state
-    context+="## Review Pipeline (v2.2)\n"
+    context+="## Review Pipeline\n"
     context+="\`\`\`\n"
     context+="Senior slots:\n"
     context+=$(ls -la .hype-worktrees/senior-*.lock 2>/dev/null || echo "no active seniors")

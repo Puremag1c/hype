@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.5.12] - 2026-02-27
+
+### Fixed
+
+- **REFLEXING→TESTING infinite loop when QA closes all findings** — after QA triages smoke findings as false positive in REFLEXING (no fix tasks created), `milestone:testing-done` was never set → `detect-phase` sends back to TESTING → same findings → infinite loop. Added post-triage check: if 0 open non-trigger tasks remain after REFLEXING, set `milestone:testing-done` automatically.
+
+---
+
 ## [2.5.11] - 2026-02-27
 
 ### Fixed
@@ -7,8 +15,6 @@
 - **Build fails in coder worktrees — missing dependencies (GitHub #26)** — `create_worktree()` did bare `git worktree add` without symlinking build artifact directories (`deps/`, `_build/`, `node_modules/`, `.venv/`, `venv/`, `vendor/`, `target/`). Coders running `mix test` / `npm test` got "deps not found" → reject cascade. Real case: vpnbot (Elixir) — 14 rejects. Added `setup_worktree_links()` that auto-detects and symlinks existing build dirs from project root into worktree. Called on both primary and retry paths.
 
 - **CONSULTATION loops without user interaction (GitHub #27)** — CONSULTATION phase used `claude --print` (batch mode) to generate a file report, then "stopped" the loop — but `return 0` only exited `dispatch_phase()`, the main `while` loop continued every 30s. User never saw reports, never got asked. Real case: vpnbot — 15 cycles of CONSULTATION in 33 minutes with zero user interaction. Replaced with interactive Manager session via `run_interactive_agent` (like PREPARING). Manager explains escalated tasks in plain language, collects user decisions through dialogue, writes results to task notes, removes `user-escalation` label. Troubleshooter picks up on next cycle.
-
-- **REFLEXING→TESTING infinite loop when QA closes all findings** — after QA triages smoke findings as false positive in REFLEXING (no fix tasks created), `milestone:testing-done` was never set → `detect-phase` sends back to TESTING → same findings → infinite loop. Added post-triage check: if 0 open non-trigger tasks remain after REFLEXING, set `milestone:testing-done` automatically.
 
 ### Changed
 

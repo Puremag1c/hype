@@ -171,7 +171,57 @@ ls -la .hype-worktrees/coder-0/node_modules
 
 ---
 
+### PROBLEM: detect-phase.sh returns UNKNOWN (silent death)
+
+**Симптомы:**
+- Один цикл показывает `Phase: UNKNOWN | 0/0 (0%)`
+- Предыдущий и следующий циклы нормальные (CODING, TESTING и т.д.)
+- В stderr detect-phase пусто (0 bytes)
+
+**Причина:**
+`set -euo pipefail` (line 22) + `ALL_TASKS_JSON=$(bd_safe list ...)` — если bd_safe вернёт non-zero, `set -e` убивает скрипт до retry логики. Transient bd lock contention (3-4 concurrent coders) — типичный триггер.
+
+**Диагностика:**
+```bash
+# Проверить что detect-phase НЕ использует голый $() без if/|| true
+grep 'ALL_TASKS_JSON=\$(bd_safe' scripts/detect-phase.sh
+# Должно быть: if ! ALL_TASKS_JSON=$(bd_safe ...) или || true
+```
+
+**Решение:**
+Исправлено в v2.5.13 (GH #29). Обёрнуто в `if !` для set-e safety, retry использует `|| true`.
+
+**Auto-recovery:**
+Self-healing — следующий цикл (30s) пройдёт нормально. HYPE обрабатывает UNKNOWN как warning.
+
+---
+
 ## Git проблемы
+
+### PROBLEM: Base branch drift during HYPE run
+
+**Симптомы:**
+- HYPE работал на ветке `schema_update`, после завершения проект на `main`
+- HYPE говорит "work complete" но коммиты на неправильной ветке
+- `get_base_branch()` возвращает `main` вместо пользовательской ветки
+
+**Причина:**
+Merge queue делает `git checkout` в основной директории проекта. `try_fast_merge()` создаёт detached HEAD (line 88). Последующие вызовы `get_base_branch()` читают live git state → возвращают `main` вместо пользовательской ветки.
+
+**Диагностика:**
+```bash
+cat .hype/base-branch 2>/dev/null    # Должен содержать кэш
+git branch --show-current             # Текущая ветка
+hype doctor                           # Покажет Detected vs Cached
+```
+
+**Решение:**
+Исправлено в v2.5.13 (GH #28). Base branch кэшируется в `.hype/base-branch` при старте HYPE. Все последующие вызовы `get_base_branch()` читают кэш, иммунный к checkout'ам merge queue.
+
+**Auto-recovery:**
+`cleanup_iteration()` удаляет кэш. При следующем старте HYPE кэш пересоздаётся.
+
+---
 
 ### PROBLEM: Orphaned worktree
 

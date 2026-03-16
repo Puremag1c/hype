@@ -56,18 +56,17 @@ fi
 
 # Собираем статистику из beads (1 запрос, всё через jq)
 # ВАЖНО: --limit 0 для unlimited (по умолчанию 50)
-ALL_TASKS_JSON=$(bd_safe list --json --limit 0 --all 2>/dev/null)
-if [ $? -ne 0 ] || ! echo "$ALL_TASKS_JSON" | jq -e 'type == "array"' >/dev/null 2>&1; then
+# v2.5.13: protect from set -e (GH #29) — bd_safe failure must not kill script silently
+if ! ALL_TASKS_JSON=$(bd_safe list --json --limit 0 --all 2>/dev/null); then
     # Dolt embedded may transiently fail — retry once after brief wait
     >&2 echo "bd list failed, retrying after 2s..."
     sleep 2
-    ALL_TASKS_JSON=$(bd_safe list --json --limit 0 --all 2>/dev/null)
-    if [ $? -ne 0 ] || ! echo "$ALL_TASKS_JSON" | jq -e 'type == "array"' >/dev/null 2>&1; then
-        echo '{"phase":"ERROR","stats":{},"progress_pct":0,"in_progress_ids":[],"regression_count":0,"p0_bugs":0,"error":"bd list failed or returned invalid JSON"}'
-        >&2 echo "bd list failed after retry"
-        exit 1
-    fi
-    >&2 echo "bd list recovered on retry"
+    ALL_TASKS_JSON=$(bd_safe list --json --limit 0 --all 2>/dev/null) || true
+fi
+if ! echo "$ALL_TASKS_JSON" | jq -e 'type == "array"' >/dev/null 2>&1; then
+    echo '{"phase":"ERROR","stats":{},"progress_pct":0,"in_progress_ids":[],"regression_count":0,"p0_bugs":0,"error":"bd list failed or returned invalid JSON"}'
+    >&2 echo "bd list failed after retry"
+    exit 1
 fi
 
 # Filter out sub-issues created by bd set-state (audit trail entries with .N suffixed IDs)

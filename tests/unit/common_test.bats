@@ -677,3 +677,25 @@ load '../helpers/mock_bd'
     echo "$merge_fn" | grep -q 'Dirty working tree'
     echo "$merge_fn" | grep -q 'git_nh reset --hard'
 }
+
+# =============================================================================
+# GH #29: detect-phase.sh bd_safe protected from set -e silent death
+# =============================================================================
+
+@test "detect-phase.sh: bd_safe list protected from set -e (GH #29)" {
+    local detect_sh="$SCRIPTS_DIR/detect-phase.sh"
+
+    # The first bd_safe call must be wrapped in 'if !' to survive set -e
+    # Old pattern: ALL_TASKS_JSON=$(bd_safe ...) then $? check = dead code under set -e
+    ! grep -q 'ALL_TASKS_JSON=\$(bd_safe.*)\s*$' "$detect_sh"
+
+    # Must use 'if !' pattern for set -e safety
+    grep -q 'if ! ALL_TASKS_JSON=\$(bd_safe' "$detect_sh"
+}
+
+@test "detect-phase.sh: retry bd_safe has || true guard" {
+    local detect_sh="$SCRIPTS_DIR/detect-phase.sh"
+
+    # The retry call inside the if-block must have || true
+    grep 'sleep 2' "$detect_sh" -A 1 | grep -q 'bd_safe.*|| true'
+}

@@ -221,9 +221,10 @@ load '../helpers/setup'
 
     # Must NOT use bd sync --import-only (removed in v2.5, Dolt handles natively)
     ! grep -q 'bd sync --import-only' "$detect_sh"
-    # Must retry bd_safe list after sleep
+    # Must retry bd_safe list after sleep (GH #29: set -e safe)
     grep -q 'retrying after' "$detect_sh"
-    grep -q 'recovered on retry' "$detect_sh"
+    grep -q 'sleep 2' "$detect_sh"
+    grep -q 'bd list failed after retry' "$detect_sh"
 }
 
 @test "detect-phase.sh: empty bd response guard (prevents phase regression)" {

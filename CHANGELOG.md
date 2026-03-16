@@ -6,12 +6,18 @@
 
 - **Base branch drift during HYPE run (GitHub #28)** — `get_base_branch()` reads live git state on every call, but merge queue does `git checkout` in the main project directory. If repo enters detached HEAD (e.g. during `try_fast_merge`), subsequent calls return `main` instead of the user's actual branch (e.g. `schema_update`). Fix: cache base branch once at HYPE startup in `.hype/base-branch`, all subsequent reads use cache. Cache cleared on `cleanup_iteration()`.
 
+- **detect-phase.sh silent death on bd_safe failure (GitHub #29)** — `set -euo pipefail` + `VAR=$(bd_safe ...)` = silent script termination. The retry logic (lines 60-71) was dead code — unreachable under `set -e`. Transient bd lock contention (3-4 concurrent coders) triggered silent exit → `UNKNOWN 0/0` phase for one cycle. Fix: wrapped in `if !` for set-e safety, retry uses `|| true`.
+
 - **completion.md bare `git push`** — changed to `git push origin HEAD` (defense-in-depth against detached HEAD scenarios).
+
+### Changed
+
+- **`CLAUDEV_DIR` renamed to `HYPE_DIR`** — legacy variable name from pre-rename era (claudev → hype). Replaced in `hype.sh` (~40), `doctor.sh` (~7), and doctor test (~4). Single `export HYPE_DIR` replaces two-line alias.
 
 ### Added
 
 - `doctor.sh` reports cached base branch in diagnostics.
-- 6 new tests for base branch cache (508 total).
+- 8 new tests: 6 for base branch cache, 2 for detect-phase set-e guard (510 total).
 
 ---
 

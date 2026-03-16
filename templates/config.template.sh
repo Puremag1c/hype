@@ -33,6 +33,9 @@ TASK_TIMEOUT="10m"
 # Таймаут code review (короче т.к. контекст передаётся в prompt)
 REVIEW_TIMEOUT="5m"
 
+# Таймаут audit задач (verify/check — не генерируют код)
+AUDIT_TIMEOUT="10m"
+
 # Таймаут для PLANNING (architect создаёт план из SPEC.md)
 PLANNING_TIMEOUT="15m"
 

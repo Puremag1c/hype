@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.5.14] - 2026-03-16
+
+### Fixed
+
+- **Audit escalation race condition — coder reclaims task before troubleshooter (GitHub #31)** — GH #30 fix set `--status=open` on audit escalation, creating a window where `bd ready` returns the task before troubleshooter picks it up. Coder reclaims → adds `coder` label → troubleshooter skips ("coder label present") → deadlock. Fix: remove `--status=open` from escalation (keep `in_progress`), same as `reject:4+` path in `run-seniors.sh:460`. `bd ready` only returns open tasks → race eliminated.
+
+- **AUDIT_TIMEOUT too short (5m default)** — auditor wastes ~2min discovering project environment (python path, venv), leaving only 3min for actual work → guaranteed timeout on non-trivial audits. Default raised to 10m. Added `AUDIT_TIMEOUT` to config template for per-project override.
+
+### Changed
+
+- **Architect prohibited from creating per-task verification audits** — audit tasks like "Verify: tests pass after X" duplicate what TESTING phase does automatically for the whole iteration. They cause timeout cascades and block dependency chains. Audits now restricted to external conditions (environment, config, infrastructure) that TESTING doesn't cover.
+
+---
+
 ## [2.5.13] - 2026-03-16
 
 ### Fixed

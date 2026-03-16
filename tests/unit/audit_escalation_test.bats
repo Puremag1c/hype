@@ -1,9 +1,10 @@
 #!/usr/bin/env bats
 # tests/unit/audit_escalation_test.bats
-# Tests for audit escalation: GH#25 (fork bomb defense) + GH#30 (troubleshooter routing)
+# Tests for audit escalation: GH#25 (fork bomb defense) + GH#30 (troubleshooter routing) + GH#31 (race fix)
 #
 # GH#25: is_audit_task() escalation guard prevents recursive audit routing
 # GH#30: 3rd audit failure routes to troubleshooter (not new task creation)
+# GH#31: escalation keeps in_progress (no --status=open), AUDIT_TIMEOUT=10m
 
 load '../helpers/setup'
 
@@ -94,7 +95,44 @@ load '../helpers/setup'
 }
 
 # =============================================================================
-# Layer 3: Audit findings routed to plan-reviewer (run-seniors.sh)
+# Layer 3: Race condition fix — no --status=open in escalation (GH#31)
+# =============================================================================
+
+@test "run-coders.sh: audit escalation does not set --status=open" {
+    local coders_sh="$SCRIPTS_DIR/run-coders.sh"
+
+    local fn_block
+    fn_block=$(sed -n '/^run_auditor()/,/^}/p' "$coders_sh")
+
+    # Extract the escalation bd_safe update (the one with blocked:troubleshoot)
+    # It must NOT contain --status=open (race condition fix GH#31)
+    local escalation_block
+    escalation_block=$(echo "$fn_block" | sed -n '/routing to troubleshooter/,/|| true/p')
+    ! echo "$escalation_block" | grep -q '\-\-status=open'
+}
+
+@test "run-coders.sh: AUDIT_TIMEOUT defaults to 10m" {
+    local coders_sh="$SCRIPTS_DIR/run-coders.sh"
+
+    # AUDIT_TIMEOUT default must be 10m (not 5m — GH#31)
+    grep -q 'AUDIT_TIMEOUT:-10m' "$coders_sh"
+}
+
+@test "config template: AUDIT_TIMEOUT setting exists" {
+    local config_tpl="$PROJECT_ROOT/templates/config.template.sh"
+    [ -f "$config_tpl" ]
+    grep -q 'AUDIT_TIMEOUT=' "$config_tpl"
+}
+
+@test "architect.md: prohibits per-task verification audits" {
+    local architect_md="$PROJECT_ROOT/core/agents/architect.md"
+
+    # Must contain prohibition against per-task audits
+    grep -q 'per-task' "$architect_md"
+}
+
+# =============================================================================
+# Layer 4: Audit findings routed to plan-reviewer (run-seniors.sh)
 # =============================================================================
 
 @test "run-seniors.sh: AUDIT_REVIEW routes to plan-reviewer (not auto-approve)" {

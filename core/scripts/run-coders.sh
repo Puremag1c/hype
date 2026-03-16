@@ -375,7 +375,7 @@ TASK: $task_json
 PROJECT_ROOT: $PROJECT_DIR"
 
     local output_file="$LOGS_DIR/auditor-$task_id.log"
-    local audit_timeout="${AUDIT_TIMEOUT:-5m}"
+    local audit_timeout="${AUDIT_TIMEOUT:-10m}"
 
     # Run auditor (no worktree needed - auditor doesn't create branches)
     # Use || to prevent set -e from killing script on timeout/failure
@@ -405,7 +405,7 @@ PROJECT_ROOT: $PROJECT_DIR"
         if [ "$audit_retry" -ge 2 ]; then
             # 3rd failure - route to troubleshooter (same as reject:4+ path in run-seniors.sh)
             log "WARN" "ESCALATE: $task_id - auditor failed 3 times, routing to troubleshooter"
-            bd_safe update "$task_id" --status=open --remove-label=coder \
+            bd_safe update "$task_id" --remove-label=coder \
                 --add-label=blocked:troubleshoot \
                 --notes="Escalated: auditor failed 3 times (timeout/error). Needs troubleshooter." >/dev/null 2>&1 || true
         else

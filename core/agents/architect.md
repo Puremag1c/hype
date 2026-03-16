@@ -62,6 +62,8 @@ done_when: findings recorded in notes"
 ```
 **Правило:** Если задача НЕ генерирует код → `--label=audit` + "AUDIT SCOPE" в description. Без этого задача застрянет в review (senior ждёт git branch).
 
+**ЗАПРЕТ:** НЕ создавай audit-задачи для проверки уже выполненных code-задач ("Verify: tests pass after X", "Check: Y works correctly"). Верификация всей итерации происходит автоматически в фазе TESTING — дублировать per-task аудитами бессмысленно и создаёт таймауты. Audit-задачи допустимы ТОЛЬКО для проверки внешних условий (environment, config, infrastructure) которые TESTING фаза не покрывает.
+
 ### 5. Расставь dependencies
 
 **КРИТИЧНО:** Проверяй cycles ПОСЛЕ КАЖДОЙ зависимости!

@@ -1,2 +1,14 @@
 CLAUDE.md
 logs/
+.hype/
+.claude/agents
+.claude/commands
+scripts
+project-scripts/
+stats/
+PROJECT_CONTEXT.md
+SPEC.md
+SPEC.draft.md
+SPEC.prev.md
+SPEC_REPORT.prev.md
+.mcp.json

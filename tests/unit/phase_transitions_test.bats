@@ -462,11 +462,4 @@ get_phase() {
     [ "$(get_phase)" = "CODING" ]
 }
 
-@test "scenario: blocked:escalated task keeps phase in CODING" {
-    set_all_milestones
-    set_tasks '[
-        {"id":"t1","title":"Impl Y","status":"open","priority":2,"labels":["blocked:escalated"]},
-        {"id":"t2","title":"done","status":"closed","priority":2,"labels":[]}
-    ]'
-    [ "$(get_phase)" = "CODING" ]
-}
+

@@ -10,6 +10,8 @@
 
 - **completion.md bare `git push`** — changed to `git push origin HEAD` (defense-in-depth against detached HEAD scenarios).
 
+- **Audit escalation routes to coder instead of troubleshooter (GitHub #30)** — when audit task fails 3 times (timeout), `run-coders.sh` created a new "Review failed audit" task with `escalation` label → routed to coder (useless). Original task got `blocked:escalated` → nobody picks it up → 7+ dependent tasks blocked, HYPE cycles idle. Fix: replace entire escalation block with `blocked:troubleshoot` on original task — same pattern as `reject:4+` in `run-seniors.sh`. Troubleshooter picks it up automatically via `check_and_route_troubleshoot()`.
+
 ### Changed
 
 - **`CLAUDEV_DIR` renamed to `HYPE_DIR`** — legacy variable name from pre-rename era (claudev → hype). Replaced in `hype.sh` (~40), `doctor.sh` (~7), and doctor test (~4). Single `export HYPE_DIR` replaces two-line alias.

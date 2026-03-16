@@ -1,10 +1,9 @@
 #!/usr/bin/env bats
 # tests/unit/audit_escalation_test.bats
-# Tests for GH#25: recursive audit escalation fork bomb
+# Tests for audit escalation: GH#25 (fork bomb defense) + GH#30 (troubleshooter routing)
 #
-# Root cause: escalation tasks embed original description with "AUDIT SCOPE" marker
-# → is_audit_task() matches → auditor route → timeout → spawns more escalations
-# Defense in depth: 3 layers
+# GH#25: is_audit_task() escalation guard prevents recursive audit routing
+# GH#30: 3rd audit failure routes to troubleshooter (not new task creation)
 
 load '../helpers/setup'
 
@@ -39,93 +38,63 @@ load '../helpers/setup'
 }
 
 # =============================================================================
-# Layer 2: Description sanitization (run-coders.sh)
+# Layer 2: Audit escalation routes to troubleshooter (GH#30)
 # =============================================================================
 
-@test "run-coders.sh: escalation sanitizes AUDIT SCOPE in description" {
+@test "run-coders.sh: audit escalation uses blocked:troubleshoot" {
     local coders_sh="$SCRIPTS_DIR/run-coders.sh"
 
     local fn_block
     fn_block=$(sed -n '/^run_auditor()/,/^}/p' "$coders_sh")
 
-    # Should have sed replacing AUDIT SCOPE
-    echo "$fn_block" | grep -q "sed.*AUDIT SCOPE.*audit scope"
+    # 3rd failure should add blocked:troubleshoot label
+    echo "$fn_block" | grep -q 'blocked:troubleshoot'
 }
 
-@test "run-coders.sh: sanitization is case-insensitive" {
+@test "run-coders.sh: audit escalation does not create new tasks" {
     local coders_sh="$SCRIPTS_DIR/run-coders.sh"
 
     local fn_block
     fn_block=$(sed -n '/^run_auditor()/,/^}/p' "$coders_sh")
 
-    # sed should use /I flag for case-insensitive
-    echo "$fn_block" | grep 'AUDIT SCOPE' | grep -q '/gI'
+    # Should NOT have bd_safe create in audit escalation path
+    ! echo "$fn_block" | grep -q 'bd_safe create.*Review failed audit'
 }
 
-# =============================================================================
-# Layer 3: Escalation-loop guard (run-coders.sh)
-# =============================================================================
-
-@test "run-coders.sh: escalation guard checks existing labels" {
+@test "run-coders.sh: audit escalation does not use blocked:escalated" {
     local coders_sh="$SCRIPTS_DIR/run-coders.sh"
 
     local fn_block
     fn_block=$(sed -n '/^run_auditor()/,/^}/p' "$coders_sh")
 
-    # Should check for escalation label before creating new escalation
-    echo "$fn_block" | grep -q 'escalation'
-    echo "$fn_block" | grep -q 'escalation-loop'
+    # blocked:escalated replaced by blocked:troubleshoot (GH#30)
+    ! echo "$fn_block" | grep -q 'blocked:escalated'
 }
 
-@test "run-coders.sh: escalation-loop blocks task instead of spawning" {
+@test "run-coders.sh: audit escalation does not use blocked:escalation-loop" {
     local coders_sh="$SCRIPTS_DIR/run-coders.sh"
 
     local fn_block
     fn_block=$(sed -n '/^run_auditor()/,/^}/p' "$coders_sh")
 
-    # When escalation detected, should add blocked:escalation-loop label
-    echo "$fn_block" | grep -q 'blocked:escalation-loop'
-    # And should log SKIP
-    echo "$fn_block" | grep -q 'SKIP escalation'
+    # escalation-loop guard removed — no new task = no recursion risk (GH#30)
+    ! echo "$fn_block" | grep -q 'blocked:escalation-loop'
 }
 
-# =============================================================================
-# Integration: escalation task labels include "escalation"
-# =============================================================================
-
-@test "run-coders.sh: escalation task always gets escalation label" {
+@test "run-coders.sh: audit escalation removes coder label" {
     local coders_sh="$SCRIPTS_DIR/run-coders.sh"
 
     local fn_block
     fn_block=$(sed -n '/^run_auditor()/,/^}/p' "$coders_sh")
 
-    # The bd_safe create for escalation must include escalation label (may span lines)
-    echo "$fn_block" | grep -q 'labels=.*escalation'
+    # Must remove coder label so task isn't picked up by coders again
+    # The bd_safe update call spans multiple lines, so check the whole block
+    echo "$fn_block" | grep -q 'remove-label=coder'
+    echo "$fn_block" | grep -q 'blocked:troubleshoot'
 }
 
 # =============================================================================
-# Integration: no unguarded "AUDIT SCOPE" in escalation descriptions
-# =============================================================================
-
-@test "run-coders.sh: no raw AUDIT SCOPE passed to bd_safe create" {
-    local coders_sh="$SCRIPTS_DIR/run-coders.sh"
-
-    local fn_block
-    fn_block=$(sed -n '/^run_auditor()/,/^}/p' "$coders_sh")
-
-    # The $task_desc variable should be sanitized before use in bd_safe create
-    # Check that sed sanitization happens BEFORE the bd_safe create call
-    local sanitize_line create_line
-    sanitize_line=$(echo "$fn_block" | grep -n 'sed.*AUDIT SCOPE' | head -1 | cut -d: -f1)
-    create_line=$(echo "$fn_block" | grep -n 'bd_safe create.*Review failed audit' | head -1 | cut -d: -f1)
-
-    [ -n "$sanitize_line" ]
-    [ -n "$create_line" ]
-    [ "$sanitize_line" -lt "$create_line" ]
-}
-
-# =============================================================================
-# Layer 4: Audit findings routed to plan-reviewer (run-seniors.sh)
+# Layer 3: Audit findings routed to plan-reviewer (run-seniors.sh)
 # =============================================================================
 
 @test "run-seniors.sh: AUDIT_REVIEW routes to plan-reviewer (not auto-approve)" {

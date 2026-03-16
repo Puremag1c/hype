@@ -403,44 +403,11 @@ PROJECT_ROOT: $PROJECT_DIR"
         audit_retry=${audit_retry:-0}
 
         if [ "$audit_retry" -ge 2 ]; then
-            # Guard: don't escalate if already an escalation task (prevents fork bomb GH#25)
-            local existing_labels
-            existing_labels=$(echo "$task_json" | jq -r '.[0].labels[]?' 2>/dev/null || true)
-            if echo "$existing_labels" | grep -q "^escalation$"; then
-                log "WARN" "SKIP escalation for $task_id - already an escalation task"
-                bd_safe update "$task_id" --status=open --remove-label=coder \
-                    --add-label=blocked:escalation-loop \
-                    --notes="Blocked: recursive escalation detected (GH#25)." >/dev/null 2>&1 || true
-            else
-            # 3rd failure - escalate to Architect
-            local task_desc
-            task_desc=$(echo "$task_json" | jq -r '.[0].description // ""' 2>/dev/null)
-            # Sanitize: strip AUDIT SCOPE marker to prevent is_audit_task false positive (GH#25)
-            task_desc=$(echo "$task_desc" | sed 's/AUDIT SCOPE/[audit scope]/gI')
-
-            log "WARN" "ESCALATE: $task_id - auditor failed 3 times, creating architect task"
-            bd_safe create --title="Review failed audit: $task_title" --type=task --priority=1 \
-                --labels="model:opus,escalation" \
-                --description="## Context
-Audit task $task_id failed after 3 attempts (timeout/error).
-
-## Original Task
-**Title:** $task_title
-**Description:** $task_desc
-
-## Failure Info
-- Exit code: $exit_code (124 = timeout)
-- Model used: opus (after escalation from sonnet)
-
-## Required Action
-1. Review if audit scope is too large
-2. Either: split into smaller audits, or reformulate
-3. Close $task_id with appropriate reason" >/dev/null 2>&1 || true
-
+            # 3rd failure - route to troubleshooter (same as reject:4+ path in run-seniors.sh)
+            log "WARN" "ESCALATE: $task_id - auditor failed 3 times, routing to troubleshooter"
             bd_safe update "$task_id" --status=open --remove-label=coder \
-                --add-label=blocked:escalated \
-                --notes="Escalated to Architect: auditor failed 3 times (timeout/error)." >/dev/null 2>&1 || true
-            fi
+                --add-label=blocked:troubleshoot \
+                --notes="Escalated: auditor failed 3 times (timeout/error). Needs troubleshooter." >/dev/null 2>&1 || true
         else
             # Determine current model and escalate one level up
             local current_model

@@ -14,17 +14,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
 PROJECT_DIR=$(pwd)
-CLAUDEV_DIR="$PROJECT_DIR/.hype"
-export HYPE_DIR="$CLAUDEV_DIR"  # v2.3.9: milestone functions use this for file-based milestones
+export HYPE_DIR="$PROJECT_DIR/.hype"
 LOGS_DIR="$PROJECT_DIR/logs"
-LOCK_FILE="$CLAUDEV_DIR/hype.lock"
-CONFIG_FILE="$CLAUDEV_DIR/config.sh"
+LOCK_FILE="$HYPE_DIR/hype.lock"
+CONFIG_FILE="$HYPE_DIR/config.sh"
 HYPE_HOME="${HYPE_HOME:-$HOME/.hype}"
 
 # === Lock file (single instance) ===
 
 acquire_lock() {
-    mkdir -p "$CLAUDEV_DIR"
+    mkdir -p "$HYPE_DIR"
 
     if ! (set -C; echo $$ > "$LOCK_FILE") 2>/dev/null; then
         OLD_PID=$(cat "$LOCK_FILE" 2>/dev/null || echo "0")
@@ -124,9 +123,9 @@ validate_config() {
 
 ensure_hype_dir() {
     # Защита от удаления .hype/ coder'ами
-    if [ ! -d "$CLAUDEV_DIR" ]; then
+    if [ ! -d "$HYPE_DIR" ]; then
         log "WARN" ".hype/ directory missing, recreating..."
-        mkdir -p "$CLAUDEV_DIR"
+        mkdir -p "$HYPE_DIR"
     fi
 
     if [ ! -f "$CONFIG_FILE" ]; then
@@ -265,7 +264,7 @@ detect_phase() {
 
     # Use fixed file in .hype/ instead of mktemp (prevents temp file leak on crash/SIGKILL)
     # File is overwritten each call, useful for debugging, cleaned up by hype clear
-    stderr_output="$CLAUDEV_DIR/detect-phase-stderr.tmp"
+    stderr_output="$HYPE_DIR/detect-phase-stderr.tmp"
     : > "$stderr_output"
 
     # Capture both stdout and stderr
@@ -401,7 +400,7 @@ create_analyst_triggers() {
 
     # v2.3.10: single cache read for all trigger cleanups (was 5 separate bd_safe list calls)
     local bd_cache
-    bd_cache=$(cat "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "[]")
+    bd_cache=$(cat "$HYPE_DIR/tick-cache.json" 2>/dev/null || echo "[]")
 
     for analyst in "${analysts[@]}"; do
         local trigger_title="run-analyst-$analyst"
@@ -442,7 +441,7 @@ check_and_create_done_milestone() {
 check_and_route_troubleshoot() {
     # v2.3.9: read from tick-cache (written by detect-phase.sh this cycle)
     local bd_cache
-    bd_cache=$(cat "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "[]")
+    bd_cache=$(cat "$HYPE_DIR/tick-cache.json" 2>/dev/null || echo "[]")
 
     # Find tasks with blocked:troubleshoot label
     local troubleshoot_ids
@@ -519,7 +518,7 @@ check_problems_and_consult_manager() {
 
     # v2.3.9: read from tick-cache (written by detect-phase.sh this cycle)
     local bd_cache
-    bd_cache=$(cat "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "[]")
+    bd_cache=$(cat "$HYPE_DIR/tick-cache.json" 2>/dev/null || echo "[]")
 
     # Count blocked tasks EXCLUDING troubleshoot (handled above)
     local blocked_count
@@ -827,7 +826,7 @@ generate_iteration_stats() {
 
     # Get iteration start time (stored as epoch for cross-platform compatibility)
     local start_epoch end_epoch
-    start_epoch=$(cat "$CLAUDEV_DIR/iteration_start.txt" 2>/dev/null || echo "0")
+    start_epoch=$(cat "$HYPE_DIR/iteration_start.txt" 2>/dev/null || echo "0")
     end_epoch=$(date +%s)
 
     # Convert epoch to readable format (cross-platform)
@@ -846,9 +845,9 @@ generate_iteration_stats() {
 
     # v2.3.9: read from tick-cache (written by detect-phase.sh this cycle, includes --all)
     local total closed blocked
-    total=$(jq 'length' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "0")
-    closed=$(jq '[.[] | select(.status == "closed")] | length' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "0")
-    blocked=$(jq '[.[] | select(.status != "closed") | select(.labels[]? | startswith("blocked:"))] | length' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "0")
+    total=$(jq 'length' "$HYPE_DIR/tick-cache.json" 2>/dev/null || echo "0")
+    closed=$(jq '[.[] | select(.status == "closed")] | length' "$HYPE_DIR/tick-cache.json" 2>/dev/null || echo "0")
+    blocked=$(jq '[.[] | select(.status != "closed") | select(.labels[]? | startswith("blocked:"))] | length' "$HYPE_DIR/tick-cache.json" 2>/dev/null || echo "0")
 
     # Count agent runs from logs
     local manager_runs architect_runs coder_runs analyst_runs senior_runs
@@ -860,13 +859,13 @@ generate_iteration_stats() {
 
     # Estimate tokens (rough: count chars in agent logs / 4)
     local total_chars estimated_tokens
-    total_chars=$(find "$LOGS_DIR" -name "*.log" -newer "$CLAUDEV_DIR/iteration_start.txt" -exec wc -c {} + 2>/dev/null | tail -1 | awk '{print $1}' || echo "0")
+    total_chars=$(find "$LOGS_DIR" -name "*.log" -newer "$HYPE_DIR/iteration_start.txt" -exec wc -c {} + 2>/dev/null | tail -1 | awk '{print $1}' || echo "0")
     estimated_tokens=$((total_chars / 4))
 
     # Get blocked tasks details
     local blocked_details
     # v2.3.9: read from tick-cache
-    blocked_details=$(jq -r '.[] | select(.status != "closed") | select(.labels[]? | startswith("blocked:")) | "- `\(.id)`: \(.title)"' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "- none")
+    blocked_details=$(jq -r '.[] | select(.status != "closed") | select(.labels[]? | startswith("blocked:")) | "- `\(.id)`: \(.title)"' "$HYPE_DIR/tick-cache.json" 2>/dev/null || echo "- none")
 
     # Generate report
     cat > "$stats_file" << EOF
@@ -912,7 +911,7 @@ dispatch_phase() {
 
     # Reset blocked cycles counter if we're not in BLOCKED_CYCLES
     if [ "$phase" != "BLOCKED_CYCLES" ]; then
-        rm -f "$CLAUDEV_DIR/blocked_cycles_count"
+        rm -f "$HYPE_DIR/blocked_cycles_count"
     fi
 
     case $phase in
@@ -922,14 +921,14 @@ dispatch_phase() {
 
             # Deep analysis for large existing projects (before Manager)
             # Only runs once per project (marker: .hype/deep-analyzed)
-            if [ -f "$PROJECT_DIR/PROJECT_CONTEXT.md" ] && [ ! -f "$CLAUDEV_DIR/deep-analyzed" ]; then
+            if [ -f "$PROJECT_DIR/PROJECT_CONTEXT.md" ] && [ ! -f "$HYPE_DIR/deep-analyzed" ]; then
                 # Source needs_deep_analysis function from deep-analyze.sh
                 source "$HYPE_HOME/core/scripts/deep-analyze.sh" 2>/dev/null || true
 
                 if type needs_deep_analysis &>/dev/null && needs_deep_analysis; then
                     log "INFO" "PREPARING: Large project detected, running deep analysis..."
                     if "$HYPE_HOME/core/scripts/deep-analyze.sh" --force; then
-                        touch "$CLAUDEV_DIR/deep-analyzed"
+                        touch "$HYPE_DIR/deep-analyzed"
                         log "INFO" "Deep analysis complete — enriched PROJECT_CONTEXT.md"
                     else
                         log "WARN" "Deep analysis failed, continuing with basic context"
@@ -1042,7 +1041,7 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}" || log "WARN" "Architect failed in PLA
             # Close stale triggers from previous runs, create fresh
             # v2.3.10: pass tick-cache to avoid bd_safe list call
             local bd_cache
-            bd_cache=$(cat "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "[]")
+            bd_cache=$(cat "$HYPE_DIR/tick-cache.json" 2>/dev/null || echo "[]")
             cleanup_stale_trigger "run-plan-review" "$bd_cache"
             bd_safe create --title="run-plan-review" --type=task --priority=0 --label=trigger >/dev/null 2>&1 || true
             run_agent_with_mode "architect" ".claude/agents/plan-reviewer.md" "$arch_model" "plan_review" "" "${THINKING_TIMEOUT:-10m}" || log "WARN" "Plan-reviewer failed in THINKING (will retry next cycle)"
@@ -1054,7 +1053,7 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}" || log "WARN" "Architect failed in PLA
 
             local user_task_ids
             # v2.3.9: read from tick-cache (written by detect-phase.sh this cycle)
-            user_task_ids=$(jq -r '.[] | select(.status == "open") | select((.labels // []) | index("user-escalation")) | .id' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "")
+            user_task_ids=$(jq -r '.[] | select(.status == "open") | select((.labels // []) | index("user-escalation")) | .id' "$HYPE_DIR/tick-cache.json" 2>/dev/null || echo "")
 
             if [ -z "$user_task_ids" ]; then
                 log "INFO" "CONSULTATION: No user-escalation tasks found (resolved externally?)"
@@ -1077,7 +1076,7 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}" || log "WARN" "Architect failed in PLA
             # Testers are done when we reach REFLEXING. If PID file persists
             # through CODING and TESTING re-enters, STATE 3 would treat
             # the dead PID as "testers just finished" — skipping actual test launch.
-            rm -f "$CLAUDEV_DIR/run-testers.pid"
+            rm -f "$HYPE_DIR/run-testers.pid"
 
             # Architect triages ALL smoke test findings before coders can grab them
             log "INFO" "REFLEXING: Processing smoke test findings..."
@@ -1088,14 +1087,14 @@ $spec_content" "${PLANNING_TIMEOUT:-15m}" || log "WARN" "Architect failed in PLA
             # Close stale triggers from previous runs, create fresh
             # v2.3.10: pass tick-cache to avoid bd_safe list call
             local bd_cache
-            bd_cache=$(cat "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "[]")
+            bd_cache=$(cat "$HYPE_DIR/tick-cache.json" 2>/dev/null || echo "[]")
             cleanup_stale_trigger "run-smoke-review" "$bd_cache"
             bd_safe create --title="run-smoke-review" --type=task --priority=0 --label=trigger >/dev/null 2>&1 || true
 
             # Collect ALL tasks needing triage (smoke label OR regression label)
             local smoke_tasks regression_tasks triage_prompt
             # v2.3.9: read from tick-cache (written by detect-phase.sh this cycle)
-            smoke_tasks=$(jq -r '.[] | select(.status == "open") | select((.labels // []) | any(. == "smoke" or . == "regression")) | "\(.id): \(.title) [labels: \(.labels | join(", "))]"' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "")
+            smoke_tasks=$(jq -r '.[] | select(.status == "open") | select((.labels // []) | any(. == "smoke" or . == "regression")) | "\(.id): \(.title) [labels: \(.labels | join(", "))]"' "$HYPE_DIR/tick-cache.json" 2>/dev/null || echo "")
             triage_prompt="
 SMOKE TEST FINDINGS TO TRIAGE:
 $smoke_tasks
@@ -1114,7 +1113,7 @@ For each task:
             # Safety net — force-remove smoke/regression labels architect missed
             # Without this, leftover labels trigger another REFLEXING (2x Opus waste)
             local remaining_smoke_ids
-            remaining_smoke_ids=$(jq -r '.[] | select(.status == "open") | select((.labels // []) | any(. == "smoke" or . == "regression")) | .id' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "")
+            remaining_smoke_ids=$(jq -r '.[] | select(.status == "open") | select((.labels // []) | any(. == "smoke" or . == "regression")) | .id' "$HYPE_DIR/tick-cache.json" 2>/dev/null || echo "")
             if [ -n "$remaining_smoke_ids" ]; then
                 log "WARN" "REFLEXING: Cleaning up leftover smoke labels (safety net)"
                 for sid in $remaining_smoke_ids; do
@@ -1134,7 +1133,7 @@ For each task:
 
         CODING)
             # v2.3.21: Clean stale testers PID file (covers TESTING→IMPL→TESTING path)
-            rm -f "$CLAUDEV_DIR/run-testers.pid"
+            rm -f "$HYPE_DIR/run-testers.pid"
 
             # Streaming: launch coders + seniors + merge queue (all non-blocking)
             # Note: regression tasks are handled in REFLEXING phase before reaching here
@@ -1151,7 +1150,7 @@ For each task:
         TESTING)
             # Non-blocking: launch testers in background, HYPE keeps ticking
             # This ensures check_beads runs every cycle even during long smoke tests
-            local testers_pid_file="$CLAUDEV_DIR/run-testers.pid"
+            local testers_pid_file="$HYPE_DIR/run-testers.pid"
             local testers_pid=""
             [ -f "$testers_pid_file" ] && testers_pid=$(cat "$testers_pid_file" 2>/dev/null)
 
@@ -1173,7 +1172,7 @@ For each task:
                 # Check for orphaned triggers (crash case — re-launch)
                 local tester_triggers
                 # v2.3.9: read from tick-cache (written by detect-phase.sh this cycle)
-                tester_triggers=$(jq '[.[] | select(.status == "open" or .status == "in_progress") | select(.title | startswith("run-tester-"))] | length' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "0")
+                tester_triggers=$(jq '[.[] | select(.status == "open" or .status == "in_progress") | select(.title | startswith("run-tester-"))] | length' "$HYPE_DIR/tick-cache.json" 2>/dev/null || echo "0")
 
                 if [ "$tester_triggers" -gt 0 ]; then
                     log "WARN" "TESTING: orphaned tester triggers ($tester_triggers), re-launching..."
@@ -1184,7 +1183,7 @@ For each task:
                     # Testers done — check results
                     local pending_tasks
                     # v2.3.9: read from tick-cache (written by detect-phase.sh this cycle)
-                    pending_tasks=$(jq '[.[] | select(.status == "open" or .status == "in_progress") | select((.labels // []) | index("trigger") | not)] | length' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "0")
+                    pending_tasks=$(jq '[.[] | select(.status == "open" or .status == "in_progress") | select((.labels // []) | index("trigger") | not)] | length' "$HYPE_DIR/tick-cache.json" 2>/dev/null || echo "0")
 
                     if [ "$pending_tasks" -gt 0 ]; then
                         log "WARN" "TESTING: $pending_tasks pending task(s) found"
@@ -1267,7 +1266,7 @@ For each task:
             log "INFO" "REPORTING: Running completion agent..."
 
             local bd_cache
-            bd_cache=$(cat "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "[]")
+            bd_cache=$(cat "$HYPE_DIR/tick-cache.json" 2>/dev/null || echo "[]")
             cleanup_stale_trigger "run-completion" "$bd_cache"
             local completion_trigger
             completion_trigger=$(bd_safe create --title="run-completion" --type=task --priority=0 --label=trigger 2>&1 | grep -oE '[A-Za-z]+-[a-z0-9]+' | head -1)
@@ -1297,7 +1296,7 @@ For each task:
             log "ERROR" "Dependency cycles detected! Cannot proceed to CODING."
 
             # Track consecutive blocked cycles for escalation
-            local blocked_count_file="$CLAUDEV_DIR/blocked_cycles_count"
+            local blocked_count_file="$HYPE_DIR/blocked_cycles_count"
             local blocked_count=0
             if [ -f "$blocked_count_file" ]; then
                 blocked_count=$(cat "$blocked_count_file" 2>/dev/null || echo "0")
@@ -1318,7 +1317,7 @@ For each task:
 
             # Create P0 task for Architect (if not exists)
             # v2.3.9: read from tick-cache (written by detect-phase.sh this cycle)
-            if ! jq -e '.[] | select(.title == "Fix dependency cycles")' "$CLAUDEV_DIR/tick-cache.json" > /dev/null 2>&1; then
+            if ! jq -e '.[] | select(.title == "Fix dependency cycles")' "$HYPE_DIR/tick-cache.json" > /dev/null 2>&1; then
                 bd_safe create --title="Fix dependency cycles" --type=task --priority=0 \
                     --description="bd dep cycles detected circular dependencies. Fix before CODING can proceed.
 
@@ -1488,15 +1487,15 @@ main() {
     log "INFO" "=========================================="
 
     # Record iteration start time (epoch for cross-platform compatibility)
-    date +%s > "$CLAUDEV_DIR/iteration_start.txt"
+    date +%s > "$HYPE_DIR/iteration_start.txt"
 
     # Clean up stale state from previous sessions (crash recovery)
-    rm -f "$CLAUDEV_DIR/run-testers.pid"
+    rm -f "$HYPE_DIR/run-testers.pid"
 
     # Cache base branch for entire session (GH #28)
     local _startup_base_branch
     _startup_base_branch=$(get_base_branch)
-    echo "$_startup_base_branch" > "$CLAUDEV_DIR/base-branch"
+    echo "$_startup_base_branch" > "$HYPE_DIR/base-branch"
     log "INFO" "Base branch: $_startup_base_branch (cached)"
 
     # Startup hardening: DB compaction
@@ -1579,7 +1578,7 @@ main() {
         # 4. Heal stuck tasks BEFORE dispatch — reviewers see healed tasks in same cycle
         # v2.3.9: extract in_progress from tick-cache (written by detect-phase.sh), no extra bd call
         local in_progress_cache
-        in_progress_cache=$(jq -c '[.[] | select(.status == "in_progress")]' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "[]")
+        in_progress_cache=$(jq -c '[.[] | select(.status == "in_progress")]' "$HYPE_DIR/tick-cache.json" 2>/dev/null || echo "[]")
         heal_stuck_tasks "$in_progress_cache"
 
         # 5. Dispatch phase-specific actions
@@ -1647,7 +1646,7 @@ main() {
         # 7. Auto-close completed features and epics
         # v2.3.10: skip if no open features/epics (saves 2-3 bd calls per cycle)
         local has_parents
-        has_parents=$(jq '[.[] | select(.status == "open") | select(.issue_type == "feature" or .issue_type == "epic")] | length' "$CLAUDEV_DIR/tick-cache.json" 2>/dev/null || echo "1")
+        has_parents=$(jq '[.[] | select(.status == "open") | select(.issue_type == "feature" or .issue_type == "epic")] | length' "$HYPE_DIR/tick-cache.json" 2>/dev/null || echo "1")
         if [ "$has_parents" -gt 0 ]; then
             ./scripts/close-completed-parents.sh 2>/dev/null || true
         fi

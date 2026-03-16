@@ -15,10 +15,10 @@ source_doctor_functions() {
 
     # Set required variables before sourcing
     PROJECT_DIR="$TEST_PROJECT_DIR"
-    CLAUDEV_DIR="$TEST_PROJECT_DIR/.hype"
+    HYPE_DIR="$TEST_PROJECT_DIR/.hype"
     LOGS_DIR="$TEST_LOGS_DIR"
     HOME="${HOME}"
-    mkdir -p "$CLAUDEV_DIR/logs"
+    mkdir -p "$HYPE_DIR/logs"
 
     source "$tmp_funcs"
 }
@@ -106,7 +106,7 @@ EOF
     source_doctor_functions
 
     # Create an old log (touch with old timestamp)
-    local old_file="$CLAUDEV_DIR/logs/doctor-20250101-120000.md"
+    local old_file="$HYPE_DIR/logs/doctor-20250101-120000.md"
     echo "old" > "$old_file"
     touch -t 202501011200 "$old_file"
 
@@ -116,7 +116,7 @@ EOF
     sleep 1
 
     # Create a fresh log
-    local fresh_file="$CLAUDEV_DIR/logs/doctor-20260211-150000.md"
+    local fresh_file="$HYPE_DIR/logs/doctor-20260211-150000.md"
     echo "fresh" > "$fresh_file"
 
     local result

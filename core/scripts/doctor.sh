@@ -16,7 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
 PROJECT_DIR=$(pwd)
-CLAUDEV_DIR="$PROJECT_DIR/.hype"
+HYPE_DIR="$PROJECT_DIR/.hype"
 LOGS_DIR="$PROJECT_DIR/logs"
 HYPE_HOME="${HYPE_HOME:-$HOME/.hype}"
 
@@ -95,7 +95,7 @@ find_latest_doctor_log() {
             latest="$f"
             break
         fi
-    done < <(ls -t "$CLAUDEV_DIR/logs"/doctor-*.md 2>/dev/null)
+    done < <(ls -t "$HYPE_DIR/logs"/doctor-*.md 2>/dev/null)
     [[ -n "$latest" ]] && echo "$latest"
 }
 
@@ -104,8 +104,8 @@ save_report_output() {
     [[ -f "$source_file" ]] || return 1
     local timestamp
     timestamp=$(date +%Y%m%d-%H%M%S)
-    local dest="$CLAUDEV_DIR/logs/doctor-$timestamp.md"
-    mkdir -p "$CLAUDEV_DIR/logs"
+    local dest="$HYPE_DIR/logs/doctor-$timestamp.md"
+    mkdir -p "$HYPE_DIR/logs"
     cp "$source_file" "$dest"
     echo "$dest"
 }
@@ -243,9 +243,9 @@ gather_context() {
     # HYPE markers
     context+="## HYPE Markers\n"
     context+="\`\`\`\n"
-    context+="hype.lock: $(ls -la "$CLAUDEV_DIR/hype.lock" 2>/dev/null || echo "not present")\n"
-    context+="needs-spec: $(ls -la "$CLAUDEV_DIR/needs-spec" 2>/dev/null || echo "not present")\n"
-    context+="force-phase: $(cat "$CLAUDEV_DIR/force-phase" 2>/dev/null || echo "not present")\n"
+    context+="hype.lock: $(ls -la "$HYPE_DIR/hype.lock" 2>/dev/null || echo "not present")\n"
+    context+="needs-spec: $(ls -la "$HYPE_DIR/needs-spec" 2>/dev/null || echo "not present")\n"
+    context+="force-phase: $(cat "$HYPE_DIR/force-phase" 2>/dev/null || echo "not present")\n"
     context+="\`\`\`\n\n"
 
     # Worktrees directory
@@ -427,7 +427,7 @@ run_doctor() {
 
 main() {
     # Ensure directories exist
-    mkdir -p "$CLAUDEV_DIR/logs"
+    mkdir -p "$HYPE_DIR/logs"
 
     # Check claude CLI
     if ! command -v claude &>/dev/null; then

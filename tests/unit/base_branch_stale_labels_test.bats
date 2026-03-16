@@ -305,3 +305,63 @@ load '../helpers/setup'
 
     [ "$violations" -eq 0 ]
 }
+
+# =============================================================================
+# GH #28: Base branch cache (prevents drift during HYPE run)
+# =============================================================================
+
+@test "get_base_branch: reads .hype/base-branch cache file first" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    local fn_block
+    fn_block=$(sed -n '/^get_base_branch()/,/^}/p' "$common_sh")
+
+    # Step 0: cache file read should be present
+    echo "$fn_block" | grep -q 'base-branch'
+    echo "$fn_block" | grep -q 'cached_base'
+}
+
+@test "get_base_branch: cache checked before BASE_BRANCH config" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    local fn_block
+    fn_block=$(sed -n '/^get_base_branch()/,/^}/p' "$common_sh")
+
+    # Cache read (step 0) should appear before BASE_BRANCH check (step 1)
+    local cache_line config_line
+    cache_line=$(echo "$fn_block" | grep -n 'cached_base' | head -1 | cut -d: -f1)
+    config_line=$(echo "$fn_block" | grep -n 'BASE_BRANCH' | head -1 | cut -d: -f1)
+
+    [ "$cache_line" -lt "$config_line" ]
+}
+
+@test "hype.sh: writes base-branch cache at startup" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    # Should write to base-branch file during startup
+    grep -q 'base-branch' "$hype_sh"
+    grep -q 'get_base_branch' "$hype_sh"
+    grep -q 'Base branch:.*cached' "$hype_sh"
+}
+
+@test "cleanup_iteration: deletes base-branch cache" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    local fn_block
+    fn_block=$(sed -n '/^cleanup_iteration()/,/^}/p' "$common_sh")
+
+    echo "$fn_block" | grep -q 'base-branch'
+}
+
+@test "completion.md: uses explicit push (git push origin HEAD)" {
+    local completion_md="$AGENTS_DIR/completion.md"
+
+    grep -q 'git push origin HEAD' "$completion_md"
+}
+
+@test "doctor.sh: reports cached base branch in diagnostics" {
+    local doctor_sh="$SCRIPTS_DIR/doctor.sh"
+
+    grep -q 'Cached:' "$doctor_sh"
+    grep -q 'base-branch' "$doctor_sh"
+}

@@ -1493,6 +1493,12 @@ main() {
     # Clean up stale state from previous sessions (crash recovery)
     rm -f "$CLAUDEV_DIR/run-testers.pid"
 
+    # Cache base branch for entire session (GH #28)
+    local _startup_base_branch
+    _startup_base_branch=$(get_base_branch)
+    echo "$_startup_base_branch" > "$CLAUDEV_DIR/base-branch"
+    log "INFO" "Base branch: $_startup_base_branch (cached)"
+
     # Startup hardening: DB compaction
     compact_beads_if_large 10
 

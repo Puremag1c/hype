@@ -145,7 +145,7 @@ Format:
 git add -A
 git status  # verify what's being committed
 git commit -m "Release v$NEW_VERSION"
-git push
+git push origin HEAD
 ```
 
 If push fails — log warning but don't fail.

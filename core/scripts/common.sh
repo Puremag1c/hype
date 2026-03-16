@@ -769,10 +769,19 @@ check_beads() {
 export -f check_beads 2>/dev/null || true
 
 # get_base_branch - detect the base branch for the current project
-# Priority: 1) BASE_BRANCH config override, 2) origin/HEAD symbolic-ref,
-# 3) probe main→master→develop, 4) fallback "main"
+# Priority: 0) cached value (.hype/base-branch, set at HYPE startup),
+# 1) BASE_BRANCH config override, 2) current branch (skip task/*),
+# 3) origin/HEAD symbolic-ref, 4) probe main→master→develop, 5) fallback "main"
 # Usage: get_base_branch → prints branch name (e.g. "main", "master", "schema_update")
 get_base_branch() {
+    # 0. Cached value (set at HYPE startup, immune to merge queue checkouts)
+    local cached_base
+    cached_base=$(cat "${HYPE_DIR:-.hype}/base-branch" 2>/dev/null || true)
+    if [ -n "$cached_base" ]; then
+        echo "$cached_base"
+        return 0
+    fi
+
     # 1. Config override (set in .hype/config.sh)
     if [ -n "${BASE_BRANCH:-}" ]; then
         echo "$BASE_BRANCH"
@@ -1078,6 +1087,8 @@ cleanup_iteration() {
     [ "$deleted_count" -gt 0 ] && echo "    Deleted $deleted_count milestone(s)"
     # v2.3.9: clean stale tick-cache
     rm -f "$project_dir/.hype/tick-cache.json" 2>/dev/null || true
+    # v2.5.13: clean cached base branch (GH #28)
+    rm -f "$project_dir/.hype/base-branch" 2>/dev/null || true
 
     # 4b. Delete evidence (v2.3.17: smoke test artifacts)
     if [ -d "$project_dir/.hype/evidence" ]; then

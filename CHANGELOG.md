@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.5.13] - 2026-03-16
+
+### Fixed
+
+- **Base branch drift during HYPE run (GitHub #28)** — `get_base_branch()` reads live git state on every call, but merge queue does `git checkout` in the main project directory. If repo enters detached HEAD (e.g. during `try_fast_merge`), subsequent calls return `main` instead of the user's actual branch (e.g. `schema_update`). Fix: cache base branch once at HYPE startup in `.hype/base-branch`, all subsequent reads use cache. Cache cleared on `cleanup_iteration()`.
+
+- **completion.md bare `git push`** — changed to `git push origin HEAD` (defense-in-depth against detached HEAD scenarios).
+
+### Added
+
+- `doctor.sh` reports cached base branch in diagnostics.
+- 6 new tests for base branch cache (508 total).
+
+---
+
 ## [2.5.12] - 2026-02-27
 
 ### Fixed

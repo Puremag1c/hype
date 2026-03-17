@@ -192,12 +192,23 @@ run_coder() {
     local task_id=$2
     local worktree_path=""
 
-    # Check task status before claim (avoid race condition confusion)
+    # Check task status and labels before claim (avoid race condition confusion)
+    local current_json
+    current_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
     local current_status
-    current_status=$(bd_safe show "$task_id" --json 2>/dev/null | jq -r '.[0].status // "unknown"' 2>/dev/null || echo "unknown")
+    current_status=$(echo "$current_json" | jq -r '.[0].status // "unknown"' 2>/dev/null || echo "unknown")
 
     if [ "$current_status" != "open" ]; then
         log "INFO" "Task $task_id not open (status: $current_status), skipping"
+        cleanup_worktree "$slot"
+        return 0
+    fi
+
+    # Defense in depth: skip tasks with blocked:* labels (GH #35, #34)
+    local has_blocked
+    has_blocked=$(echo "$current_json" | jq -r '[.[0].labels[]? | select(startswith("blocked:"))] | length' 2>/dev/null || echo "0")
+    if [ "$has_blocked" != "0" ]; then
+        log "INFO" "Task $task_id has blocked label, skipping"
         cleanup_worktree "$slot"
         return 0
     fi
@@ -331,6 +342,16 @@ $retry_context}"
 
 run_auditor() {
     local task_id=$1
+
+    # Defense in depth: skip tasks with blocked:* labels (GH #35, #34)
+    local current_json
+    current_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
+    local has_blocked
+    has_blocked=$(echo "$current_json" | jq -r '[.[0].labels[]? | select(startswith("blocked:"))] | length' 2>/dev/null || echo "0")
+    if [ "$has_blocked" != "0" ]; then
+        log "INFO" "Task $task_id has blocked label, skipping"
+        return 0
+    fi
 
     # Try to claim the task
     if ! bd_safe update "$task_id" --status=in_progress --add-label=coder --remove-label=needs-review >/dev/null 2>&1; then

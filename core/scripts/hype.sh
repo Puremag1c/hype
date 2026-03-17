@@ -513,8 +513,8 @@ PROJECT_ROOT: $PROJECT_DIR"
 # Manager is called ONLY for problem resolution, not for phase coordination
 
 check_problems_and_consult_manager() {
-    # First: route troubleshoot tasks to dedicated Troubleshooter agent
-    check_and_route_troubleshoot
+    # NOTE: check_and_route_troubleshoot() now runs BEFORE dispatch_phase (GH #35, #34)
+    # to prevent coder from re-claiming blocked:troubleshoot tasks
 
     # v2.3.9: read from tick-cache (written by detect-phase.sh this cycle)
     local bd_cache
@@ -1591,7 +1591,11 @@ main() {
         in_progress_cache=$(jq -c '[.[] | select(.status == "in_progress")]' "$HYPE_DIR/tick-cache.json" 2>/dev/null || echo "[]")
         heal_stuck_tasks "$in_progress_cache"
 
-        # 5. Dispatch phase-specific actions
+        # 5. Route troubleshoot tasks BEFORE dispatch (GH #35, #34)
+        # Must run before run-coders.sh to prevent coder from re-claiming blocked:troubleshoot tasks
+        check_and_route_troubleshoot
+
+        # 6. Dispatch phase-specific actions
         dispatch_phase "$phase" "$phase_json"
 
         # 6. Check for completion

@@ -130,5 +130,89 @@ load '../helpers/setup'
 }
 
 # =============================================================================
+# GH #35, #34: blocked:* label check in run_coder/run_auditor
+# =============================================================================
+
+@test "run_coder: checks blocked:* labels before claiming (GH #35)" {
+    local coders_sh="$SCRIPTS_DIR/run-coders.sh"
+
+    # Extract run_coder function
+    local func_block
+    func_block=$(sed -n '/^run_coder()/,/^}/p' "$coders_sh")
+
+    # Should check for blocked: labels
+    echo "$func_block" | grep -q 'startswith("blocked:")'
+    echo "$func_block" | grep -q 'has_blocked.*!=.*"0"'
+}
+
+@test "run_auditor: checks blocked:* labels before claiming (GH #35)" {
+    local coders_sh="$SCRIPTS_DIR/run-coders.sh"
+
+    # Extract run_auditor function
+    local func_block
+    func_block=$(sed -n '/^run_auditor()/,/^}/p' "$coders_sh")
+
+    # Should check for blocked: labels
+    echo "$func_block" | grep -q 'startswith("blocked:")'
+}
+
+@test "run_coder: blocked check comes before claim (GH #35)" {
+    local coders_sh="$SCRIPTS_DIR/run-coders.sh"
+
+    # blocked check line must come before claim line
+    local blocked_line claim_line
+    blocked_line=$(grep -n 'has_blocked.*!=.*"0"' "$coders_sh" | head -1 | cut -d: -f1)
+    claim_line=$(grep -n 'status=in_progress.*add-label=coder' "$coders_sh" | head -1 | cut -d: -f1)
+
+    [ -n "$blocked_line" ]
+    [ -n "$claim_line" ]
+    [ "$blocked_line" -lt "$claim_line" ]
+}
+
+# =============================================================================
+# GH #35, #34: troubleshooter runs before dispatch
+# =============================================================================
+
+@test "hype.sh: check_and_route_troubleshoot runs before dispatch_phase (GH #35)" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    # troubleshoot line must come before dispatch line in main loop
+    local troubleshoot_line dispatch_line
+    troubleshoot_line=$(grep -n 'Route troubleshoot tasks BEFORE dispatch' "$hype_sh" | head -1 | cut -d: -f1)
+    dispatch_line=$(grep -n 'dispatch_phase "\$phase"' "$hype_sh" | head -1 | cut -d: -f1)
+
+    [ -n "$troubleshoot_line" ]
+    [ -n "$dispatch_line" ]
+    [ "$troubleshoot_line" -lt "$dispatch_line" ]
+}
+
+@test "hype.sh: check_problems_and_consult_manager no longer calls troubleshoot (GH #35)" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    # The function should NOT call check_and_route_troubleshoot anymore
+    local func_block
+    func_block=$(sed -n '/^check_problems_and_consult_manager()/,/^}/p' "$hype_sh")
+
+    ! echo "$func_block" | grep -q '^    check_and_route_troubleshoot'
+}
+
+# =============================================================================
+# GH #34: senior.md prohibits status=blocked
+# =============================================================================
+
+@test "senior.md: prohibits status=blocked (GH #34)" {
+    local senior_md
+    # Check both possible locations
+    if [ -f "$SCRIPTS_DIR/../agents/senior.md" ]; then
+        senior_md="$SCRIPTS_DIR/../agents/senior.md"
+    else
+        senior_md="$PROJECT_DIR/core/agents/senior.md"
+    fi
+
+    grep -qi 'status=blocked' "$senior_md"
+    grep -qi 'запрещено\|NEVER\|never.*status.*blocked' "$senior_md"
+}
+
+# =============================================================================
 # Review "no action" path: re-add needs-review (now tested in reviewers_test.bats)
 # =============================================================================

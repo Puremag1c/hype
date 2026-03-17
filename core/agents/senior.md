@@ -76,6 +76,8 @@ bd update $TASK_ID --status=open \
     --notes="Review failed: <конкретная причина>. Fix and resubmit."
 ```
 
+**ЗАПРЕЩЕНО:** Никогда не ставь `--status=blocked`. HYPE не обрабатывает этот статус — задача станет невидимой для всех пайплайнов (deadlock). Если задача заблокирована внешним фактором — reject с notes, объясняющими блокер. Система сама эскалирует через reject:N.
+
 ## Причины reject
 
 - **Over-engineering:** добавлены helpers, абстракции, код "на будущее"

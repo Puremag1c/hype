@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.5.16] - 2026-03-17
+
+### Fixed
+
+- **Coder-troubleshooter race condition (GitHub #35, #34)** — coders re-claimed `blocked:troubleshoot` tasks before troubleshooter could process them. Three fixes: (1) `run_coder()` and `run_auditor()` now check `blocked:*` labels before claiming (defense in depth), (2) `check_and_route_troubleshoot()` moved to run BEFORE `dispatch_phase()` in main loop, (3) senior prompt explicitly prohibits `--status=blocked` (invalid status that makes tasks invisible to all pipelines). 526 tests (6 new).
+
+---
+
 ## [2.5.15] - 2026-03-17
 
 ### Fixed

@@ -86,5 +86,49 @@ load '../helpers/setup'
 }
 
 # =============================================================================
+# GH #32: PID tracking for zombie coder kill
+# =============================================================================
+
+@test "run-coders.sh: writes PID file after launching coder" {
+    local coders_sh="$SCRIPTS_DIR/run-coders.sh"
+
+    # PID file should be written after background launch
+    grep -q 'echo "\$!" > "\$WORKTREES_DIR/task-\$task_id.pid"' "$coders_sh"
+}
+
+@test "run-coders.sh: writes PID file after launching auditor" {
+    local coders_sh="$SCRIPTS_DIR/run-coders.sh"
+
+    # Auditor also gets PID file
+    grep -A2 'run_auditor' "$coders_sh" | grep -q 'task-\$task_id.pid'
+}
+
+@test "run-coders.sh: cleans up PID file on normal coder exit" {
+    local coders_sh="$SCRIPTS_DIR/run-coders.sh"
+
+    # PID file cleanup inside subshell (rm after run_coder returns)
+    grep -q 'run_coder.*rm -f.*task-\$task_id.pid' "$coders_sh"
+}
+
+@test "run-coders.sh: cleans up PID file on normal auditor exit" {
+    local coders_sh="$SCRIPTS_DIR/run-coders.sh"
+
+    # PID file cleanup inside subshell (rm after run_auditor returns)
+    grep -q 'run_auditor.*rm -f.*task-\$task_id.pid' "$coders_sh"
+}
+
+@test "reset_stale_tasks: kills zombie process via PID file (GH #32)" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    # Should read PID from file and kill before resetting
+    local kill_block
+    kill_block=$(sed -n '/Kill zombie coder/,/rm -f.*pid_file/p' "$common_sh")
+
+    echo "$kill_block" | grep -q 'cat "\$pid_file"'
+    echo "$kill_block" | grep -q 'kill "\$old_pid"'
+    echo "$kill_block" | grep -q 'rm -f "\$pid_file"'
+}
+
+# =============================================================================
 # Review "no action" path: re-add needs-review (now tested in reviewers_test.bats)
 # =============================================================================

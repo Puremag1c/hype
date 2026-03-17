@@ -265,6 +265,16 @@ reset_stale_tasks() {
             age=$((now_epoch - task_epoch))
 
             if [ "$age" -gt "$stale_threshold" ]; then
+                # Kill zombie coder process if PID file exists (GH #32)
+                local pid_file="${PROJECT_DIR:-.}/.hype-worktrees/task-$task_id.pid"
+                if [ -f "$pid_file" ]; then
+                    local old_pid
+                    old_pid=$(cat "$pid_file" 2>/dev/null || echo "")
+                    if [ -n "$old_pid" ] && kill -0 "$old_pid" 2>/dev/null; then
+                        kill "$old_pid" 2>/dev/null || true
+                    fi
+                    rm -f "$pid_file"
+                fi
                 # Append to notes instead of overwriting (preserve review feedback)
                 local updated_notes
                 updated_notes=$(append_notes "$task_id" "Reset: $log_prefix (${age}s without update)")

@@ -70,6 +70,8 @@ done_when: findings recorded in notes"
 
 **File overlap rule:** Если две задачи трогают один и тот же файл — поставь dependency между ними. Параллельные правки одного файла вызывают merge conflicts и тратят циклы. Используй `files:` в description для трекинга.
 
+**АНТИПАТТЕРН:** Рефакторинг модуля X разбитый на 4 задачи (split, imports, tests, cleanup) где все трогают одни и те же файлы — БЕЗ зависимостей. Результат: 4 параллельных coder'а на одних файлах → cross-contamination → senior reject'ит все → 24+ мин dead time → opus escalation не помогает (проблема в stale branch, не в модели). **Решение:** цепочка зависимостей task1 → task2 → task3 → task4.
+
 ```bash
 bd dep add <task-id> <depends-on-id>
 

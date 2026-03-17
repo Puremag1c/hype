@@ -76,6 +76,40 @@ load '../helpers/setup'
 }
 
 # =============================================================================
+# GH #33: stale review lock detection
+# =============================================================================
+
+@test "heal: detects stale review lock by age (GH #33)" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    local heal_block
+    heal_block=$(sed -n '/^heal_stuck_tasks()/,/^}/p' "$hype_sh")
+
+    # Should check lock age via stat before deciding to skip
+    echo "$heal_block" | grep -q 'stat -f %m.*review.*lock'
+}
+
+@test "heal: removes stale review lock with rmdir (GH #33)" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    local heal_block
+    heal_block=$(sed -n '/^heal_stuck_tasks()/,/^}/p' "$hype_sh")
+
+    # Should rmdir the stale lock
+    echo "$heal_block" | grep -q 'rmdir.*review_lock'
+}
+
+@test "heal: stale review lock uses same threshold as reviewing (GH #33)" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    local heal_block
+    heal_block=$(sed -n '/^heal_stuck_tasks()/,/^}/p' "$hype_sh")
+
+    # Age check uses reviewing_threshold (reuses same constant)
+    echo "$heal_block" | grep -q 'lock_age.*-gt.*reviewing_threshold'
+}
+
+# =============================================================================
 # heal_stuck_tasks: approved warning (v2.2)
 # =============================================================================
 

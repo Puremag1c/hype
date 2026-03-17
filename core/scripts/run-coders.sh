@@ -512,7 +512,8 @@ main() {
         if is_audit_task "$task_json"; then
             log "TASK_START" "$task_id \"$task_title\" (AUDIT, sonnet)"
             # Auditor: no worktree, no slot (doesn't create branches)
-            ( run_auditor "$task_id" ) &
+            ( run_auditor "$task_id"; rm -f "$WORKTREES_DIR/task-$task_id.pid" ) &
+            echo "$!" > "$WORKTREES_DIR/task-$task_id.pid"
         else
             local slot
             slot=$(find_free_slot) || {
@@ -522,7 +523,8 @@ main() {
             }
             log "TASK_START" "$task_id \"$task_title\" (slot $slot, $model)"
             # Executor: uses worktree for isolation
-            ( run_coder "$slot" "$task_id" ) &
+            ( run_coder "$slot" "$task_id"; rm -f "$WORKTREES_DIR/task-$task_id.pid" ) &
+            echo "$!" > "$WORKTREES_DIR/task-$task_id.pid"
         fi
         ((started++))
     done

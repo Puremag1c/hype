@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.5.15] - 2026-03-17
+
+### Fixed
+
+- **Stale review lock blocks heal_stuck_tasks (GitHub #33)** — when senior process crashes without trap firing, `review-TASK_ID.lock` persists. `heal_stuck_tasks()` saw the lock file and assumed reviewer still running — task stuck with `reviewing` label indefinitely. Fix: added lock age check (same threshold as reviewing: 180s). If lock is older than threshold, it's removed as stale before healing.
+
+- **Zombie coder processes cause duplicate log messages (GitHub #32)** — `reset_stale_tasks()` reset task status to `open` without killing the old coder process. Both old and new coders ran concurrently, producing duplicate "completed" log messages. Fix: PID tracking via `task-TASK_ID.pid` files — written on launch, killed before stale reset, cleaned up on normal exit. 8 new tests (520 total).
+
+### Changed
+
+- **Architect anti-pattern warning for parallel file overlap** — added explicit anti-pattern example to architect prompt showing cross-contamination scenario: 4 refactoring tasks on same files without dependencies → reject cascades → wasted cycles. Reinforces existing "File overlap rule."
+
+---
+
 ## [2.5.14] - 2026-03-16
 
 ### Fixed

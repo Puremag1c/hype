@@ -697,8 +697,18 @@ heal_stuck_tasks() {
         task_age=$((now - task_epoch))
 
         if [ "$task_age" -gt "$reviewing_threshold" ]; then
-            # Check if a reviewer lock exists (reviewer still running)
-            if [ ! -d "$PROJECT_DIR/.hype-worktrees/review-$task_id.lock" ]; then
+            local review_lock="$PROJECT_DIR/.hype-worktrees/review-$task_id.lock"
+            # Check for stale review lock (senior crashed without trap firing)
+            if [ -d "$review_lock" ]; then
+                local lock_age
+                lock_age=$(( now - $(stat -f %m "$review_lock" 2>/dev/null || stat -c %Y "$review_lock" 2>/dev/null || echo "$now") ))
+                if [ "$lock_age" -gt "$reviewing_threshold" ]; then
+                    log "WARN" "HEAL: Removing stale review lock for $task_id (${lock_age}s old)"
+                    rmdir "$review_lock" 2>/dev/null || true
+                fi
+            fi
+            # Heal if lock is gone (was never there, or just removed as stale)
+            if [ ! -d "$review_lock" ]; then
                 log "WARN" "HEAL: $task_id stuck in reviewing for ${task_age}s without active reviewer, returning to queue"
                 bd_safe update "$task_id" --remove-label=reviewing --add-label=needs-review >/dev/null 2>&1 || true
             fi

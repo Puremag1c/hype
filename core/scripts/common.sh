@@ -773,6 +773,42 @@ check_beads() {
         fi
     done
 
+    # All retries failed — check for stale Dolt locks (GH #36)
+    local beads_dir="${PROJECT_DIR:-.}/.beads"
+    local fixed=false
+
+    # Stale dolt-access.lock (beads application-level)
+    local access_lock="$beads_dir/dolt-access.lock"
+    if [ -f "$access_lock" ]; then
+        local lock_age
+        lock_age=$(( $(date +%s) - $(stat -f %m "$access_lock" 2>/dev/null || stat -c %Y "$access_lock" 2>/dev/null || echo "0") ))
+        if [ "$lock_age" -gt 300 ]; then
+            >&2 echo "WARN: Removing stale dolt-access.lock (age: ${lock_age}s)"
+            rm -f "$access_lock"
+            fixed=true
+        fi
+    fi
+
+    # Stale Dolt internal noms LOCK
+    local noms_lock="$beads_dir/dolt/beads/.dolt/noms/LOCK"
+    if [ -f "$noms_lock" ]; then
+        local lock_age
+        lock_age=$(( $(date +%s) - $(stat -f %m "$noms_lock" 2>/dev/null || stat -c %Y "$noms_lock" 2>/dev/null || echo "0") ))
+        if [ "$lock_age" -gt 300 ]; then
+            >&2 echo "WARN: Removing stale Dolt noms LOCK (age: ${lock_age}s)"
+            rm -f "$noms_lock"
+            fixed=true
+        fi
+    fi
+
+    # Retry after stale lock cleanup
+    if [ "$fixed" = true ]; then
+        if timeout_cmd 5s bd list --limit 1 >/dev/null 2>&1; then
+            >&2 echo "INFO: bd backend recovered after stale lock cleanup"
+            return 0
+        fi
+    fi
+
     >&2 echo "ERROR: bd backend failed to recover after 3 attempts"
     return 1
 }

@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.5.17] - 2026-03-18
+
+### Fixed
+
+- **Retry counter not incrementing on non-timeout failures (GitHub #37)** — when coder exited with non-124 code (crash, OOM, API error), retry:N was not incremented. Task looped indefinitely without escalation (12 attempts → retry:2). Fix: unified failure handler increments retry:N on ALL exit codes. Also reads fresh retry count from bd after execution to prevent stale snapshot race between parallel coders. 532 tests (6 new).
+
+- **Stale Dolt locks block beads backend (GitHub #36)** — crashed beads process left `dolt-access.lock` and `noms/LOCK` files (29h stale). `check_beads()` retried `bd list` but never cleaned locks, causing intermittent SIGSEGV and 11+ cycle recovery loops. Fix: after 3 failed probes, check lock file age (>5min threshold) and remove stale locks before final retry. Cross-platform stat (macOS + Linux).
+
+---
+
 ## [2.5.16] - 2026-03-17
 
 ### Fixed

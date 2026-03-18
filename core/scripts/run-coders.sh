@@ -297,31 +297,33 @@ $retry_context}"
     fi
 
     if [ $exit_code -ne 0 ]; then
+        local fail_reason
         if [ $exit_code -eq 124 ]; then
             log "WARN" "Executor timeout for $task_id"
-            # Increment retry counter (take max if multiple exist, remove old label)
-            local current_retry old_retry_label
-            current_retry=$(echo "$task_json" | jq -r '[.[0].labels[]? | select(startswith("retry:")) | split(":")[1] | tonumber] | max // 0' 2>/dev/null)
-            current_retry="${current_retry:-0}"
-            local new_retry=$((current_retry + 1))
-
-            # Save structured attempt result
-            local updated_notes
-            updated_notes=$(save_attempt_result "$task_id" "TIMEOUT after $TASK_TIMEOUT - task may be too large or complex")
-
-            # Remove old retry label if exists, add new one
-            old_retry_label=$(echo "$task_json" | jq -r '.[0].labels[]? | select(startswith("retry:"))' 2>/dev/null | head -1)
-            if [ -n "$old_retry_label" ]; then
-                bd_safe update "$task_id" --status=open --remove-label=coder --remove-label="$old_retry_label" --add-label="retry:$new_retry" --notes="$updated_notes" >/dev/null 2>&1 || true
-            else
-                bd_safe update "$task_id" --status=open --remove-label=coder --add-label="retry:$new_retry" --notes="$updated_notes" >/dev/null 2>&1 || true
-            fi
+            fail_reason="TIMEOUT after $TASK_TIMEOUT - task may be too large or complex"
         else
             log "ERROR" "Executor failed for $task_id (exit: $exit_code)"
-            # Save structured attempt result
-            local updated_notes
-            updated_notes=$(save_attempt_result "$task_id" "FAILED with exit code $exit_code")
-            bd_safe update "$task_id" --status=open --remove-label=coder --notes="$updated_notes" >/dev/null 2>&1 || true
+            fail_reason="FAILED with exit code $exit_code"
+        fi
+
+        # Increment retry counter on ALL failures, not just timeouts (GH #37)
+        # Re-read fresh retry count from bd to avoid stale snapshot race (GH #37)
+        local fresh_json current_retry old_retry_label
+        fresh_json=$(bd_safe show "$task_id" --json 2>/dev/null || echo "[]")
+        current_retry=$(echo "$fresh_json" | jq -r '[.[0].labels[]? | select(startswith("retry:")) | split(":")[1] | tonumber] | max // 0' 2>/dev/null)
+        current_retry="${current_retry:-0}"
+        local new_retry=$((current_retry + 1))
+
+        # Save structured attempt result
+        local updated_notes
+        updated_notes=$(save_attempt_result "$task_id" "$fail_reason")
+
+        # Remove old retry label if exists, add new one
+        old_retry_label=$(echo "$fresh_json" | jq -r '.[0].labels[]? | select(startswith("retry:"))' 2>/dev/null | head -1)
+        if [ -n "$old_retry_label" ]; then
+            bd_safe update "$task_id" --status=open --remove-label=coder --remove-label="$old_retry_label" --add-label="retry:$new_retry" --notes="$updated_notes" >/dev/null 2>&1 || true
+        else
+            bd_safe update "$task_id" --status=open --remove-label=coder --add-label="retry:$new_retry" --notes="$updated_notes" >/dev/null 2>&1 || true
         fi
         return 0
     fi

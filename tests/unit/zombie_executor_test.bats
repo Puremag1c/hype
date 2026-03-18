@@ -214,5 +214,80 @@ load '../helpers/setup'
 }
 
 # =============================================================================
+# GH #37: retry counter on ALL failures + fresh read
+# =============================================================================
+
+@test "run_coder: non-timeout failures increment retry:N (GH #37)" {
+    local coders_sh="$SCRIPTS_DIR/run-coders.sh"
+
+    # The old code had separate branches for exit==124 (retry++) and exit!=124 (no retry)
+    # Now both paths should go through the same retry increment block
+    # Verify there is only ONE retry increment block (unified), not two separate branches
+    local retry_blocks
+    retry_blocks=$(grep -c 'add-label="retry:\$new_retry"' "$coders_sh")
+
+    # Should have exactly 2 occurrences (one with remove old label, one without)
+    # in a single unified block, not in separate if/else branches
+    [ "$retry_blocks" -eq 2 ]
+}
+
+@test "run_coder: reads fresh retry count from bd, not stale snapshot (GH #37)" {
+    local coders_sh="$SCRIPTS_DIR/run-coders.sh"
+
+    # The retry reading should use fresh_json (re-read from bd), not task_json (stale snapshot)
+    local fail_block
+    fail_block=$(sed -n '/exit_code -ne 0/,/return 0/p' "$coders_sh" | head -30)
+
+    echo "$fail_block" | grep -q 'fresh_json.*bd_safe show'
+    echo "$fail_block" | grep -q 'echo "\$fresh_json".*retry:'
+}
+
+@test "run_coder: unified failure handler for timeout and non-timeout (GH #37)" {
+    local coders_sh="$SCRIPTS_DIR/run-coders.sh"
+
+    # Both timeout (124) and non-timeout should set fail_reason, then share retry code
+    local fail_block
+    fail_block=$(sed -n '/exit_code -ne 0/,/return 0/p' "$coders_sh" | head -5)
+
+    # Should NOT have nested if/else with separate retry logic
+    # The old pattern was: if 124 → retry++; else → no retry
+    # New pattern: if 124 → set reason; else → set reason; then → shared retry++
+    echo "$fail_block" | grep -q 'fail_reason'
+}
+
+# =============================================================================
+# GH #36: check_beads stale Dolt lock cleanup
+# =============================================================================
+
+@test "check_beads: detects stale dolt-access.lock (GH #36)" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    local check_block
+    check_block=$(sed -n '/^check_beads()/,/^}/p' "$common_sh")
+
+    echo "$check_block" | grep -q 'dolt-access.lock'
+    echo "$check_block" | grep -q 'lock_age.*-gt.*300'
+}
+
+@test "check_beads: detects stale Dolt noms LOCK (GH #36)" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    local check_block
+    check_block=$(sed -n '/^check_beads()/,/^}/p' "$common_sh")
+
+    echo "$check_block" | grep -q 'noms/LOCK'
+}
+
+@test "check_beads: retries after stale lock cleanup (GH #36)" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+
+    local check_block
+    check_block=$(sed -n '/^check_beads()/,/^}/p' "$common_sh")
+
+    # After removing locks, should retry bd list
+    echo "$check_block" | grep -q 'recovered after stale lock cleanup'
+}
+
+# =============================================================================
 # Review "no action" path: re-add needs-review (now tested in reviewers_test.bats)
 # =============================================================================

@@ -811,6 +811,29 @@ load '../helpers/setup'
     grep -q 'НИКОГДА.*gitignore\|gitignore.*НИКОГДА' "$coder_md"
 }
 
+@test "update_gitignore: includes .hype-worktrees/ entry (GH #38)" {
+    local hype_bin="$PROJECT_ROOT/bin/hype"
+
+    local func_body
+    func_body=$(sed -n '/^update_gitignore()/,/^}/p' "$hype_bin")
+
+    echo "$func_body" | grep -q '.hype-worktrees/'
+}
+
+@test "cmd_init: .gitignore template includes .hype-worktrees/ (GH #38)" {
+    local hype_bin="$PROJECT_ROOT/bin/hype"
+
+    # Both init blocks (append and create) should include .hype-worktrees/
+    local init_block
+    init_block=$(sed -n '/cmd_init()/,/^}/p' "$hype_bin")
+
+    local count
+    count=$(echo "$init_block" | grep -c '.hype-worktrees/')
+
+    # Should appear in both the append and create heredocs
+    [ "$count" -ge 2 ]
+}
+
 @test "v2.3.17: heal_stuck_tasks detects coder+needs-review deadlock" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 

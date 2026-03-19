@@ -1,6 +1,7 @@
 CLAUDE.md
 logs/
 .hype/
+.hype-worktrees/
 .claude/agents
 .claude/commands
 scripts

@@ -561,12 +561,8 @@ EOF
     # Save project type for HYPE
     echo "$project_type" > .hype/project_type
 
-    # Auto-commit .gitignore if changed
-    if git diff --quiet .gitignore 2>/dev/null || git ls-files --others --exclude-standard | grep -q "^\.gitignore$"; then
-        git add .gitignore
-        git commit -m "chore: Add hype entries to .gitignore" --no-verify -q 2>/dev/null && \
-            success "Committed .gitignore"
-    fi
+    # Ensure all entries present (single source of truth for gitignore entries)
+    update_gitignore
 
     echo ""
     success "Project initialized!"

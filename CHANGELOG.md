@@ -8,7 +8,7 @@
 
 - **Stale Dolt locks block beads backend (GitHub #36)** — crashed beads process left `dolt-access.lock` and `noms/LOCK` files (29h stale). `check_beads()` retried `bd list` but never cleaned locks, causing intermittent SIGSEGV and 11+ cycle recovery loops. Fix: after 3 failed probes, check lock file age (>5min threshold) and remove stale locks before final retry. Cross-platform stat (macOS + Linux).
 
-- **`.hype-worktrees/` missing from `.gitignore` (GitHub #38)** — `hype init` and `update_gitignore()` added `.hype/` but not `.hype-worktrees/`. PID files and lock dirs could be accidentally committed. Fix: added `.hype-worktrees/` to both init templates and update_gitignore entries list. 534 tests (2 new).
+- **`.hype-worktrees/` missing from `.gitignore` (GitHub #38)** — `hype init` and `update_gitignore()` added `.hype/` but not `.hype-worktrees/`. PID files and lock dirs could be accidentally committed. Fix: added `.hype-worktrees/` to `update_gitignore()` entries list, refactored `cmd_init` to call `update_gitignore()` (single source of truth instead of duplicated heredocs). Removed accidentally tracked `.hype/hype.lock` from git. 534 tests (2 new).
 
 ---
 

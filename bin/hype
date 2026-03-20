@@ -740,6 +740,7 @@ update_dependencies() {
                 sudo chown -R "$(whoami)" "$claude_dir"
             fi
             claude update || true
+            hash -r
         fi
 
         # No version range — presence is enough

@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.5.22] - 2026-03-20
+
+### Fixed
+
+- **Dirty git status after `hype init`/`hype upgrade`** — gitignore changes from `update_gitignore()` and `update_beads_gitignore()` were left uncommitted, showing modified `.gitignore` and `.beads/.gitignore` in `git status`. New `commit_gitignore_changes()` auto-commits both files in one commit (with push). Called from `cmd_init` and `cmd_upgrade`. Also consolidated `.claude/agents` + `.claude/commands` gitignore entries into single `.claude/`.
+
+---
+
 ## [2.5.21] - 2026-03-20
 
 ### Fixed

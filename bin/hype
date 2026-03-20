@@ -375,10 +375,17 @@ cmd_init() {
 
     # Beads health check (only if already initialized — fresh projects get bd init below)
     if [[ -d ".beads" ]]; then
+        # Clean stale Dolt runtime files that block server start
+        rm -f .beads/dolt-server.lock .beads/dolt-server.pid .beads/dolt-server.port 2>/dev/null || true
         ensure_dolt_server
         if ! bd list --limit 1 &>/dev/null; then
-            error "Beads backend not responding. Run 'bd doctor --fix'"
-            exit 1
+            # Retry once after cleaning locks
+            sleep 2
+            ensure_dolt_server
+            if ! bd list --limit 1 &>/dev/null; then
+                error "Beads backend not responding. Run 'bd doctor --fix'"
+                exit 1
+            fi
         fi
     fi
 
@@ -587,10 +594,15 @@ cmd_start() {
     check_deps
 
     # Beads health check — ensure persistent Dolt server
+    rm -f .beads/dolt-server.lock .beads/dolt-server.pid .beads/dolt-server.port 2>/dev/null || true
     ensure_dolt_server
     if ! bd list --limit 1 &>/dev/null; then
-        error "Beads backend not responding. Run 'bd doctor --fix'"
-        exit 1
+        sleep 2
+        ensure_dolt_server
+        if ! bd list --limit 1 &>/dev/null; then
+            error "Beads backend not responding. Run 'bd doctor --fix'"
+            exit 1
+        fi
     fi
 
     # If DONE, inform user about cleanup

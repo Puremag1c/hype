@@ -255,3 +255,17 @@ load '../helpers/setup'
     func_block=$(sed -n '/^update_gitignore()/,/^}/p' "$hype_bin")
     echo "$func_block" | grep -q '\.claude/'
 }
+
+@test "bin/hype: update_gitignore uses exact line match (grep -qxF)" {
+    local hype_bin="$PROJECT_ROOT/bin/hype"
+    local func_block
+    func_block=$(sed -n '/^update_gitignore()/,/^}/p' "$hype_bin")
+    echo "$func_block" | grep -q 'grep -qxF'
+}
+
+@test "bin/hype: update_beads_gitignore uses exact line match (grep -qxF)" {
+    local hype_bin="$PROJECT_ROOT/bin/hype"
+    local func_block
+    func_block=$(sed -n '/^update_beads_gitignore()/,/^}/p' "$hype_bin")
+    echo "$func_block" | grep -q 'grep -qxF'
+}

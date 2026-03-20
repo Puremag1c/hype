@@ -1030,7 +1030,7 @@ update_gitignore() {
     local added=()
 
     for entry in "${entries[@]}"; do
-        if ! grep -qF "$entry" .gitignore 2>/dev/null; then
+        if ! grep -qxF "$entry" .gitignore 2>/dev/null; then
             echo "$entry" >> .gitignore
             added+=("$entry")
         fi
@@ -1068,7 +1068,7 @@ update_beads_gitignore() {
     local added=()
 
     for entry in "${entries[@]}"; do
-        if ! grep -qF "$entry" .beads/.gitignore 2>/dev/null; then
+        if ! grep -qxF "$entry" .beads/.gitignore 2>/dev/null; then
             echo "$entry" >> .beads/.gitignore
             added+=("$entry")
         fi

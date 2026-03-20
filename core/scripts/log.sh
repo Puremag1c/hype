@@ -8,8 +8,8 @@
 # Использование:
 #   source ./scripts/log.sh
 #   log "MANAGER" "INFO" "Starting phase detection"
-#   log "EXECUTOR" "TASK_START" "hype-abc"
-#   log "HYPE" "FATAL" "Beads daemon not running"
+#   log "CODER" "TASK_START" "beads-abc"
+#   log "HYPE" "FATAL" "Beads backend not responding"
 #
 # Или напрямую:
 #   ./scripts/log.sh MANAGER INFO "Starting phase detection"

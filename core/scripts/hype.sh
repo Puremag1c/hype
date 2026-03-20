@@ -867,10 +867,19 @@ generate_iteration_stats() {
     analyst_runs=$(grep -c "Starting analyst-" "$LOGS_DIR/hype.log" 2>/dev/null || echo "0")
     senior_runs=$(grep -c "Processing review for" "$LOGS_DIR/hype.log" 2>/dev/null || echo "0")
 
-    # Estimate tokens (rough: count chars in agent logs / 4)
-    local total_chars estimated_tokens
-    total_chars=$(find "$LOGS_DIR" -name "*.log" -newer "$HYPE_DIR/iteration_start.txt" -exec wc -c {} + 2>/dev/null | tail -1 | awk '{print $1}' || echo "0")
-    estimated_tokens=$((total_chars / 4))
+    # Real token usage from tokens.jsonl (written by run_claude_with_progress)
+    local tokens_file="$LOGS_DIR/tokens.jsonl"
+    local total_cost total_input total_output total_cache_read total_cache_create agent_count
+    if [ -f "$tokens_file" ]; then
+        total_cost=$(jq -s '[.[].cost_usd // 0] | add | . * 10000 | round / 10000' "$tokens_file" 2>/dev/null || echo "0")
+        total_input=$(jq -s '[.[].input_tokens // 0] | add' "$tokens_file" 2>/dev/null || echo "0")
+        total_output=$(jq -s '[.[].output_tokens // 0] | add' "$tokens_file" 2>/dev/null || echo "0")
+        total_cache_read=$(jq -s '[.[].cache_read // 0] | add' "$tokens_file" 2>/dev/null || echo "0")
+        total_cache_create=$(jq -s '[.[].cache_create // 0] | add' "$tokens_file" 2>/dev/null || echo "0")
+        agent_count=$(jq -s 'length' "$tokens_file" 2>/dev/null || echo "0")
+    else
+        total_cost=0; total_input=0; total_output=0; total_cache_read=0; total_cache_create=0; agent_count=0
+    fi
 
     # Get blocked tasks details
     local blocked_details
@@ -899,7 +908,11 @@ generate_iteration_stats() {
 | Analysts | $analyst_runs |
 | Senior Executor | $senior_runs |
 
-**Estimated tokens:** ~$estimated_tokens (based on log size)
+## Token Usage
+- **Total cost:** \$${total_cost} USD
+- **Input tokens:** ${total_input} (cache read: ${total_cache_read}, cache create: ${total_cache_create})
+- **Output tokens:** ${total_output}
+- **Agent calls:** ${agent_count}
 
 ## Blocked Tasks
 $blocked_details
@@ -1636,21 +1649,29 @@ main() {
 
             ./scripts/notify.sh "Project complete" "All tasks done" 2>/dev/null || true
 
+            # Show cost summary
+            if [ -f "$LOGS_DIR/tokens.jsonl" ]; then
+                local iter_cost iter_calls
+                iter_cost=$(jq -s '[.[].cost_usd // 0] | add | . * 10000 | round / 10000' "$LOGS_DIR/tokens.jsonl" 2>/dev/null || echo "0")
+                iter_calls=$(jq -s 'length' "$LOGS_DIR/tokens.jsonl" 2>/dev/null || echo "0")
+                echo "Cost: \$${iter_cost} USD ($iter_calls agent calls)"
+                echo ""
+            fi
+
             # Ask user about cleanup (interactive only)
-            echo ""
             echo "Run cleanup? This will:"
             echo "  - Delete all logs"
             echo "  - Clear beads tasks (backup in issues.jsonl)"
             echo "  - Archive SPEC.md → SPEC.prev.md"
             echo ""
-            read -p "Cleanup now? (y/N) " -n 1 -r
+            read -p "Cleanup now? (Y/n) " -n 1 -r
             echo ""
 
-            if [[ $REPLY =~ ^[Yy]$ ]]; then
+            if [[ $REPLY =~ ^[Nn]$ ]]; then
+                log "INFO" "Skipped cleanup. Run 'hype clear' later if needed."
+            else
                 cleanup_iteration "$LOGS_DIR" "$PROJECT_DIR"
                 log "SUCCESS" "Cleanup complete"
-            else
-                log "INFO" "Skipped cleanup. Run 'hype clear' later if needed."
             fi
 
             rm -f "$LOCK_FILE"

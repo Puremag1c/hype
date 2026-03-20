@@ -481,6 +481,19 @@ run_claude_with_progress() {
     # Convert stream-json to readable log (extract assistant text messages)
     if [ -f "$raw_output" ]; then
         jq -r 'select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text' "$raw_output" 2>/dev/null > "$output_file" || cp "$raw_output" "$output_file" 2>/dev/null || true
+
+        # Extract token usage from stream-json result line
+        jq -c 'select(.type == "result") | {
+            ts: (now | strftime("%Y-%m-%dT%H:%M:%S")),
+            label: $label,
+            cost_usd: .total_cost_usd,
+            input_tokens: .usage.input_tokens,
+            cache_read: .usage.cache_read_input_tokens,
+            cache_create: .usage.cache_creation_input_tokens,
+            output_tokens: .usage.output_tokens,
+            duration_ms: .duration_ms,
+            models: .modelUsage
+        }' --arg label "$label" "$raw_output" >> "$logs_dir/tokens.jsonl" 2>/dev/null || true
     fi
     rm -f "$raw_output"
 
@@ -1191,5 +1204,8 @@ cleanup_iteration() {
     touch "$project_dir/.hype/needs-spec" 2>/dev/null || true
 
     echo "Cleanup complete!"
+
+    # Stop persistent Dolt server (after all bd operations complete)
+    bd dolt stop 2>/dev/null || true
 }
 export -f cleanup_iteration 2>/dev/null || true

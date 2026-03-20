@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.5.20] - 2026-03-20
+
+### Added
+
+- **Token cost tracking from claude stream-json** — `run_claude_with_progress()` extracts `type=result` usage data (total_cost_usd, input/output tokens, cache stats, per-model breakdown) and appends to `logs/tokens.jsonl`. `generate_iteration_stats()` reads real data instead of chars÷4 estimate. DONE phase shows cost summary before cleanup prompt.
+
+### Changed
+
+- **Cleanup prompts default to Y** — `hype clear` and DONE phase cleanup prompt changed from `(y/N)` to `(Y/n)`. Enter now proceeds (cleanup is the normal path). Safety prompt for in-progress tasks stays `(y/N)`.
+
+### Fixed
+
+- **Dolt server not stopped on cleanup** — `cleanup_iteration()` and `hype clear` start Dolt server (via bd calls) but never stopped it. Added `bd dolt stop` at end of `cleanup_iteration()`, after all bd operations complete.
+
+---
+
 ## [2.5.19] - 2026-03-20
 
 ### Changed

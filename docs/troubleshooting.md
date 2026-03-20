@@ -30,9 +30,9 @@ rmdir /tmp/hype-bd.lock.d 2>/dev/null
 # 2. Проверить базу
 bd admin cleanup --force
 
-# 3. Если ничего не помогает — пересоздать
-rm -rf .beads/*.db
-bd create --title="test" && bd close $(bd list --json | jq -r '.[0].id')
+# 3. Если ничего не помогает — пересоздать базу
+bd dolt stop 2>/dev/null; rm -rf .beads/dolt .beads/*.db .beads/ephemeral.sqlite3
+bd create --title="test" && bd close $(bd list --json --limit 0 | jq -r '.[0].id')
 ```
 
 **Auto-recovery:**
@@ -76,7 +76,7 @@ bd update <id> --status=open --remove-label=coder
 
 **Диагностика:**
 ```bash
-bd list --status=closed --json | jq '.[] | select(.labels | index("needs-review"))'
+bd list --status=closed --json --limit 0 | jq '.[] | select((.labels // []) | index("needs-review"))'
 ```
 
 **Решение (runtime-fix):**
@@ -347,7 +347,7 @@ Architect не убрал regression label после обработки.
 
 **Диагностика:**
 ```bash
-bd list --status=open --json | jq '.[] | select(.labels | index("regression"))'
+bd list --status=open --json --limit 0 | jq '.[] | select((.labels // []) | index("regression"))'
 ```
 
 **Решение (runtime-fix):**
@@ -535,7 +535,7 @@ cat .hype/config.sh
 **Решение (runtime-fix):**
 ```bash
 # Восстановить из template
-cp ~/.hype/templates/config.template.sh .hype/config.sh
+cp "${HYPE_HOME:-$HOME/.hype}/templates/config.template.sh" .hype/config.sh
 ```
 
 ---
@@ -578,8 +578,8 @@ Race condition: milestone создан пока trigger был in_progress, по
 
 **Диагностика:**
 ```bash
-bd list --json | jq '.[] | select(.labels[]? | startswith("milestone:analysts"))'
-bd list --json | jq '.[] | select(.title | startswith("run-analyst-")) | {id, status}'
+bd list --json --limit 0 | jq '.[] | select((.labels // [])[]? | startswith("milestone:analysts"))'
+bd list --json --limit 0 | jq '.[] | select(.title | startswith("run-analyst-")) | {id, status}'
 ```
 
 **Решение:**
@@ -653,7 +653,7 @@ start_command: .venv/bin/python -m chatfilter.main
 
 **Диагностика:**
 ```bash
-bd list --json | jq '.[] | select(.labels[]? == "blocked:troubleshoot") | {id, title, labels}'
+bd list --json --limit 0 | jq '.[] | select((.labels // [])[]? == "blocked:troubleshoot") | {id, title, labels}'
 ls -t logs/troubleshooter-*.log | head -3
 ```
 
@@ -718,7 +718,7 @@ bd update <id> --status=open --remove-label=user-escalation --remove-label=block
 
 **Диагностика:**
 ```bash
-bd list --json | jq '.[] | select(.labels[]? | startswith("regress:")) | {id, title, labels}'
+bd list --json --limit 0 | jq '.[] | select((.labels // [])[]? | startswith("regress:")) | {id, title, labels}'
 ```
 
 **Решение (runtime-fix):**

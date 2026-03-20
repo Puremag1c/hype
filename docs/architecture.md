@@ -137,13 +137,15 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
 - **Review (v2.5.9):** После завершения Senior маршрутизирует на plan-reviewer (`MODE=audit_review`), который читает findings и создаёт fix-задачи при необходимости. До v2.5.9 findings авто-одобрялись и никем не читались
 - **Эскалация:** sonnet → opus при timeout/failure
 
-### Versioner (Haiku)
-- **Роль:** Обновление VERSION и CHANGELOG после VALIDATING
-- **Когда:** После успешного VALIDATING: PASSED
+### Completion (Opus)
+- **Роль:** Финализация итерации (REPORTING фаза)
+- **Когда:** После milestone:validating-done
 - **Задачи:**
-  - Определяет тип изменений (major/minor/patch)
-  - Обнаруживает источник версии в целевом проекте (v2.2.1): `package.json`, `pyproject.toml`, `Cargo.toml`, `mix.exs`, etc. — обновляет версию где она определена, не только `VERSION` файл
+  - Version bump (определяет major/minor/patch)
+  - Обнаруживает источник версии в целевом проекте: `package.json`, `pyproject.toml`, `Cargo.toml`, `mix.exs`, etc.
   - Добавляет запись в CHANGELOG.md
+  - Генерирует SPEC_REPORT.md
+  - Commit + push
 
 ### Architect Troubleshooter (Opus)
 - **Роль:** Разрешение persistent failures (reject:4+)
@@ -256,7 +258,8 @@ startup_timeout: 30          # Секунды на запуск сервера
                   │ Direct (embedded)
                   ▼
 ┌─────────────────────────────────────────────────────────┐
-│              .beads/*.db (Dolt embedded)                 │
+│              .beads/dolt/ (Dolt embedded)                │
+│  - Persistent server via bd dolt start (v2.5.19)        │
 │  - Auto-commit after write operations                   │
 │  - SQL access via bd sql / bd query                     │
 │  - Native git-like versioning (bd diff, bd history)     │
@@ -276,7 +279,7 @@ bd set-state $id model=opus      # Атомарная смена label
 
 **2. Worktrees используют auto-discovery**
 ```
-main-repo/.beads/*.db     ← единственная база
+main-repo/.beads/dolt/    ← единственная база
 worktree/                 ← bd auto-discovers из parent
 ```
 
@@ -388,7 +391,7 @@ bd dep cycles  # Проверка циклов
 - Запускается в каждой итерации main loop
 - Находит `in_progress` задачи без `coder` и `needs-review` labels
 - Если задача stuck >2 минут → автоматически добавляет `needs-review`
-- Закрывает gap когда coder завершился но label не поставился (beads sync race)
+- Закрывает gap когда coder завершился но label не поставился (Dolt write race)
 - **v2.2:** Reviewing healing — задачи с `reviewing` >3 мин без senior lock → возврат в `needs-review`
 - **v2.2.1:** Approved recovery — задачи с `approved` >5 мин → лог предупреждение; >10 мин → remove approved, increment reject:N, return to coder
 - **Исключения:** trigger, reviewing (пока есть lock), approved (до 10 мин), user-escalation
@@ -401,7 +404,8 @@ bd dep cycles  # Проверка циклов
 ### Backend health check (v2.5+)
 - `check_beads()` использует `bd list --limit 1` probe — 3 попытки с 2s pause
 - Dolt embedded — нет отдельного процесса, нет PID tracking
-- `compact_beads_if_large()` — если `.beads/*.db` > 10MB → `bd admin compact --purge-tombstones`
+- `compact_beads_if_large()` — если `.beads/beads.db` > 10MB → `bd admin compact --purge-tombstones`
+- `ensure_dolt_server()` — запускает persistent Dolt server (`bd dolt start`) при startup. Избегает 5-6s cold start на каждый bd вызов (beads 0.59+). `cleanup_iteration()` останавливает сервер (`bd dolt stop`) после завершения
 
 ### Adaptive backoff
 - Если bd backend отвечает >2s → удваивает iteration delay (max 60s)
@@ -461,8 +465,8 @@ main
 
 ```bash
 ./scripts/log.sh MANAGER INFO "Starting phase detection"
-./scripts/log.sh EXECUTOR TASK_START "hype-abc"
-./scripts/log.sh ORCHESTRATOR FATAL "Beads backend not responding"
+./scripts/log.sh CODER TASK_START "beads-abc"
+./scripts/log.sh HYPE FATAL "Beads backend not responding"
 ```
 
 ## Установка

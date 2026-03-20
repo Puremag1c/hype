@@ -1620,10 +1620,10 @@ cmd_clear() {
     echo "  - Archive SPEC.md → SPEC.prev.md"
     echo ""
 
-    read -p "Continue? (y/N) " -n 1 -r
+    read -p "Continue? (Y/n) " -n 1 -r
     echo ""
 
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    if [[ $REPLY =~ ^[Nn]$ ]]; then
         info "Cancelled."
         exit 0
     fi

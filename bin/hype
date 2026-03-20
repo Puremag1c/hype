@@ -564,6 +564,7 @@ EOF
 
     # Ensure all entries present (single source of truth for gitignore entries)
     update_gitignore
+    update_beads_gitignore
 
     echo ""
     success "Project initialized!"
@@ -1065,7 +1066,7 @@ update_beads_gitignore() {
         return
     fi
 
-    local entries=("export-state/")
+    local entries=("export-state/" "dolt-server.lock" "dolt-server.log" "dolt-server.pid" "dolt-server.port" "backup/" ".beads-credential-key")
     local added=()
 
     for entry in "${entries[@]}"; do

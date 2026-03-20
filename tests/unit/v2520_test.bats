@@ -147,6 +147,60 @@ load '../helpers/setup'
     echo "$func_body" | grep -q 'Agent calls'
 }
 
+# =============================================================================
+# Beads runtime cleanup (dirty git status prevention)
+# =============================================================================
+
+@test "cleanup_iteration: cleans beads runtime files" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+    [ -f "$common_sh" ]
+
+    func_body=$(sed -n '/^cleanup_iteration()/,/^}/p' "$common_sh")
+    echo "$func_body" | grep -q 'dolt-server.lock'
+    echo "$func_body" | grep -q 'dolt-server.log'
+    echo "$func_body" | grep -q 'dolt-server.pid'
+    echo "$func_body" | grep -q '.beads-credential-key'
+    echo "$func_body" | grep -q 'backup'
+}
+
+@test "cleanup_iteration: restores metadata.json from git" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+    [ -f "$common_sh" ]
+
+    func_body=$(sed -n '/^cleanup_iteration()/,/^}/p' "$common_sh")
+    echo "$func_body" | grep -q 'git.*checkout.*metadata.json'
+}
+
+@test "cleanup_iteration: cleans tokens.jsonl" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+    [ -f "$common_sh" ]
+
+    func_body=$(sed -n '/^cleanup_iteration()/,/^}/p' "$common_sh")
+    echo "$func_body" | grep -q 'tokens.jsonl'
+}
+
+@test "bin/hype: update_beads_gitignore covers dolt-server runtime files" {
+    local hype_bin="$PROJECT_ROOT/bin/hype"
+    [ -f "$hype_bin" ]
+
+    func_body=$(sed -n '/^update_beads_gitignore()/,/^}/p' "$hype_bin")
+    echo "$func_body" | grep -q 'dolt-server.lock'
+    echo "$func_body" | grep -q 'dolt-server.pid'
+    echo "$func_body" | grep -q '.beads-credential-key'
+    echo "$func_body" | grep -q 'backup/'
+}
+
+@test "bin/hype: cmd_init calls update_beads_gitignore" {
+    local hype_bin="$PROJECT_ROOT/bin/hype"
+    [ -f "$hype_bin" ]
+
+    # cmd_init has nested braces, so use line range between cmd_init and next cmd_ function
+    local start_line end_line
+    start_line=$(grep -n '^cmd_init()' "$hype_bin" | head -1 | cut -d: -f1)
+    end_line=$(awk "NR>$start_line && /^cmd_[a-z]/{print NR; exit}" "$hype_bin")
+    sed -n "${start_line},${end_line}p" "$hype_bin" | grep -q 'update_beads_gitignore'
+}
+
 @test "hype.sh DONE: shows cost summary before cleanup prompt" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
     [ -f "$hype_sh" ]

@@ -28,6 +28,18 @@ ephemeral.sqlite3-journal
 ephemeral.sqlite3-wal
 ephemeral.sqlite3-shm
 
+# Dolt persistent server (beads 0.59+)
+dolt-server.lock
+dolt-server.log
+dolt-server.pid
+dolt-server.port
+
+# Backup directory (bd admin backup)
+backup/
+
+# Credential key (machine-specific)
+.beads-credential-key
+
 # Legacy files (from pre-Dolt versions)
 *.db
 *.db?*

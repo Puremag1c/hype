@@ -1203,6 +1203,18 @@ cleanup_iteration() {
     # 7. Create needs-spec marker for next iteration
     touch "$project_dir/.hype/needs-spec" 2>/dev/null || true
 
+    # 8. Clean beads runtime files (prevent dirty git status)
+    echo "  → Cleaning beads runtime files..."
+    rm -f "$project_dir/.beads/dolt-server.lock" "$project_dir/.beads/dolt-server.log" \
+          "$project_dir/.beads/dolt-server.pid" "$project_dir/.beads/dolt-server.port" \
+          "$project_dir/.beads/.beads-credential-key" 2>/dev/null || true
+    rm -rf "$project_dir/.beads/backup" 2>/dev/null || true
+    # Restore metadata.json if beads modified it during runtime
+    git -C "$project_dir" checkout -- .beads/metadata.json 2>/dev/null || true
+
+    # 9. Clean tokens.jsonl (iteration-specific, already aggregated in stats)
+    rm -f "$logs_dir/tokens.jsonl" 2>/dev/null || true
+
     echo "Cleanup complete!"
 
     # Stop persistent Dolt server (after all bd operations complete)

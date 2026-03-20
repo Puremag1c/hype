@@ -215,3 +215,43 @@ load '../helpers/setup'
     cleanup_line=$(grep -n 'Cleanup now?' "$hype_sh" | head -1 | cut -d: -f1)
     [ "$cost_line" -lt "$cleanup_line" ]
 }
+
+# =============================================================================
+# Gitignore auto-commit tests (v2.5.21)
+# =============================================================================
+
+@test "bin/hype: commit_gitignore_changes function defined" {
+    local hype_bin="$PROJECT_ROOT/bin/hype"
+    grep -q '^commit_gitignore_changes()' "$hype_bin"
+}
+
+@test "bin/hype: commit_gitignore_changes checks git diff" {
+    local hype_bin="$PROJECT_ROOT/bin/hype"
+    local func_block
+    func_block=$(sed -n '/^commit_gitignore_changes()/,/^}/p' "$hype_bin")
+    echo "$func_block" | grep -q 'git diff'
+    echo "$func_block" | grep -q '.gitignore'
+}
+
+@test "bin/hype: cmd_init calls commit_gitignore_changes" {
+    local hype_bin="$PROJECT_ROOT/bin/hype"
+    local start_line end_line
+    start_line=$(grep -n '^cmd_init()' "$hype_bin" | head -1 | cut -d: -f1)
+    end_line=$(awk "NR>$start_line && /^cmd_[a-z]/{print NR; exit}" "$hype_bin")
+    sed -n "${start_line},${end_line}p" "$hype_bin" | grep -q 'commit_gitignore_changes'
+}
+
+@test "bin/hype: cmd_upgrade calls commit_gitignore_changes" {
+    local hype_bin="$PROJECT_ROOT/bin/hype"
+    local start_line end_line
+    start_line=$(grep -n '^cmd_upgrade()' "$hype_bin" | head -1 | cut -d: -f1)
+    end_line=$(awk "NR>$start_line && /^cmd_[a-z]/{print NR; exit}" "$hype_bin")
+    sed -n "${start_line},${end_line}p" "$hype_bin" | grep -q 'commit_gitignore_changes'
+}
+
+@test "bin/hype: update_gitignore adds .claude/ entry" {
+    local hype_bin="$PROJECT_ROOT/bin/hype"
+    local func_block
+    func_block=$(sed -n '/^update_gitignore()/,/^}/p' "$hype_bin")
+    echo "$func_block" | grep -q '\.claude/'
+}

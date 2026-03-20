@@ -572,6 +572,7 @@ EOF
     # Ensure all entries present (single source of truth for gitignore entries)
     update_gitignore
     update_beads_gitignore
+    commit_gitignore_changes
 
     echo ""
     success "Project initialized!"
@@ -935,6 +936,7 @@ upgrade_project() {
     # Update .gitignore entries
     update_gitignore
     update_beads_gitignore
+    commit_gitignore_changes
 
     # Ensure spinnerTipsEnabled is disabled in settings.json
     if [[ -f ".claude/settings.json" ]]; then
@@ -1024,7 +1026,7 @@ update_gitignore() {
         return
     fi
 
-    local entries=(".hype/" ".hype-worktrees/" ".claude/agents" ".claude/commands" "scripts" "project-scripts/" "logs/" "stats/" "PROJECT_CONTEXT.md" "SPEC.md" "SPEC.draft.md" "SPEC.prev.md" "SPEC_REPORT.prev.md" ".mcp.json")
+    local entries=(".hype/" ".hype-worktrees/" ".claude/" "scripts" "project-scripts/" "logs/" "stats/" "PROJECT_CONTEXT.md" "SPEC.md" "SPEC.draft.md" "SPEC.prev.md" "SPEC_REPORT.prev.md" ".mcp.json")
     local added=()
 
     for entry in "${entries[@]}"; do
@@ -1054,21 +1056,6 @@ update_gitignore() {
 
     if [[ "$changed" == "true" ]]; then
         [[ ${#added[@]} -gt 0 ]] && success "Added to .gitignore: ${added[*]}"
-
-        # Auto-commit and push if git repo with remote
-        if git rev-parse --is-inside-work-tree &>/dev/null; then
-            git add .gitignore
-            if git commit -m "chore: Update hype entries in .gitignore" --no-verify -q 2>/dev/null; then
-                success "Committed .gitignore"
-
-                # Push if remote exists
-                if git remote get-url origin &>/dev/null; then
-                    if git push -q 2>/dev/null; then
-                        success "Pushed .gitignore"
-                    fi
-                fi
-            fi
-        fi
     fi
 }
 
@@ -1089,6 +1076,25 @@ update_beads_gitignore() {
 
     if [[ ${#added[@]} -gt 0 ]]; then
         success "Added to .beads/.gitignore: ${added[*]}"
+    fi
+}
+
+# Commit gitignore changes from update_gitignore + update_beads_gitignore
+commit_gitignore_changes() {
+    git rev-parse --is-inside-work-tree &>/dev/null || return 0
+
+    local files_to_add=()
+    git diff --quiet .gitignore 2>/dev/null || files_to_add+=(".gitignore")
+    git diff --quiet .beads/.gitignore 2>/dev/null || files_to_add+=(".beads/.gitignore")
+
+    [[ ${#files_to_add[@]} -eq 0 ]] && return 0
+
+    git add "${files_to_add[@]}"
+    if git commit -m "chore: update gitignore entries for hype" --no-verify -q 2>/dev/null; then
+        success "Committed ${files_to_add[*]}"
+        if git remote get-url origin &>/dev/null; then
+            git push -q 2>/dev/null && success "Pushed" || true
+        fi
     fi
 }
 

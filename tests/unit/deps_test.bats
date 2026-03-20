@@ -28,12 +28,18 @@ load '../helpers/setup'
     grep -q '^beads|bd|.*|true$' "$PROJECT_ROOT/deps.conf"
 }
 
-@test "deps: beads has max_version ceiling (controlled upgrades)" {
-    local beads_line
-    beads_line=$(grep '^beads|' "$PROJECT_ROOT/deps.conf")
-    local max_version
-    max_version=$(echo "$beads_line" | cut -d'|' -f5)
-    [[ -n "$max_version" ]]
+@test "deps: no max_version ceilings (update only when below min)" {
+    # All deps should have empty max_version — HYPE only updates when below min
+    while IFS= read -r line; do
+        [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
+        local name max_version
+        name=$(echo "$line" | cut -d'|' -f1)
+        max_version=$(echo "$line" | cut -d'|' -f5)
+        [[ -z "$max_version" ]] || {
+            echo "$name has max_version=$max_version (should be empty)" >&2
+            return 1
+        }
+    done < "$PROJECT_ROOT/deps.conf"
 }
 
 @test "deps: claude has min_version set" {
@@ -141,13 +147,14 @@ _version_compare() {
     echo "$func_block" | grep -q 'claude update'
 }
 
-@test "deps: update_dependencies does NOT continue after claude update (version check)" {
+@test "deps: update_dependencies only calls claude update when below min" {
     local func_block
     func_block=$(sed -n '/^update_dependencies()/,/^}/p' "$PROJECT_ROOT/bin/hype")
-    # The claude block should NOT have 'continue' — falls through to version check
-    local claude_block
-    claude_block=$(echo "$func_block" | sed -n '/cmd.*==.*claude/,/fi/p')
-    ! echo "$claude_block" | grep -q 'continue'
+    # claude update must appear AFTER "Check if below minimum" (conditional, not top-level)
+    local below_min_line claude_line
+    below_min_line=$(echo "$func_block" | grep -n 'Check if below minimum' | head -1 | cut -d: -f1)
+    claude_line=$(echo "$func_block" | grep -n 'claude update' | head -1 | cut -d: -f1)
+    [[ "$claude_line" -gt "$below_min_line" ]]
 }
 
 @test "deps: update_dependencies uses sudo claude update for root-owned binary" {

@@ -734,23 +734,14 @@ update_dependencies() {
 
         # Special case: claude uses its own updater (not brew)
         if [[ "$cmd" == "claude" ]]; then
-            # Fix root ownership on claude data dir and symlink
-            local claude_dir="$HOME/.local/share/claude"
             local claude_bin
             claude_bin="$(command -v claude 2>/dev/null)"
-            local needs_sudo=false
-            if [[ -d "$claude_dir" ]] && [[ "$(stat -f '%Su' "$claude_dir" 2>/dev/null || stat -c '%U' "$claude_dir" 2>/dev/null)" == "root" ]]; then
-                needs_sudo=true
-            fi
             if [[ -n "$claude_bin" ]] && [[ "$(stat -f '%Su' "$claude_bin" 2>/dev/null || stat -c '%U' "$claude_bin" 2>/dev/null)" == "root" ]]; then
-                needs_sudo=true
+                info "claude installed as root — using sudo for update..."
+                sudo claude update || true
+            else
+                claude update || true
             fi
-            if [[ "$needs_sudo" == "true" ]]; then
-                info "Fixing claude ownership (requires sudo)..."
-                [[ -d "$claude_dir" ]] && sudo chown -R "$(whoami)" "$claude_dir"
-                [[ -n "$claude_bin" ]] && sudo chown -h "$(whoami)" "$claude_bin"
-            fi
-            claude update || true
             hash -r
         fi
 

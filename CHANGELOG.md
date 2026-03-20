@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.5.18] - 2026-03-20
+## [2.5.19] - 2026-03-20
 
 ### Changed
 
 - **Dependency version ranges updated (deps.conf)** — beads 0.55.0–0.56.99 → 0.59.0–0.61.99 (daemon removed in 0.59, tested up to 0.61.0). Claude min added: 2.1.70–2.1.99 (Opus 4.6 model support, security fix v2.1.78). gh 2.0.0 → 2.80.0–2.89.99 (modern baseline). All max_version ceilings set for controlled upgrades via new HYPE releases.
+
+### Fixed
+
+- **`claude update` silently failing on root-owned versions dir** — `update_dependencies()` silenced errors (`2>/dev/null`) and skipped version check (`continue`). Now detects root ownership on `~/.local/share/claude/versions/`, warns with `sudo chown` fix, shows `claude update` output, and falls through to min_version check. Removed incorrect `brew_pkg` for claude (not a brew package). 539 tests (4 new).
 
 ---
 

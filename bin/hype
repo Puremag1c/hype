@@ -735,19 +735,6 @@ update_dependencies() {
             continue
         fi
 
-        # Special case: claude uses its own updater (not brew)
-        if [[ "$cmd" == "claude" ]]; then
-            local claude_bin
-            claude_bin="$(command -v claude 2>/dev/null)"
-            if [[ -n "$claude_bin" ]] && [[ "$(stat -f '%Su' "$claude_bin" 2>/dev/null || stat -c '%U' "$claude_bin" 2>/dev/null)" == "root" ]]; then
-                info "claude installed as root — using sudo for update..."
-                sudo claude update || true
-            else
-                claude update || true
-            fi
-            hash -r
-        fi
-
         # No version range — presence is enough
         [[ -z "$min_version" && -z "$max_version" ]] && continue
 
@@ -760,23 +747,35 @@ update_dependencies() {
             local cmp
             cmp=$(version_compare "$current_version" "$min_version")
             if [[ "$cmp" == "-1" ]]; then
-                if command -v brew &>/dev/null && [[ -n "$brew_pkg" ]]; then
+                # claude uses its own updater (not brew)
+                if [[ "$cmd" == "claude" ]]; then
+                    info "Upgrading claude $current_version → ≥$min_version..."
+                    local claude_bin
+                    claude_bin="$(command -v claude 2>/dev/null)"
+                    if [[ -n "$claude_bin" ]] && [[ "$(stat -f '%Su' "$claude_bin" 2>/dev/null || stat -c '%U' "$claude_bin" 2>/dev/null)" == "root" ]]; then
+                        sudo claude update || true
+                    else
+                        claude update || true
+                    fi
+                    hash -r
+                elif command -v brew &>/dev/null && [[ -n "$brew_pkg" ]]; then
                     info "Upgrading $name $current_version → ≥$min_version..."
                     brew upgrade "$brew_pkg" 2>/dev/null || true
-                    # Re-check after upgrade
-                    local new_version
-                    new_version=$(get_dep_version "$version_extract")
-                    if [[ -n "$new_version" ]]; then
-                        local new_cmp
-                        new_cmp=$(version_compare "$new_version" "$min_version")
-                        if [[ "$new_cmp" != "-1" ]]; then
-                            success "$name $new_version"
-                        else
-                            warn "$name $new_version still below minimum $min_version"
-                        fi
-                    fi
                 else
                     warn "$name $current_version is below minimum $min_version"
+                    continue
+                fi
+                # Re-check after upgrade
+                local new_version
+                new_version=$(get_dep_version "$version_extract")
+                if [[ -n "$new_version" ]]; then
+                    local new_cmp
+                    new_cmp=$(version_compare "$new_version" "$min_version")
+                    if [[ "$new_cmp" != "-1" ]]; then
+                        success "$name $new_version"
+                    else
+                        warn "$name $new_version still below minimum $min_version"
+                    fi
                 fi
                 continue
             fi

@@ -141,6 +141,29 @@ _version_compare() {
     echo "$func_block" | grep -q 'claude update'
 }
 
+@test "deps: update_dependencies does NOT continue after claude update (version check)" {
+    local func_block
+    func_block=$(sed -n '/^update_dependencies()/,/^}/p' "$PROJECT_ROOT/bin/hype")
+    # The claude block should NOT have 'continue' — falls through to version check
+    local claude_block
+    claude_block=$(echo "$func_block" | sed -n '/cmd.*==.*claude/,/fi/p')
+    ! echo "$claude_block" | grep -q 'continue'
+}
+
+@test "deps: update_dependencies checks claude versions dir ownership" {
+    local func_block
+    func_block=$(sed -n '/^update_dependencies()/,/^}/p' "$PROJECT_ROOT/bin/hype")
+    echo "$func_block" | grep -q 'chown'
+}
+
+@test "deps: claude has no brew_pkg in deps.conf (uses own updater)" {
+    local claude_line
+    claude_line=$(grep '^claude|' "$PROJECT_ROOT/deps.conf")
+    local brew_pkg
+    brew_pkg=$(echo "$claude_line" | cut -d'|' -f6)
+    [[ -z "$brew_pkg" ]]
+}
+
 @test "deps: check_dep_versions has fallback for missing deps.conf" {
     local func_block
     func_block=$(sed -n '/^check_dep_versions()/,/^}/p' "$PROJECT_ROOT/bin/hype")

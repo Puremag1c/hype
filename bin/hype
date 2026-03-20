@@ -732,10 +732,14 @@ update_dependencies() {
             continue
         fi
 
-        # Special case: claude update
+        # Special case: claude uses its own updater (not brew)
         if [[ "$cmd" == "claude" ]]; then
-            claude update 2>/dev/null || true
-            continue
+            local claude_dir="$HOME/.local/share/claude/versions"
+            if [[ -d "$claude_dir" ]] && [[ "$(stat -f '%Su' "$claude_dir" 2>/dev/null || stat -c '%U' "$claude_dir" 2>/dev/null)" == "root" ]]; then
+                warn "claude versions dir owned by root — update will fail"
+                warn "Fix: sudo chown -R \$(whoami) ~/.local/share/claude/"
+            fi
+            claude update || true
         fi
 
         # No version range — presence is enough

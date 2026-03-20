@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.5.18] - 2026-03-20
+
+### Changed
+
+- **Dependency version ranges updated (deps.conf)** — beads min 0.55.0→0.59.0 (daemon removed in 0.59), max_version 0.56.99 removed (was blocking upgrades to 0.61.0). Claude min added: 2.1.70 (Opus 4.6 model support, security fix v2.1.78). gh min 2.0.0→2.80.0 (modern baseline). All deps verified compatible — no breaking changes for HYPE usage patterns.
+
+---
+
 ## [2.5.17] - 2026-03-18
 
 ### Fixed

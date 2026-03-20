@@ -734,10 +734,10 @@ update_dependencies() {
 
         # Special case: claude uses its own updater (not brew)
         if [[ "$cmd" == "claude" ]]; then
-            local claude_dir="$HOME/.local/share/claude/versions"
+            local claude_dir="$HOME/.local/share/claude"
             if [[ -d "$claude_dir" ]] && [[ "$(stat -f '%Su' "$claude_dir" 2>/dev/null || stat -c '%U' "$claude_dir" 2>/dev/null)" == "root" ]]; then
-                warn "claude versions dir owned by root — update will fail"
-                warn "Fix: sudo chown -R \$(whoami) ~/.local/share/claude/"
+                info "Fixing claude dir ownership (requires sudo)..."
+                sudo chown -R "$(whoami)" "$claude_dir"
             fi
             claude update || true
         fi

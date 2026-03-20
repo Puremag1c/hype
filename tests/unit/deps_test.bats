@@ -150,10 +150,10 @@ _version_compare() {
     ! echo "$claude_block" | grep -q 'continue'
 }
 
-@test "deps: update_dependencies checks claude versions dir ownership" {
+@test "deps: update_dependencies fixes claude versions dir ownership via sudo" {
     local func_block
     func_block=$(sed -n '/^update_dependencies()/,/^}/p' "$PROJECT_ROOT/bin/hype")
-    echo "$func_block" | grep -q 'chown'
+    echo "$func_block" | grep -q 'sudo chown'
 }
 
 @test "deps: claude has no brew_pkg in deps.conf (uses own updater)" {

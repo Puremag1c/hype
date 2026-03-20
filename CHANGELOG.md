@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.5.23] - 2026-03-20
+
+### Fixed
+
+- **Rejected tasks stuck in dead zone — 279 idle iterations (GH #40)** — `reject_from_review()` was adding `needs-review` label on rejection since v2.2. After v2.5.4 added `needs-review` filter to `get_ready_tasks()`, rejected tasks became invisible to both coders (filter `needs-review`) and seniors (need `in_progress`). Fixed: `reject_from_review()` now removes `needs-review` + `reviewing`. Claude rejection path in `run-seniors.sh` also cleans review labels. Safety net in `heal_stuck_tasks()` catches `open` + `needs-review` dead zone.
+
+- **`grep -qF` substring match prevented `.claude/` gitignore entry (GH #39)** — `update_gitignore()` used `grep -qF` which matched `.claude/` as substring inside existing `.claude/agents` entry, so `.claude/` was never added. Changed to `grep -qxF` (exact line match) in both `update_gitignore()` and `update_beads_gitignore()`.
+
+---
+
 ## [2.5.22] - 2026-03-20
 
 ### Fixed

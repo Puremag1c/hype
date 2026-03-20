@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.5.21] - 2026-03-20
+
+### Fixed
+
+- **Dirty git status after HYPE runs** — beads 0.59+ leaves runtime files in `.beads/` (dolt-server.lock/log/pid/port, backup/, .beads-credential-key, modified metadata.json). `cleanup_iteration()` now removes runtime files and restores metadata.json from git. `update_beads_gitignore()` extended with dolt-server patterns, called from both `hype init` and `hype upgrade` (covers new and existing projects).
+
+- **Doctor docs audit** — `docs/troubleshooting.md`: fixed 6x missing `--limit 0`, 2x unsafe `.labels` jq without `// []` guard, stale `.beads/*.db` cleanup path (now Dolt-correct), hardcoded `~/.hype` path. `docs/architecture.md`: Versioner(Haiku) → Completion(Opus), `.beads/*.db` → `.beads/dolt/`, added `ensure_dolt_server()` docs, fixed stale agent names in log examples. `core/scripts/log.sh`: stale EXECUTOR/daemon comments.
+
+---
+
 ## [2.5.20] - 2026-03-20
 
 ### Added

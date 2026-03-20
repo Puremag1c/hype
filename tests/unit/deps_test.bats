@@ -28,12 +28,12 @@ load '../helpers/setup'
     grep -q '^beads|bd|.*|true$' "$PROJECT_ROOT/deps.conf"
 }
 
-@test "deps: beads has no max_version ceiling (regression guard)" {
+@test "deps: beads has max_version ceiling (controlled upgrades)" {
     local beads_line
     beads_line=$(grep '^beads|' "$PROJECT_ROOT/deps.conf")
     local max_version
     max_version=$(echo "$beads_line" | cut -d'|' -f5)
-    [[ -z "$max_version" ]]
+    [[ -n "$max_version" ]]
 }
 
 @test "deps: claude has min_version set" {

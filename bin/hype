@@ -795,13 +795,21 @@ update_dependencies() {
 
 cmd_update() {
     local no_deps=false
+    local deps_only=false
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --no-deps) no_deps=true; shift ;;
+            --deps-only) deps_only=true; shift ;;
+            --no-self) shift ;;  # skip git pull (already done)
             *) shift ;;
         esac
     done
+
+    if [[ "$deps_only" == true ]]; then
+        update_dependencies
+        return
+    fi
 
     info "Updating hype..."
 
@@ -820,7 +828,8 @@ cmd_update() {
     fi
 
     if [[ "$no_deps" == false ]]; then
-        update_dependencies
+        # exec new binary so update_dependencies runs from updated code
+        exec "$HYPE_HOME/bin/hype" update --no-self --deps-only
     fi
 }
 

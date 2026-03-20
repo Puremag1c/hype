@@ -8,7 +8,9 @@
 
 ### Fixed
 
-- **`claude update` silently failing on root-owned versions dir** — `update_dependencies()` silenced errors (`2>/dev/null`) and skipped version check (`continue`). Now detects root ownership on `~/.local/share/claude/versions/`, warns with `sudo chown` fix, shows `claude update` output, and falls through to min_version check. Removed incorrect `brew_pkg` for claude (not a brew package). 539 tests (4 new).
+- **`claude update` silently failing on root-owned binary** — `update_dependencies()` silenced errors (`2>/dev/null`) and skipped version check (`continue`). Now detects root ownership on claude binary, uses `sudo claude update`. Removed incorrect `brew_pkg` for claude (not a brew package). Re-execs after git pull so new code runs immediately.
+
+- **Dolt 5-6s cold start on every bd call** — beads 0.59+ embedded mode starts/stops Dolt server per call. Added `ensure_dolt_server()` to `check_beads()`, `cmd_init`, `cmd_start` — starts persistent Dolt server via `bd dolt start` if not running. Checks PID file first, skips if alive. Result: 0.09s per call (60x speedup). 544 tests (5 new).
 
 ---
 

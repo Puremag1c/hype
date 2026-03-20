@@ -753,11 +753,35 @@ export -f release_review_lock 2>/dev/null || true
 # =============================================================================
 # Verifies bd CLI can read from Dolt. Used by hype.sh and doctor.sh.
 
+# ensure_dolt_server - start persistent Dolt server if not running
+# Avoids 5-6s cold start on every bd call (beads 0.59+ embedded mode)
+ensure_dolt_server() {
+    local beads_dir="${PROJECT_DIR:-.}/.beads"
+    [[ -d "$beads_dir" ]] || return 0
+
+    local pid_file="$beads_dir/dolt-server.pid"
+    # Already running — skip
+    if [[ -f "$pid_file" ]]; then
+        local pid
+        pid=$(cat "$pid_file" 2>/dev/null)
+        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+            return 0
+        fi
+    fi
+
+    # Start persistent server
+    bd dolt start >/dev/null 2>&1 || true
+}
+export -f ensure_dolt_server 2>/dev/null || true
+
 # check_beads - verify bd backend is accessible
 # Returns: 0 if healthy, 1 if unrecoverable
 # Caller decides policy: hype.sh retries, doctor.sh continues with limited data
 check_beads() {
-    if timeout_cmd 5s bd list --limit 1 >/dev/null 2>&1; then
+    # Ensure persistent Dolt server is running (avoids 5-6s cold start per call)
+    ensure_dolt_server
+
+    if timeout_cmd 10s bd list --limit 1 >/dev/null 2>&1; then
         return 0
     fi
 

@@ -375,6 +375,7 @@ cmd_init() {
 
     # Beads health check (only if already initialized — fresh projects get bd init below)
     if [[ -d ".beads" ]]; then
+        ensure_dolt_server
         if ! bd list --limit 1 &>/dev/null; then
             error "Beads backend not responding. Run 'bd doctor --fix'"
             exit 1
@@ -584,7 +585,8 @@ cmd_start() {
     print_hype_logo
     check_deps
 
-    # Beads health check (Dolt embedded, no daemon since v0.50)
+    # Beads health check — ensure persistent Dolt server
+    ensure_dolt_server
     if ! bd list --limit 1 &>/dev/null; then
         error "Beads backend not responding. Run 'bd doctor --fix'"
         exit 1

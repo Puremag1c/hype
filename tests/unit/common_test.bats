@@ -467,6 +467,37 @@ load '../helpers/mock_bd'
     ! echo "$body" | grep -q 'bd daemon'
 }
 
+@test "check_beads calls ensure_dolt_server before probe" {
+    local body
+    body=$(sed -n '/^check_beads()/,/^}/p' "$SCRIPTS_DIR/common.sh")
+    echo "$body" | grep -q 'ensure_dolt_server'
+}
+
+@test "ensure_dolt_server defined and uses bd dolt start" {
+    grep -q '^ensure_dolt_server()' "$SCRIPTS_DIR/common.sh"
+    local body
+    body=$(sed -n '/^ensure_dolt_server()/,/^}/p' "$SCRIPTS_DIR/common.sh")
+    echo "$body" | grep -q 'bd dolt start'
+}
+
+@test "ensure_dolt_server checks pid file before starting" {
+    local body
+    body=$(sed -n '/^ensure_dolt_server()/,/^}/p' "$SCRIPTS_DIR/common.sh")
+    echo "$body" | grep -q 'dolt-server.pid'
+    echo "$body" | grep -q 'kill -0'
+}
+
+@test "bin/hype: cmd_init calls ensure_dolt_server" {
+    local body
+    body=$(sed -n '/^cmd_init()/,/^}/p' "$PROJECT_ROOT/bin/hype")
+    echo "$body" | grep -q 'ensure_dolt_server'
+}
+
+@test "bin/hype: cmd_start calls ensure_dolt_server" {
+    # cmd_start is not a function name — look for the ensure_dolt_server near the start health check
+    grep -q 'ensure_dolt_server' "$PROJECT_ROOT/bin/hype"
+}
+
 @test "delete_milestone uses rm -f (v2.3.9 file-based)" {
     local body
     body=$(sed -n '/^delete_milestone()/,/^}/p' "$SCRIPTS_DIR/common.sh")

@@ -447,7 +447,10 @@ $context
         # Approved — merge queue will pick it up
         log "SUCCESS" "APPROVED: $task_id"
     elif [ "$task_status" = "open" ]; then
-        # Rejected — increment reject:N and escalate
+        # Rejected — clean review labels so coder can pick it up (GH #40)
+        bd_safe update "$task_id" --remove-label=needs-review --remove-label=reviewing >/dev/null 2>&1 || true
+
+        # Increment reject:N and escalate
         local reject_count
         reject_count=$(get_counter_value "$updated_json" "reject")
         ((reject_count++))
@@ -468,7 +471,7 @@ $context
             local next_model="$current_model"
             [ "$current_model" = "haiku" ] && next_model="sonnet"
             [ "$current_model" = "sonnet" ] && next_model="opus"
-            if [ "$next_model" != "$current_model" ]; then
+            if [ "$next_model" != "current_model" ]; then
                 clean_model_label "$task_id" "$next_model"
                 log "WARN" "ESCALATE: $task_id $current_model → $next_model (reject:$reject_count)"
             fi

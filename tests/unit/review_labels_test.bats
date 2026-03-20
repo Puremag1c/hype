@@ -36,15 +36,17 @@ load '../helpers/setup'
 # reject_from_review
 # =============================================================================
 
-@test "reject_from_review: removes reviewing, adds needs-review, reopens" {
+@test "reject_from_review: removes reviewing and needs-review, reopens (GH #40)" {
     local common_sh="$SCRIPTS_DIR/common.sh"
 
     local fn_block
     fn_block=$(sed -n '/^reject_from_review()/,/^}/p' "$common_sh")
 
     echo "$fn_block" | grep -q '\-\-remove-label=reviewing'
-    echo "$fn_block" | grep -q '\-\-add-label=needs-review'
+    echo "$fn_block" | grep -q '\-\-remove-label=needs-review'
     echo "$fn_block" | grep -q '\-\-status=open'
+    # Must NOT add needs-review (was the root cause of GH #40 dead zone)
+    ! echo "$fn_block" | grep -q '\-\-add-label=needs-review'
 }
 
 @test "reject_from_review: removes coder label (prevent re-claim)" {
@@ -54,6 +56,29 @@ load '../helpers/setup'
     fn_block=$(sed -n '/^reject_from_review()/,/^}/p' "$common_sh")
 
     echo "$fn_block" | grep -q '\-\-remove-label=coder'
+}
+
+# =============================================================================
+# GH #40: Claude rejection cleans review labels
+# =============================================================================
+
+@test "run-seniors.sh: Claude rejection removes needs-review+reviewing (GH #40)" {
+    local seniors_sh="$SCRIPTS_DIR/run-seniors.sh"
+    # The "open" status block (Claude rejected) must remove review labels
+    # Find the block: elif [ "$task_status" = "open" ]; then
+    local block
+    block=$(sed -n '/task_status.*=.*open/,/REJECTED.*reject_count/p' "$seniors_sh")
+    echo "$block" | grep -q '\-\-remove-label=needs-review'
+    echo "$block" | grep -q '\-\-remove-label=reviewing'
+}
+
+@test "heal_stuck_tasks: heals open+needs-review dead zone (GH #40)" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+    local fn_block
+    fn_block=$(sed -n '/^heal_stuck_tasks()/,/^}/p' "$hype_sh")
+    echo "$fn_block" | grep -q 'open.*needs-review dead zone'
+    echo "$fn_block" | grep -q '\-\-remove-label=needs-review'
+    echo "$fn_block" | grep -q 'status=open'
 }
 
 # =============================================================================

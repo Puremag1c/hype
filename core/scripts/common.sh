@@ -718,12 +718,12 @@ approve_task() {
 }
 export -f approve_task 2>/dev/null || true
 
-# reject_from_review - return a task to the review queue after rejection
+# reject_from_review - return a task to coder after senior rejection
 # Usage: reject_from_review TASK_ID
-# Transitions: reviewing → needs-review (task reopened for re-work by coder)
+# Transitions: reviewing → open (coder picks up, no needs-review = visible to coders)
 reject_from_review() {
     local task_id="$1"
-    bd_safe update "$task_id" --remove-label=reviewing --add-label=needs-review --status=open --remove-label=coder >/dev/null 2>&1
+    bd_safe update "$task_id" --status=open --remove-label=reviewing --remove-label=needs-review --remove-label=coder >/dev/null 2>&1
 }
 export -f reject_from_review 2>/dev/null || true
 

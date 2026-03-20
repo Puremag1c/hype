@@ -752,6 +752,24 @@ heal_stuck_tasks() {
             log "WARN" "HEAL: $task_id approved but not merged for ${task_age}s — merge queue may be stuck"
         fi
     done
+
+    # GH #40: Heal open+needs-review dead zone (rejected tasks with stale review labels)
+    # When senior rejects but needs-review is not removed, task is invisible to both coders and seniors
+    local open_json
+    open_json=$(bd_safe list --status=open --json --limit 0 2>/dev/null || echo "[]")
+    local deadzone_ids
+    deadzone_ids=$(echo "$open_json" | jq -r '.[] | select(
+        ((.labels // []) | index("needs-review")) or
+        ((.labels // []) | index("reviewing"))
+    ) | select(
+        (.title | test("^milestone:") | not) and
+        ((.labels // []) | index("trigger") | not)
+    ) | .id' 2>/dev/null || true)
+
+    for task_id in $deadzone_ids; do
+        log "WARN" "HEAL: $task_id open+needs-review dead zone — removing review labels (GH #40)"
+        bd_safe update "$task_id" --remove-label=needs-review --remove-label=reviewing >/dev/null 2>&1 || true
+    done
 }
 
 # === Stale worktrees cleanup ===

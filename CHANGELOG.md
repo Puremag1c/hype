@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.5.24] - 2026-03-21
+
+### Fixed
+
+- **Coder `bd init` destroys metadata pointer — all tasks vanish (GH #41)** — Coder running in git worktree had no `.beads/` directory. Beads SessionStart hook triggered `bd init`, creating parasitic `coder_0` database and overwriting `metadata.json` pointer. All `bd list` calls returned 0 issues, HYPE entered UNKNOWN phase loop. Fix (3 layers): worktree setup now symlinks `.beads/` from main project; `check_beads()` validates metadata pointer on every health check and auto-repairs; coder.md explicitly prohibits `bd init`.
+
+---
+
 ## [2.5.23] - 2026-03-20
 
 ### Fixed

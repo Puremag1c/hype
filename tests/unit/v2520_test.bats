@@ -269,3 +269,28 @@ load '../helpers/setup'
     func_block=$(sed -n '/^update_beads_gitignore()/,/^}/p' "$hype_bin")
     echo "$func_block" | grep -q 'grep -qxF'
 }
+
+# =============================================================================
+# GH #41: Parasitic database protection
+# =============================================================================
+
+@test "setup_worktree_links: symlinks .beads/ to worktree (GH #41)" {
+    local coders_sh="$SCRIPTS_DIR/run-coders.sh"
+    local func_block
+    func_block=$(sed -n '/^setup_worktree_links()/,/^}/p' "$coders_sh")
+    echo "$func_block" | grep -q '\.beads'
+    echo "$func_block" | grep -q 'ln -sf'
+}
+
+@test "coder.md: prohibits bd init (GH #41)" {
+    grep -q 'bd init' "$PROJECT_ROOT/core/agents/coder.md"
+    grep -q 'НИКОГДА.*bd init' "$PROJECT_ROOT/core/agents/coder.md"
+}
+
+@test "check_beads: validates metadata.json dolt_database pointer (GH #41)" {
+    local common_sh="$SCRIPTS_DIR/common.sh"
+    local func_block
+    func_block=$(sed -n '/^check_beads()/,/^}/p' "$common_sh")
+    echo "$func_block" | grep -q 'dolt_database'
+    echo "$func_block" | grep -q 'metadata.json'
+}

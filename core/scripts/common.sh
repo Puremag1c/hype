@@ -791,6 +791,18 @@ export -f ensure_dolt_server 2>/dev/null || true
 # Returns: 0 if healthy, 1 if unrecoverable
 # Caller decides policy: hype.sh retries, doctor.sh continues with limited data
 check_beads() {
+    # GH #41: Validate metadata pointer — coder bd init can switch to parasitic database
+    local beads_meta="${PROJECT_DIR:-.}/.beads/metadata.json"
+    if [ -f "$beads_meta" ]; then
+        local db_name
+        db_name=$(jq -r '.dolt_database // "beads"' "$beads_meta" 2>/dev/null || echo "beads")
+        if [ "$db_name" != "beads" ]; then
+            >&2 echo "WARN: metadata.json points to '$db_name' instead of 'beads' — fixing (GH #41)"
+            jq '.dolt_database = "beads"' "$beads_meta" > "$beads_meta.tmp" 2>/dev/null && \
+                mv "$beads_meta.tmp" "$beads_meta" || true
+        fi
+    fi
+
     # Ensure persistent Dolt server is running (avoids 5-6s cold start per call)
     ensure_dolt_server
 

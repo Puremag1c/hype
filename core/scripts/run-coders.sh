@@ -45,6 +45,12 @@ setup_worktree_links() {
             ln -sf "$project_dir/$dir" "$worktree_path/$dir"
         fi
     done
+
+    # GH #41: Link .beads/ so coder bd commands use existing database
+    # Without this, beads SessionStart hook runs bd init → creates parasitic database
+    if [ -d "$project_dir/.beads" ] && [ ! -e "$worktree_path/.beads" ]; then
+        ln -sf "$project_dir/.beads" "$worktree_path/.beads"
+    fi
 }
 
 # find_free_slot - allocates a slot with lock-based protection

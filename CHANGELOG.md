@@ -6,6 +6,8 @@
 
 - **Coder `bd init` destroys metadata pointer — all tasks vanish (GH #41)** — Coder running in git worktree had no `.beads/` directory. Beads SessionStart hook triggered `bd init`, creating parasitic `coder_0` database and overwriting `metadata.json` pointer. All `bd list` calls returned 0 issues, HYPE entered UNKNOWN phase loop. Fix (3 layers): worktree setup now symlinks `.beads/` from main project; `check_beads()` validates metadata pointer on every health check and auto-repairs; coder.md explicitly prohibits `bd init`.
 
+- **Doctor misdiagnosis on phase transition anomaly (GH #41)** — Doctor saw 0 tasks in UNKNOWN phase and concluded "planning was skipped" instead of investigating WHY tasks vanished. Added phase transition anomaly rule (CODING→UNKNOWN requires root cause analysis, not symptomatic treatment). Doctor log creation now mandatory and automatic. Added `/exit` instruction so user knows how to trigger report submission.
+
 ---
 
 ## [2.5.23] - 2026-03-20

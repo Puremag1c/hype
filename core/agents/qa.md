@@ -42,6 +42,8 @@ bd list --status=closed  # Что сделано
 
 **КРИТИЧНО:** Перед сдачей проекта ты ОБЯЗАН проверить что продукт работает.
 
+**ВАЖНО:** Полный тест-сьют уже прошёл в фазе TESTING. Твоя задача — **быстрая верификация**, а не повторный запуск всех тестов. Используй `timeout 5m` для любых тестовых команд. Если тесты не укладываются в 5 минут — пропусти и проверь Must Have вручную.
+
 #### 3.1 Прочитай секцию Testing из SPEC.md
 
 ```bash
@@ -100,10 +102,12 @@ kill $DEV_PID 2>/dev/null
 
 **Type: library**
 ```bash
-npm test        # Node.js
-pytest          # Python
-go test ./...   # Go
+timeout 5m npm test        # Node.js
+timeout 5m pytest          # Python
+timeout 5m go test ./...   # Go
+timeout 5m mix test        # Elixir
 ```
+Если timeout — тесты уже прошли в TESTING, переходи к проверке Must Have.
 
 #### 3.4 Проверь Must Have из SPEC.md
 

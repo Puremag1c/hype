@@ -413,27 +413,25 @@ create_analyst_triggers() {
 # === Check and create done milestone after validating ===
 
 check_and_create_done_milestone() {
-    # Check if architect output contains PASSED
-    local latest_log
-    latest_log=$(ls -t "$LOGS_DIR"/architect-*.log 2>/dev/null | head -1)
-
-    if [ -n "$latest_log" ] && grep -q "VALIDATING: PASSED" "$latest_log" 2>/dev/null; then
-        # Safety: verify no open/in_progress tasks remain before marking DONE
-        local remaining_tasks
-        remaining_tasks=$(bd_safe query "(status=open OR status=in_progress) AND NOT label=trigger" --json --limit 0 2>/dev/null | \
-            jq '[.[] | select((.labels // []) | any(test("^milestone:")) | not)] | length' 2>/dev/null || echo "0")
-
-        if [ "$remaining_tasks" -gt 0 ]; then
-            log "WARN" "VALIDATING passed but $remaining_tasks task(s) still open, deferring DONE milestone"
-            return 0
-        fi
-
-        log "INFO" "Final review passed, creating project-done milestone"
-        ensure_milestone "milestone:project-done" "Project complete"
-
-        # Note: cleanup moved to interactive prompt at DONE phase (or 'hype clear' command)
-        # User chooses when to cleanup — preserves logs for review
+    # GH #42: Check milestone:validating-done exists (not grep in logs)
+    # Old code searched for "VALIDATING: PASSED" in architect logs — broke when
+    # VALIDATING was skipped/doctor-fixed (string never appeared → infinite REPORTING)
+    if ! has_milestone "milestone:validating-done"; then
+        return 0
     fi
+
+    # Safety: verify no open/in_progress tasks remain before marking DONE
+    local remaining_tasks
+    remaining_tasks=$(bd_safe query "(status=open OR status=in_progress) AND NOT label=trigger" --json --limit 0 2>/dev/null | \
+        jq '[.[] | select((.labels // []) | any(test("^milestone:")) | not)] | length' 2>/dev/null || echo "0")
+
+    if [ "$remaining_tasks" -gt 0 ]; then
+        log "WARN" "VALIDATING done but $remaining_tasks task(s) still open, deferring DONE milestone"
+        return 0
+    fi
+
+    log "INFO" "Final review passed, creating project-done milestone"
+    ensure_milestone "milestone:project-done" "Project complete"
 }
 
 # === Route blocked:troubleshoot tasks to Architect Troubleshooter ===
@@ -904,6 +902,17 @@ generate_iteration_stats() {
     # v2.3.9: read from tick-cache
     blocked_details=$(jq -r '.[] | select(.status != "closed") | select(.labels[]? | startswith("blocked:")) | "- `\(.id)`: \(.title)"' "$HYPE_DIR/tick-cache.json" 2>/dev/null || echo "- none")
 
+    # GH #42: Check if VALIDATING was skipped
+    local validating_warning=""
+    local validating_reason
+    validating_reason=$(cat "$HYPE_DIR/milestone:validating-done" 2>/dev/null || echo "")
+    if [[ "$validating_reason" == *"skipped"* ]]; then
+        validating_warning="
+## Warnings
+- **VALIDATING skipped:** $validating_reason. Full test suite ran in TESTING phase, but final QA validation did not complete.
+"
+    fi
+
     # Generate report
     cat > "$stats_file" << EOF
 # Iteration Report
@@ -911,7 +920,7 @@ generate_iteration_stats() {
 **Started:** $start_time
 **Completed:** $end_time
 **Duration:** $duration
-
+${validating_warning}
 ## Tasks
 - Total created: $total
 - Completed: $closed
@@ -1287,18 +1296,12 @@ For each task:
                 ensure_milestone "milestone:validating-done" "Validation passed"
             fi
 
-            # Safety: if still no PASSED and no new tasks after all retries, create blocker
+            # GH #42: Auto-skip VALIDATING after all retries exhausted
+            # Old behavior: create P0 bug → coder gets unsolvable meta-task → infinite loop
+            # New behavior: skip to REPORTING (TESTING already passed, VALIDATING is best-effort)
             if [ "$validating_success" = false ]; then
-                local latest_log open_count
-                latest_log=$(ls -t "$LOGS_DIR"/architect-*.log 2>/dev/null | head -1)
-                open_count=$(bd_safe count --status=open 2>/dev/null || echo "0")
-
-                if [ "$open_count" -eq 0 ] && { [ -z "$latest_log" ] || ! grep -q "VALIDATING: PASSED" "$latest_log" 2>/dev/null; }; then
-                    log "WARN" "VALIDATING incomplete after $validating_attempt attempts, creating blocker"
-                    bd_safe create --title="VALIDATING incomplete - check logs" \
-                        --type=bug --priority=0 \
-                        --description="Architect did not complete VALIDATING after $validating_attempt attempts. Manual intervention required." >/dev/null 2>&1 || true
-                fi
+                log "WARN" "VALIDATING incomplete after $validating_attempt attempts — auto-skipping to REPORTING (GH #42)"
+                ensure_milestone "milestone:validating-done" "Validation skipped after $validating_attempt timeout(s)"
             fi
             ;;
 

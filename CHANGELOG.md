@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.5.25] - 2026-03-22
+
+### Fixed
+
+- **VALIDATING/REPORTING infinite loop (GH #42)** — Three linked bugs: (1) VALIDATING 3x timeout created P0 bug for coder → unsolvable meta-task → infinite loop. Now auto-skips with `ensure_milestone` instead of creating bugs. (2) `check_and_create_done_milestone()` relied on grep "VALIDATING: PASSED" in logs → if validation skipped, project-done milestone never created → infinite REPORTING. Now uses `has_milestone "validating-done"`. (3) QA agent ran full test suite (already done in TESTING) → timeout. Added `timeout 5m` to all test commands in qa.md. SPEC_REPORT now includes warning when VALIDATING was skipped with reason.
+
+---
+
 ## [2.5.24] - 2026-03-21
 
 ### Fixed

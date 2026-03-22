@@ -294,3 +294,38 @@ load '../helpers/setup'
     echo "$func_block" | grep -q 'dolt_database'
     echo "$func_block" | grep -q 'metadata.json'
 }
+
+# =============================================================================
+# GH #42: VALIDATING/REPORTING infinite loop fixes
+# =============================================================================
+
+@test "hype.sh: VALIDATING 3x timeout auto-skips (no P0 bug creation) (GH #42)" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+    # Must NOT create P0 bug on VALIDATING timeout
+    local validating_block
+    validating_block=$(sed -n '/VALIDATING.*attempt/,/;;/p' "$hype_sh")
+    ! echo "$validating_block" | grep -q 'VALIDATING incomplete.*creating blocker'
+    # Must auto-skip with ensure_milestone
+    echo "$validating_block" | grep -q 'Validation skipped'
+}
+
+@test "hype.sh: check_and_create_done_milestone uses has_milestone (GH #42)" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+    local func_block
+    func_block=$(sed -n '/^check_and_create_done_milestone()/,/^}/p' "$hype_sh")
+    echo "$func_block" | grep -q 'has_milestone.*validating-done'
+    # Must NOT grep logs for VALIDATING: PASSED (comments don't count)
+    ! echo "$func_block" | grep -v '^[[:space:]]*#' | grep -q 'VALIDATING: PASSED'
+}
+
+@test "hype.sh: generate_iteration_stats checks validating skip (GH #42)" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+    local func_block
+    func_block=$(sed -n '/^generate_iteration_stats()/,/^}/p' "$hype_sh")
+    echo "$func_block" | grep -q 'validating_reason'
+    echo "$func_block" | grep -q 'VALIDATING skipped'
+}
+
+@test "qa.md: test commands use timeout 5m (GH #42)" {
+    grep -q 'timeout 5m' "$PROJECT_ROOT/core/agents/qa.md"
+}

@@ -48,7 +48,7 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
 | TESTING | все задачи closed | Testers ×6 | Параллельная проверка работоспособности |
 | REFLEXING | smoke/regression tasks найдены | QA | Триаж всех smoke test находок |
 | CONSULTATION | user-escalation label | Manager-Review (interactive) | Диалог с пользователем, результат в notes → Troubleshooter |
-| VALIDATING | milestone:testing-done | QA | Проверяет целостность |
+| VALIDATING | milestone:testing-done | QA | Проверяет целостность. 3x timeout → auto-skip (TESTING = hard gate, VALIDATING = best-effort). Warning в SPEC_REPORT |
 | REPORTING | milestone:validating-done | Completion (Opus) | Version bump + CHANGELOG + SPEC_REPORT + commit + push |
 | DONE | milestone:project-done | — | Проект завершён |
 
@@ -325,7 +325,7 @@ bd admin cleanup --force
 
 - `model:haiku/sonnet/opus` — какая модель выполняет
 - `added-by:analyst-*` — кто добавил задачу
-- `milestone:*` — маркер завершения фазы
+- `milestone:*` — маркер завершения фазы (file-based: `.hype/milestone:NAME`, содержимое = reason, e.g. "Validation passed" или "Validation skipped after 3 timeout(s)"). `has_milestone()` проверяет `[ -f ]`, `ensure_milestone()` пишет reason в файл
 - `retry:N` — счётчик timeout/failure при execution
 - `reject:N` — счётчик отказов code review (escalation ladder: 1→retry, 2-3→escalate model, 4→troubleshooter). Только для quality rejections от Senior
 - `merge-conflict:N` — (убран в v2.3.11). Заменён hybrid merge queue: fast script path + merger agent fallback. Нет больше 6-retry loop

@@ -471,7 +471,7 @@ $context
             local next_model="$current_model"
             [ "$current_model" = "haiku" ] && next_model="sonnet"
             [ "$current_model" = "sonnet" ] && next_model="opus"
-            if [ "$next_model" != "current_model" ]; then
+            if [ "$next_model" != "$current_model" ]; then
                 clean_model_label "$task_id" "$next_model"
                 log "WARN" "ESCALATE: $task_id $current_model → $next_model (reject:$reject_count)"
             fi

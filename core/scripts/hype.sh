@@ -591,10 +591,18 @@ call_manager_for_problems() {
         task_labels=$(echo "$bd_cache" | jq -r --arg id "$task_id" '.[] | select(.id == $id) | (.labels // [])[]' 2>/dev/null || echo "")
 
         if echo "$task_labels" | grep -q "model:opus"; then
-            # Already Opus and still failing → close
-            bd_safe close "$task_id" --reason="Unresolvable after multiple attempts with Opus" 2>/dev/null || true
-            log "INFO" "Manager: closed $task_id (Opus retry limit exceeded)"
-            ((closed++))
+            if echo "$task_labels" | grep -q "blocked:troubleshoot"; then
+                # Already been through Troubleshooter → close
+                bd_safe close "$task_id" --reason="Unresolvable after Troubleshooter and Opus retry limit" 2>/dev/null || true
+                log "INFO" "Manager: closed $task_id (Opus + Troubleshooter exhausted)"
+                ((closed++))
+            else
+                # Route to Troubleshooter for reformulate/split/remove/escalate (GH #43)
+                bd_safe update "$task_id" --status=open --add-label=blocked:troubleshoot \
+                    --notes="Retry limit with Opus — routing to Troubleshooter" 2>/dev/null || true
+                log "INFO" "Manager: routed $task_id to Troubleshooter (Opus retry limit)"
+                ((escalated++))
+            fi
         else
             # Escalate to Opus
             bd_safe update "$task_id" --status=open --set-labels=model:opus --notes="Reassigned to Opus after retry limit" 2>/dev/null || true

@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.5.26] - 2026-03-22
+
+### Fixed
+
+- **Opus retry limit bypasses Troubleshooter (GH #43)** — `call_manager_for_problems()` closed Opus tasks at retry limit instead of routing to Troubleshooter. 120 cycles for 15 tasks: tasks that could be reformulated/split were closed as "unresolvable". Now: opus + retry limit → `blocked:troubleshoot` → Troubleshooter tries reformulate/split/remove/escalate. Only closes after Troubleshooter already attempted.
+
+---
+
 ## [2.5.25] - 2026-03-22
 
 ### Fixed

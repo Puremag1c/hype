@@ -257,6 +257,33 @@ load '../helpers/setup'
     echo "$fn_block" | grep 'retry_ids=' | grep -q 'status.*!=.*closed'
 }
 
+@test "hype.sh: call_manager routes opus+retry to Troubleshooter (GH #43)" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    local fn_block
+    fn_block=$(sed -n '/^call_manager_for_problems()/,/^}/p' "$hype_sh")
+
+    # Opus retry limit must check for blocked:troubleshoot before closing
+    echo "$fn_block" | grep -q 'blocked:troubleshoot'
+    # Must NOT close immediately when opus hits retry limit (without troubleshoot check)
+    # The close should only happen inside "if blocked:troubleshoot already present"
+    local close_line troubleshoot_check_line
+    troubleshoot_check_line=$(echo "$fn_block" | grep -n 'blocked:troubleshoot' | head -1 | cut -d: -f1)
+    close_line=$(echo "$fn_block" | grep -n 'Unresolvable after Troubleshooter' | head -1 | cut -d: -f1)
+    [ "$close_line" -gt "$troubleshoot_check_line" ]
+}
+
+@test "hype.sh: call_manager opus+retry without troubleshoot adds label (GH #43)" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+
+    local fn_block
+    fn_block=$(sed -n '/^call_manager_for_problems()/,/^}/p' "$hype_sh")
+
+    # Must add blocked:troubleshoot for opus tasks that haven't been through troubleshooter
+    echo "$fn_block" | grep -q 'add-label=blocked:troubleshoot'
+    echo "$fn_block" | grep -q 'routing to Troubleshooter'
+}
+
 @test "hype.sh: generate_iteration_stats blocked count filters closed tasks" {
     local hype_sh="$SCRIPTS_DIR/hype.sh"
 

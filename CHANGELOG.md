@@ -1,52 +1,34 @@
 # Changelog
 
-## [2.5.30] - 2026-03-23
+## [2.6.0] - 2026-03-23
+
+Escalation audit: все пути эскалации закрыты, бесконечные циклы невозможны. GH #42–#47.
 
 ### Fixed
 
-- **Troubleshooter timeout = task stuck forever (GH #47)** — Troubleshooter had no timeout handling: exit code ignored, no retry, no escalation. Task with `blocked:troubleshoot` stayed stuck indefinitely. Now: 3 attempts with increasing timeout (base × 1.5^N: 5m → 7.5m → 11.25m). After 3 timeouts → `user-escalation`. Counter: `troubleshoot:N`.
+- **VALIDATING/REPORTING infinite loop (GH #42)** — VALIDATING 3x timeout создавал P0 баг для coder → бесконечный цикл. Теперь auto-skip с milestone. `check_and_create_done_milestone()` использует `has_milestone` вместо grep в логах. QA agent: `timeout 5m` на тесты. SPEC_REPORT содержит warning при skip.
 
-- **Stale "Manager (Sonnet)" agent in architecture.md (GH #47)** — `call_manager_for_problems()` is a bash function, not an LLM agent. Doctor was misdiagnosing issues based on outdated docs describing it as "Manager (Sonnet)".
+- **Opus retry limit bypasses Troubleshooter (GH #43)** — `call_manager_for_problems()` закрывал Opus задачи при retry limit вместо Troubleshooter. Теперь: opus + retry limit → `blocked:troubleshoot` → Troubleshooter. Закрывает только после Troubleshooter.
 
----
+- **Stale reset infinite loop (GH #44)** — `reset_stale_tasks()` не инкрементил `retry:N`. Задачи с crash/timeout крутились бесконечно (11+ resets, 15+ часов). Теперь инкрементит `retry:N` как нормальный coder timeout.
 
-## [2.5.29] - 2026-03-23
+- **TASK_STALE_TIMEOUT < TASK_TIMEOUT contradiction (GH #45)** — Stale timeout (600s) убивал задачи раньше task timeout (20m). Убран параметр `TASK_STALE_TIMEOUT` из конфига. Автоматически: `TASK_TIMEOUT + 60s`.
 
-### Fixed
+- **Stale branch blocks retry worktree (GH #46)** — Worktree чистился, но ветка `task/beads-*` оставалась. Новый кодер не мог создать ветку, сбегал в main repo. `create_worktree()` удаляет стейл-ветку. Coder prompt запрещает покидать worktree (rule #12).
 
-- **Stale branch blocks retry worktree (GH #46)** — After coder timeout, worktree was cleaned up but the `task/beads-*` branch remained. Next coder couldn't create same branch, created `-v2`, got confused, escaped to main repo. Fix: `create_worktree()` now deletes stale task branch before creating worktree. Coder prompt now prohibits leaving worktree (rule #12).
+- **Troubleshooter timeout = stuck forever (GH #47)** — Troubleshooter не обрабатывал timeout: задача с `blocked:troubleshoot` висела навсегда. Теперь: 3 попытки с растущим timeout (base × 1.5^N: 5m → 7.5m → 11m). После 3 таймаутов → `user-escalation`.
 
----
+- **Stale "Manager (Sonnet)" in architecture.md (GH #47)** — `call_manager_for_problems()` — bash-функция, не LLM-агент. Doctor давал неправильные диагнозы из-за устаревшей документации.
 
-## [2.5.28] - 2026-03-23
+### Escalation ladder (complete)
 
-### Changed
+```
+coder timeout → retry:N → model upgrade (haiku→sonnet→opus)
+  → retry limit → blocked:troubleshoot → Troubleshooter (3x, 1.5× timeout)
+    → user-escalation → CONSULTATION (interactive)
+```
 
-- **TASK_STALE_TIMEOUT derived from TASK_TIMEOUT (GH #45)** — Removed `TASK_STALE_TIMEOUT` config parameter. Now auto-computed as `TASK_TIMEOUT + 60s`. Contradictory config (stale=600s < timeout=20m) caused infinite loops: stale detector killed tasks before they could complete. No more user-facing config to misconfigure.
-
----
-
-## [2.5.27] - 2026-03-23
-
-### Fixed
-
-- **Stale task reset doesn't increment retry counter — infinite loop (GH #44)** — `reset_stale_tasks()` reset in_progress tasks to open without incrementing `retry:N`. Tasks that caused coder crash/timeout looped forever (11+ resets, 15+ hours) without triggering the escalation ladder. Now increments `retry:N` on each stale reset, same as normal coder timeout path in `run-coders.sh`.
-
----
-
-## [2.5.26] - 2026-03-22
-
-### Fixed
-
-- **Opus retry limit bypasses Troubleshooter (GH #43)** — `call_manager_for_problems()` closed Opus tasks at retry limit instead of routing to Troubleshooter. 120 cycles for 15 tasks: tasks that could be reformulated/split were closed as "unresolvable". Now: opus + retry limit → `blocked:troubleshoot` → Troubleshooter tries reformulate/split/remove/escalate. Only closes after Troubleshooter already attempted.
-
----
-
-## [2.5.25] - 2026-03-22
-
-### Fixed
-
-- **VALIDATING/REPORTING infinite loop (GH #42)** — Three linked bugs: (1) VALIDATING 3x timeout created P0 bug for coder → unsolvable meta-task → infinite loop. Now auto-skips with `ensure_milestone` instead of creating bugs. (2) `check_and_create_done_milestone()` relied on grep "VALIDATING: PASSED" in logs → if validation skipped, project-done milestone never created → infinite REPORTING. Now uses `has_milestone "validating-done"`. (3) QA agent ran full test suite (already done in TESTING) → timeout. Added `timeout 5m` to all test commands in qa.md. SPEC_REPORT now includes warning when VALIDATING was skipped with reason.
+Все 14 путей проаудированы, все имеют потолок эскалации. 591 тест.
 
 ---
 

@@ -24,7 +24,7 @@ hype.sh (bash loop с lock file)
     │
     ├─► Troubleshooter (Opus) — при blocked:troubleshoot (reject:4+)
     │
-    └─► Manager (Sonnet) — при прочих blocked/retry-limit
+    └─► call_manager_for_problems() — bash-функция (детерминированная логика blocked/retry-limit)
 ```
 
 **Ключевой принцип:** Bash вызывает bash (механика). LLM используется только для решений.
@@ -40,7 +40,7 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
 
 | Фаза | Условие перехода | Агент | Действие |
 |------|-----------------|-------|----------|
-| PREPARING | Нет SPEC.md | Manager | Собирает требования от user (+ deep analysis для больших проектов) |
+| PREPARING | Нет SPEC.md | Manager (Opus, interactive) | Собирает требования от user (+ deep analysis для больших проектов) |
 | PLANNING | Есть SPEC.md | Architect | Создаёт задачи в beads |
 | ANALYZE | milestone:planning-done | Analysts ×5 | Параллельный аудит плана |
 | THINKING | milestone:analysts-done | Plan-Reviewer | Ревьюит добавления Analysts |
@@ -54,11 +54,11 @@ PREPARING → PLANNING → ANALYZE → THINKING → CODING → TESTING → VALID
 
 ## Агенты
 
-### Manager (Sonnet)
-- **Роль:** Problem Advisor (советник для проблем)
-- **Вызывается:** ТОЛЬКО при наличии blocked tasks или retry limit
-- **Задача:** Анализировать проблемы, давать рекомендации
-- **Не делает:** НЕ координирует фазы, НЕ запускает скрипты
+### call_manager_for_problems() (bash-функция, НЕ агент)
+- **Роль:** Детерминированная обработка blocked/retry-limit задач
+- **Расположение:** hype.sh, вызывается на каждом CODING тике
+- **Логика:** blocked:dependency → проверить dep → разблокировать; blocked:conflict → эскалация к Architect; retry limit + не-opus → эскалировать модель; retry limit + opus → blocked:troubleshoot → Troubleshooter; retry limit + opus + уже был Troubleshooter → close
+- **Важно:** Это НЕ LLM-агент, а обычная bash-функция с if/else логикой
 
 ### Manager (Opus)
 - **Роль:** Сбор требований

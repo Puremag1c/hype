@@ -338,6 +338,7 @@ bd admin cleanup --force
 - `approved` — задача одобрена, ждёт merge queue (v2.2)
 - `reviewed` — задача замержена и закрыта (v2.2)
 - `blocked:troubleshoot` — исчерпан escalation ladder, ждёт Troubleshooter
+- `troubleshoot:N` — счётчик попыток Troubleshooter (0-2). При N≥3 → user-escalation (GH #47)
 - `blocked:*` — прочие причины блокировки
 - `trigger` — системная задача-координатор (run-analyst-*, run-tester-*, milestone:*). Исключена из coder/senior/merge/heal/reset. Автоматически закрывается после запуска агента
 - `secrets-warning` — preflight нашёл credential-like patterns в diff. Senior решает: реальный секрет = REJECT, тестовые данные = proceed
@@ -418,7 +419,7 @@ bd dep cycles  # Проверка циклов
 - Review rejections: `reject:N` — только code quality отказы от Senior
 - Merge conflicts (v2.3.11): fast script merge → agent fallback → coder. Нет counter loop — один умный attempt агентом вместо 6 слепых retry
 - Escalation ladder (reject:N): 1→retry, 2-3→escalate model (haiku→sonnet→opus), 4→Troubleshooter
-- Troubleshooter: reformulate / split / remove / escalate to user
+- Troubleshooter: reformulate / split / remove / escalate to user. 3 attempts с увеличивающимся timeout (base × 1.5^N). После 3 таймаутов → `user-escalation` (GH #47). Counter: `troubleshoot:N`
 - Max 2 reformulations (label `reformulated`), then only reduce/remove/user
 
 ### Needs-review retry

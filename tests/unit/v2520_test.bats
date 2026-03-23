@@ -368,3 +368,35 @@ load '../helpers/setup'
 @test "coder.md: prohibits leaving worktree (GH #46)" {
     grep -q 'НИКОГДА не выходи из своего worktree' "$PROJECT_ROOT/core/agents/coder.md"
 }
+
+# =============================================================================
+# GH #47: Troubleshooter retry with increasing timeout
+# =============================================================================
+
+@test "hype.sh: troubleshooter has increasing timeout (GH #47)" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+    local func_block
+    func_block=$(sed -n '/^check_and_route_troubleshoot()/,/^}/p' "$hype_sh")
+    # Must read troubleshoot:N counter
+    echo "$func_block" | grep -q 'troubleshoot:'
+    # Must compute increasing timeout (1.5x multiplier)
+    echo "$func_block" | grep -q '3 / 2'
+}
+
+@test "hype.sh: troubleshooter escalates to user after 3 timeouts (GH #47)" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+    local func_block
+    func_block=$(sed -n '/^check_and_route_troubleshoot()/,/^}/p' "$hype_sh")
+    # Must add user-escalation after exhausting attempts
+    echo "$func_block" | grep -q 'user-escalation'
+    # Must check exit code 124 (timeout)
+    echo "$func_block" | grep -q 'ts_exit.*124'
+}
+
+@test "hype.sh: troubleshooter timeout increments counter (GH #47)" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+    local func_block
+    func_block=$(sed -n '/^check_and_route_troubleshoot()/,/^}/p' "$hype_sh")
+    # Must increment troubleshoot counter on timeout
+    echo "$func_block" | grep -q 'set_counter_label.*troubleshoot'
+}

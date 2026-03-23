@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.5.30] - 2026-03-23
+
+### Fixed
+
+- **Troubleshooter timeout = task stuck forever (GH #47)** — Troubleshooter had no timeout handling: exit code ignored, no retry, no escalation. Task with `blocked:troubleshoot` stayed stuck indefinitely. Now: 3 attempts with increasing timeout (base × 1.5^N: 5m → 7.5m → 11.25m). After 3 timeouts → `user-escalation`. Counter: `troubleshoot:N`.
+
+- **Stale "Manager (Sonnet)" agent in architecture.md (GH #47)** — `call_manager_for_problems()` is a bash function, not an LLM agent. Doctor was misdiagnosing issues based on outdated docs describing it as "Manager (Sonnet)".
+
+---
+
 ## [2.5.29] - 2026-03-23
 
 ### Fixed

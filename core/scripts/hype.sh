@@ -484,7 +484,28 @@ check_and_route_troubleshoot() {
             continue
         fi
 
-        log "INFO" "Routing $task_id to Troubleshooter..."
+        # Troubleshooter retry with increasing timeout (GH #47)
+        local ts_attempt
+        ts_attempt=$(echo "$fresh_json" | jq -r '[.[0].labels[]? | select(startswith("troubleshoot:")) | split(":")[1] | tonumber] | max // 0' 2>/dev/null || echo "0")
+        ts_attempt="${ts_attempt:-0}"
+
+        # Timeout: base * 1.5^N (5m → 7m30s → 11m15s)
+        local base_timeout_s base_timeout_val="${REVIEW_TIMEOUT:-5m}"
+        local bt_num="${base_timeout_val%[ms]}" bt_unit="${base_timeout_val: -1}"
+        if [ "$bt_unit" = "m" ]; then
+            base_timeout_s=$((bt_num * 60))
+        else
+            base_timeout_s=$bt_num
+        fi
+        local ts_timeout_s=$base_timeout_s
+        local i=0
+        while [ "$i" -lt "$ts_attempt" ]; do
+            ts_timeout_s=$(( ts_timeout_s * 3 / 2 ))
+            ((i++))
+        done
+        local ts_timeout="${ts_timeout_s}s"
+
+        log "INFO" "Routing $task_id to Troubleshooter (attempt $((ts_attempt+1))/3, timeout ${ts_timeout_s}s)..."
 
         local task_json
         task_json="$fresh_json"
@@ -497,9 +518,25 @@ TASK_ID: $task_id
 TASK: $task_json
 PROJECT_ROOT: $PROJECT_DIR"
 
-        local ts_model
+        local ts_model ts_exit=0
         ts_model=$(map_model "${MODEL_ARCHITECT:-opus}")
-        printf '%s' "$full_prompt" | timeout_cmd "${REVIEW_TIMEOUT:-5m}" claude --print --model "$ts_model" > "$output_file" 2>&1 || true
+        printf '%s' "$full_prompt" | timeout_cmd "$ts_timeout" claude --print --model "$ts_model" > "$output_file" 2>&1 || ts_exit=$?
+
+        if [ "$ts_exit" -eq 124 ]; then
+            # Troubleshooter timed out
+            local next_attempt=$((ts_attempt + 1))
+            if [ "$next_attempt" -ge 3 ]; then
+                # Exhausted all attempts → user escalation
+                bd_safe update "$task_id" --remove-label=blocked:troubleshoot --add-label=user-escalation \
+                    --notes="Troubleshooter exhausted ($next_attempt timeouts, last ${ts_timeout_s}s) — needs user input" >/dev/null 2>&1 || true
+                log "WARN" "Troubleshooter exhausted for $task_id ($next_attempt timeouts) → user-escalation"
+            else
+                # Increment attempt counter, will retry next cycle with longer timeout
+                set_counter_label "$task_id" "troubleshoot" "$next_attempt" "$fresh_json"
+                log "WARN" "Troubleshooter timeout for $task_id (attempt $next_attempt/3, ${ts_timeout_s}s) — will retry with longer timeout"
+            fi
+            continue
+        fi
 
         log "INFO" "Troubleshooter completed for $task_id (see $output_file)"
 

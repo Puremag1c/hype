@@ -353,3 +353,18 @@ load '../helpers/setup'
 @test "config template: no TASK_STALE_TIMEOUT param (GH #45)" {
     ! grep -q '^TASK_STALE_TIMEOUT=' "$PROJECT_ROOT/templates/config.template.sh"
 }
+
+# =============================================================================
+# GH #46: Stale branch cleanup + worktree isolation
+# =============================================================================
+
+@test "run-coders.sh: create_worktree deletes stale task branch (GH #46)" {
+    local coders_sh="$SCRIPTS_DIR/run-coders.sh"
+    local func_block
+    func_block=$(sed -n '/^create_worktree()/,/^}/p' "$coders_sh")
+    echo "$func_block" | grep -q 'git branch -D.*task/beads-'
+}
+
+@test "coder.md: prohibits leaving worktree (GH #46)" {
+    grep -q 'НИКОГДА не выходи из своего worktree' "$PROJECT_ROOT/core/agents/coder.md"
+}

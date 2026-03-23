@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.5.29] - 2026-03-23
+
+### Fixed
+
+- **Stale branch blocks retry worktree (GH #46)** — After coder timeout, worktree was cleaned up but the `task/beads-*` branch remained. Next coder couldn't create same branch, created `-v2`, got confused, escaped to main repo. Fix: `create_worktree()` now deletes stale task branch before creating worktree. Coder prompt now prohibits leaving worktree (rule #12).
+
+---
+
 ## [2.5.28] - 2026-03-23
 
 ### Changed

@@ -101,6 +101,11 @@ create_worktree() {
     # previous worktree was rm -rf'd without git worktree remove)
     git worktree prune 2>/dev/null || true
 
+    # Delete stale task branch from previous attempt (GH #46)
+    # Coder creates task/beads-$task_id inside worktree; if worktree was cleaned
+    # but branch remains, next coder can't create same branch name
+    git branch -D "task/beads-$task_id" 2>/dev/null || true
+
     mkdir -p "$WORKTREES_DIR"
 
     # Create worktree from current HEAD (detached)

@@ -329,3 +329,27 @@ load '../helpers/setup'
 @test "qa.md: test commands use timeout 5m (GH #42)" {
     grep -q 'timeout 5m' "$PROJECT_ROOT/core/agents/qa.md"
 }
+
+# =============================================================================
+# GH #45: TASK_STALE_TIMEOUT derived from TASK_TIMEOUT
+# =============================================================================
+
+@test "hype.sh: TASK_STALE_TIMEOUT derived from TASK_TIMEOUT (GH #45)" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+    local func_block
+    func_block=$(sed -n '/^validate_config()/,/^}/p' "$hype_sh")
+    # Must compute stale timeout from task timeout
+    echo "$func_block" | grep -q 'TASK_STALE_TIMEOUT='
+    echo "$func_block" | grep -q 'timeout_num'
+    # Must NOT validate TASK_STALE_TIMEOUT as config param
+    ! echo "$func_block" | grep -q 'validate_int.*TASK_STALE_TIMEOUT'
+}
+
+@test "hype.sh: TASK_STALE_TIMEOUT exported for subshells (GH #45)" {
+    local hype_sh="$SCRIPTS_DIR/hype.sh"
+    grep -q 'export TASK_STALE_TIMEOUT' "$hype_sh"
+}
+
+@test "config template: no TASK_STALE_TIMEOUT param (GH #45)" {
+    ! grep -q '^TASK_STALE_TIMEOUT=' "$PROJECT_ROOT/templates/config.template.sh"
+}

@@ -106,8 +106,6 @@ validate_config() {
     validate_int "MAX_PARALLEL_CODERS" "$MAX_PARALLEL_CODERS"
     validate_int "RETRY_LIMIT" "$RETRY_LIMIT"
     validate_int "ITERATION_DELAY" "$ITERATION_DELAY"
-    validate_int "TASK_STALE_TIMEOUT" "${TASK_STALE_TIMEOUT:-600}"
-
     validate_bool "LOG_TOKENS" "$LOG_TOKENS"
     validate_bool "DEBUG" "${DEBUG:-false}"
 
@@ -118,7 +116,18 @@ validate_config() {
         exit 1
     fi
 
-    log "INFO" "Config loaded: MAX_PARALLEL=$MAX_PARALLEL_CODERS, RETRY=$RETRY_LIMIT, DELAY=${ITERATION_DELAY}s"
+    # Derive TASK_STALE_TIMEOUT from TASK_TIMEOUT + 60s buffer (GH #45)
+    # Stale detector is safety net for zombie tasks — must always be > task timeout
+    local timeout_num="${TASK_TIMEOUT%[ms]}"
+    local timeout_unit="${TASK_TIMEOUT: -1}"
+    if [ "$timeout_unit" = "m" ]; then
+        TASK_STALE_TIMEOUT=$((timeout_num * 60 + 60))
+    else
+        TASK_STALE_TIMEOUT=$((timeout_num + 60))
+    fi
+    export TASK_STALE_TIMEOUT
+
+    log "INFO" "Config loaded: MAX_PARALLEL=$MAX_PARALLEL_CODERS, RETRY=$RETRY_LIMIT, DELAY=${ITERATION_DELAY}s, STALE=${TASK_STALE_TIMEOUT}s"
 }
 
 ensure_hype_dir() {

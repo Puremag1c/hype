@@ -58,8 +58,7 @@ VALIDATING_TIMEOUT="15m"
 # Таймаут stale worktrees (секунды) — worktree старше этого удаляется
 WORKTREE_STALE_TIMEOUT=900
 
-# Таймаут stale tasks (секунды) — in_progress задача без обновлений сбрасывается
-TASK_STALE_TIMEOUT=600
+# TASK_STALE_TIMEOUT вычисляется автоматически: TASK_TIMEOUT + 60s (GH #45)
 
 # === Модели ===
 

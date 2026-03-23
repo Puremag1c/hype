@@ -227,7 +227,7 @@ MAX_PARALLEL_CODERS=3    # Лимит параллельных Coders
 RETRY_LIMIT=3               # Retry до эскалации к Architect
 TASK_TIMEOUT="10m"          # Таймаут на задачу
 WORKTREE_STALE_TIMEOUT=900  # Секунды до удаления stale worktree
-TASK_STALE_TIMEOUT=600      # Секунды до сброса stale task
+# TASK_STALE_TIMEOUT вычисляется: TASK_TIMEOUT + 60s (GH #45)
 ALLOWED_MODELS="opus,sonnet,haiku"  # Разрешённые модели
 ```
 

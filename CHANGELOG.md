@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.5.28] - 2026-03-23
+
+### Changed
+
+- **TASK_STALE_TIMEOUT derived from TASK_TIMEOUT (GH #45)** — Removed `TASK_STALE_TIMEOUT` config parameter. Now auto-computed as `TASK_TIMEOUT + 60s`. Contradictory config (stale=600s < timeout=20m) caused infinite loops: stale detector killed tasks before they could complete. No more user-facing config to misconfigure.
+
+---
+
 ## [2.5.27] - 2026-03-23
 
 ### Fixed

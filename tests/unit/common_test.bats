@@ -572,6 +572,23 @@ load '../helpers/mock_bd'
     echo "$body" | grep -q 'all_tasks_json="\${3:-}"'
 }
 
+@test "reset_stale_tasks increments retry:N on stale reset (GH #44)" {
+    local body
+    body=$(sed -n '/^reset_stale_tasks()/,/^}/p' "$SCRIPTS_DIR/common.sh")
+    # Must increment retry counter
+    echo "$body" | grep -q 'retry:'
+    echo "$body" | grep -q 'new_retry'
+    echo "$body" | grep -q 'add-label.*retry:'
+}
+
+@test "reset_stale_tasks removes old retry label before adding new (GH #44)" {
+    local body
+    body=$(sed -n '/^reset_stale_tasks()/,/^}/p' "$SCRIPTS_DIR/common.sh")
+    # Must handle existing retry label removal
+    echo "$body" | grep -q 'old_retry_label'
+    echo "$body" | grep -q 'remove-label.*old_retry_label'
+}
+
 @test "hype.sh CODING shares cache via HYPE_IN_PROGRESS_CACHE" {
     grep -q 'HYPE_IN_PROGRESS_CACHE=.*run-seniors.sh' "$SCRIPTS_DIR/hype.sh"
     grep -q 'HYPE_IN_PROGRESS_CACHE=.*run-merge-queue.sh' "$SCRIPTS_DIR/hype.sh"

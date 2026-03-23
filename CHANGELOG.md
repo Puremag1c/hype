@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.5.27] - 2026-03-23
+
+### Fixed
+
+- **Stale task reset doesn't increment retry counter — infinite loop (GH #44)** — `reset_stale_tasks()` reset in_progress tasks to open without incrementing `retry:N`. Tasks that caused coder crash/timeout looped forever (11+ resets, 15+ hours) without triggering the escalation ladder. Now increments `retry:N` on each stale reset, same as normal coder timeout path in `run-coders.sh`.
+
+---
+
 ## [2.5.26] - 2026-03-22
 
 ### Fixed

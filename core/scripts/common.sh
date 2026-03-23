@@ -275,10 +275,21 @@ reset_stale_tasks() {
                     fi
                     rm -f "$pid_file"
                 fi
+                # Increment retry counter so escalation ladder triggers (GH #44)
+                local current_retry old_retry_label
+                current_retry=$(echo "$all_tasks_json" | jq -r ".[] | select(.id == \"$task_id\") | [.labels[]? | select(startswith(\"retry:\")) | split(\":\")[1] | tonumber] | max // 0" 2>/dev/null || echo "0")
+                current_retry="${current_retry:-0}"
+                local new_retry=$((current_retry + 1))
+                old_retry_label=$(echo "$all_tasks_json" | jq -r ".[] | select(.id == \"$task_id\") | .labels[]? | select(startswith(\"retry:\"))" 2>/dev/null | head -1)
+
                 # Append to notes instead of overwriting (preserve review feedback)
                 local updated_notes
                 updated_notes=$(append_notes "$task_id" "Reset: $log_prefix (${age}s without update)")
-                bd_safe update "$task_id" --status=open --remove-label=coder --notes="$updated_notes" >/dev/null 2>&1 || true
+                if [ -n "$old_retry_label" ]; then
+                    bd_safe update "$task_id" --status=open --remove-label=coder --remove-label="$old_retry_label" --add-label="retry:$new_retry" --notes="$updated_notes" >/dev/null 2>&1 || true
+                else
+                    bd_safe update "$task_id" --status=open --remove-label=coder --add-label="retry:$new_retry" --notes="$updated_notes" >/dev/null 2>&1 || true
+                fi
                 ((reset_count++)) || true
             fi
         fi

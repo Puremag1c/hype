@@ -203,7 +203,39 @@ git push --force-with-lease -u origin "task/beads-$TASK_ID"
 **КРИТИЧНО:** Перед пометкой ready-for-review ты ОБЯЗАН проверить что код работает.
 
 ```bash
-# 1. Запусти тесты (если есть)
+# 1. Запусти линтер (авто-исправление где возможно)
+if [ -f pyproject.toml ] || [ -f setup.cfg ] || [ -f .flake8 ]; then
+    # Python: prefer ruff (fast, auto-fix), fallback to black/flake8
+    if command -v ruff &>/dev/null; then
+        ruff check --fix . && ruff format .
+    elif command -v black &>/dev/null; then
+        black .
+    fi
+elif [ -f mix.exs ]; then
+    mix format
+elif [ -f package.json ]; then
+    # JS/TS: lint script или eslint
+    if grep -q '"lint"' package.json; then
+        npm run lint -- --fix 2>/dev/null || npm run lint
+    elif npx eslint --version &>/dev/null 2>&1; then
+        npx eslint --fix . 2>/dev/null || true
+    fi
+elif [ -f Cargo.toml ]; then
+    cargo clippy --fix --allow-dirty 2>/dev/null || cargo clippy
+elif [ -f go.mod ]; then
+    go vet ./...
+    if command -v golangci-lint &>/dev/null; then
+        golangci-lint run --fix 2>/dev/null || golangci-lint run
+    fi
+fi
+
+# Коммит lint-фиксов если есть
+if ! git diff --quiet; then
+    git add -A
+    git commit -m "style: auto-fix lint issues"
+fi
+
+# 2. Запусти тесты (если есть)
 if [ -f package.json ]; then
     npm test
 elif [ -f mix.exs ]; then
@@ -214,12 +246,14 @@ elif [ -f go.mod ]; then
     go test ./...
 fi
 
-# 2. Если проект имеет Playwright/browser tools — используй для e2e
+# 3. Если проект имеет Playwright/browser tools — используй для e2e
 if [ -f .mcp.json ] && grep -q "playwright\|puppeteer\|browser" .mcp.json; then
     # Используй доступные browser tools для e2e проверки
     echo "Browser tools available — run e2e verification"
 fi
 ```
+
+**Если линтер находит ошибки которые нельзя авто-исправить — исправь вручную перед продолжением.**
 
 **Если тестов нет:**
 - Вручную проверь что изменение работает

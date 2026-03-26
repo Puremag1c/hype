@@ -65,9 +65,12 @@ echo $NEW_VERSION
 Find and update every file containing the version:
 
 ```bash
-for f in VERSION package.json pyproject.toml Cargo.toml mix.exs setup.py setup.cfg build.gradle pom.xml; do
+for f in VERSION package.json pyproject.toml Cargo.toml mix.exs setup.py setup.cfg build.gradle pom.xml pubspec.yaml Chart.yaml; do
     [ -f "$f" ] && echo "Found: $f"
 done
+
+# Also check for __version__ in Python packages
+grep -rl "__version__" --include="*.py" . 2>/dev/null | grep -v __pycache__ | head -5
 ```
 
 - `VERSION` → write new version
@@ -76,11 +79,14 @@ done
 - `Cargo.toml` → update `version = "X.Y.Z"`
 - `mix.exs` → update `@version "X.Y.Z"` or `version: "X.Y.Z"`
 - `setup.py` / `setup.cfg` → update `version=X.Y.Z`
+- `pubspec.yaml` → update `version: "X.Y.Z"`
+- `Chart.yaml` → update `version: X.Y.Z` and `appVersion: "X.Y.Z"`
+- `__init__.py` → update `__version__ = "X.Y.Z"`
 
 Verify no stale version remains:
 
 ```bash
-grep -rn "$CURRENT" --include="*.md" --include="*.json" --include="*.toml" . | grep -v CHANGELOG | grep -v node_modules
+grep -rn "$CURRENT" --include="*.md" --include="*.json" --include="*.toml" --include="*.py" --include="*.exs" --include="*.cfg" --include="*.yaml" --include="*.yml" --include="*.xml" --include="*.gradle" . | grep -v CHANGELOG | grep -v node_modules | grep -v .git | grep -v __pycache__
 ```
 
 ### 4. Generate CHANGELOG

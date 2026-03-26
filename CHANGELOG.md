@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.6.1] - 2026-03-26
+
+### Added
+
+- **Coder lint step** — кодер теперь запускает линтер перед `needs-review`: ruff/black (Python), mix format (Elixir), eslint (JS/TS), cargo clippy (Rust), go vet (Go). Авто-фикс + коммит lint-исправлений.
+- **tester-ci agent** — новый тестер проверяет прохождение CI (GitHub Actions) через `gh run watch`. Создаёт P0 баг при фейле. Работает для всех типов проектов.
+
+### Fixed
+
+- **Completion version grep** — расширен поиск старых версий: добавлены `*.py`, `*.exs`, `*.cfg`, `*.yaml`, `*.yml`, `*.xml`, `*.gradle`. Детекция `__version__` в Python пакетах. Поддержка `pubspec.yaml`, `Chart.yaml`, `__init__.py`.
+
 ## [2.6.0] - 2026-03-23
 
 Escalation audit: все пути эскалации закрыты, бесконечные циклы невозможны. GH #42–#47.

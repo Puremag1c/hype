@@ -78,11 +78,11 @@ get_project_type() {
 get_testers_for_type() {
     local type=$1
     case "$type" in
-        web)      echo "backend api functional visual" ;;
-        api)      echo "backend api functional" ;;
-        cli)      echo "backend cli functional" ;;
-        library)  echo "backend regression functional" ;;
-        *)        echo "backend functional" ;;
+        web)      echo "backend api functional visual ci" ;;
+        api)      echo "backend api functional ci" ;;
+        cli)      echo "backend cli functional ci" ;;
+        library)  echo "backend regression functional ci" ;;
+        *)        echo "backend functional ci" ;;
     esac
 }
 

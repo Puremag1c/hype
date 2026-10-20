@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "toyota-way": {
+      "source": {
+        "source": "github",
+        "repo": "Puremag1c/toyota-way"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "toyota-way@toyota-way": true
+  }
+}
